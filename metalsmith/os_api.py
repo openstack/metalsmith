@@ -96,7 +96,10 @@ class API(object):
 
         return nodes
 
-    def update_node(self, node_id, **attrs):
+    def list_node_ports(self, node_id):
+        return self.ironic.node.list_ports(node_id, limit=0)
+
+    def _convert_patches(self, attrs):
         patches = []
         for key, value in attrs.items():
             if not key.startswith('/'):
@@ -107,4 +110,37 @@ class API(object):
             else:
                 patches.append({'op': 'add', 'path': key, 'value': value})
 
+        return patches
+
+    def update_node(self, node_id, *args, **attrs):
+        if args:
+            attrs.update(args[0])
+        patches = self._convert_patches(attrs)
         return self.ironic.node.update(node_id, patches)
+
+    def update_node_port(self, port_id, *args, **attrs):
+        if args:
+            attrs.update(args[0])
+        patches = self._convert_patches(attrs)
+        return self.ironic.port.update(port_id, patches)
+
+    def validate_node(self, node_id, validate_deploy=False):
+        ifaces = ['power', 'management']
+        if validate_deploy:
+            ifaces += ['deploy']
+
+        validation = self.ironic.node.validate(node_id)
+        for iface in ifaces:
+            result = getattr(validation, iface)
+            if not result['result']:
+                raise RuntimeError('%s: %s' % (iface, result['reason']))
+
+    def create_port(self, network_id, mac_address):
+        port_body = {'mac_address': mac_address,
+                     'network_id': network_id,
+                     'admin_state_up': True}
+        port = self.neutron.create_port({'port': port_body})
+        return DictWithAttrs(port['port'])
+
+    def delete_port(self, port_id):
+        self.neutron.delete_port(port_id)

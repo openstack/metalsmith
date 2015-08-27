@@ -49,6 +49,13 @@ def reserve(api, nodes, profile):
 
     for node in suitable_nodes:
         try:
+            api.validate_node(node.uuid)
+        except RuntimeError as exc:
+            LOG.warn('Node %(node)s failed validation: %(err)s',
+                     {'node': _log_node(node), 'err': exc})
+            continue
+
+        try:
             api.update_node(node.uuid, instance_uuid=node.uuid)
         except os_api.ir_exc.Conflict:
             LOG.info('Node %s was occupied, proceeding with the next',
@@ -59,18 +66,41 @@ def reserve(api, nodes, profile):
     raise RuntimeError('Unable to reserve any node')
 
 
-def clean_up(api, node):
+def clean_up(api, node, instance_info):
     try:
         api.update_node(node.uuid, instance_uuid=os_api.REMOVE)
     except Exception:
         LOG.debug('Failed to remove instance_uuid, assuming already removed')
 
+    for port in instance_info.get('ports', ()):
+        api.delete_port(port.id)
 
-def prepare(api, node, network, image):
-    raise NotImplementedError('Not implemented')
+    for node_port in instance_info.get('node_ports', ()):
+        try:
+            api.update_node_port(node_port.uuid,
+                                 {'/extra/vif_port_id': os_api.REMOVE})
+        except Exception:
+            LOG.debug('Failed to remove VIF id from %s, assuming removed',
+                      node_port.uuid)
 
 
-def provision(api, node):
+def provision(api, node, network, image, instance_info):
+    node_ports = api.list_node_ports(node.uuid)
+    for node_port in node_ports:
+        port = api.create_port(mac_address=node_port.address,
+                               network_id=network.id)
+        LOG.debug('Created Neutron port %s', port)
+        instance_info.setdefault('ports', []).append(port)
+
+        api.update_node_port(node_port.uuid,
+                             {'/extra/vif_port_id': port.id})
+        instance_info.setdefault('node_ports', []).append(node_port)
+        LOG.debug('Ironic port %(node_port)s (%(mac)s) associated with '
+                  'Neutron port %(port)s',
+                  {'node_port': node_port.uuid,
+                   'mac': node_port.address,
+                   'port': port.id})
+
     raise NotImplementedError('Not implemented')
 
 
@@ -99,13 +129,13 @@ def deploy(profile, image_id, network_id, auth_args):
     node = reserve(api, nodes, profile)
     LOG.info('Reserved node %s', _log_node(node))
 
+    instance_info = {}
     try:
-        prepare(api, node, network, image)
-        provision(api, node)
+        provision(api, node, network, image, instance_info)
     except Exception:
         with excutils.save_and_reraise_exception():
             LOG.error('Deploy failed, cleaning up')
             try:
-                clean_up(api, node)
+                clean_up(api, node, instance_info)
             except Exception:
                 LOG.exception('Clean up also failed')
