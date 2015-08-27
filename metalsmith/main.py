@@ -15,6 +15,7 @@
 
 import argparse
 import logging
+import os
 import sys
 
 from metalsmith import deploy
@@ -30,6 +31,13 @@ def main():
                         help='output more logging')
     parser.add_argument('-i', '--image', help='image to use (name or UUID)',
                         required=True)
+    parser.add_argument('-n', '--network',
+                        help='network to use (name or UUID)', required=True),
+    parser.add_argument('--os-username', default=os.environ.get('OS_USERNAME'))
+    parser.add_argument('--os-password', default=os.environ.get('OS_PASSWORD'))
+    parser.add_argument('--os-tenant-name',
+                        default=os.environ.get('OS_TENANT_NAME'))
+    parser.add_argument('--os-auth-url', default=os.environ.get('OS_AUTH_URL'))
     parser.add_argument('profile', help='node profile to deploy')
     args = parser.parse_args()
 
@@ -38,9 +46,18 @@ def main():
     logging.basicConfig(
         level=logging.DEBUG if args.debug else logging.INFO,
         format=log_fmt)
+    if not args.debug:
+        logging.getLogger('requests.packages.urllib3.connectionpool').setLevel(
+            logging.CRITICAL)
+
+    auth_args = {'auth_url': args.os_auth_url,
+                 'username': args.os_username,
+                 'tenant_name': args.os_tenant_name,
+                 'password': args.os_password}
 
     try:
-        deploy.deploy(profile=args.profile, image=args.image)
+        deploy.deploy(profile=args.profile, image_id=args.image,
+                      network_id=args.network, auth_args=auth_args)
     except Exception as exc:
         LOG.critical('%s', exc, exc_info=args.debug)
         sys.exit(1)

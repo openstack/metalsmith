@@ -15,40 +15,97 @@
 
 import logging
 
-import glanceclient
-from keystoneclient.v2_0 import client as ks_client
-from neutronclient.neutron import client as neu_client
+from oslo_utils import excutils
+
+from metalsmith import os_api
 
 
 LOG = logging.getLogger(__name__)
 
 
-class API(object):
-    """Various OpenStack API's."""
-
-    GLANCE_VERSION = '1'
-    NEUTRON_VERSION = '2.0'
-
-    def __init__(self, **kwargs):
-        LOG.debug('creating Keystone client')
-        self.keystone = ks_client.Client(**kwargs)
-        self.auth_token = self.keystone.auth_token
-        LOG.debug('creating service clients')
-        self.glance = glanceclient.Client(
-            self.GLANCE_VERSION, endpoint=self.get_endpoint('image'),
-            token=self.auth_token)
-        self.neutron = neu_client.Client(
-            self.NEUTRON_VERSION, endpoint_url=self.get_endpoint('network'),
-            token=self.auth_token)
-
-    def get_endpoint(self, service_type, endpoint_type='internalurl'):
-        service_id = self.keystone.services.find(type=service_type).id
-        endpoint = self.keystone.endpoints.find(service_id=service_id)
-        return getattr(endpoint, endpoint_type)
+def _log_node(node):
+    if node.name:
+        return '%s (UUID %s)' % (node.name, node.uuid)
+    else:
+        return node.uuid
 
 
-def deploy(profile, image):
+def _get_capabilities(node):
+    return dict(x.split(':', 1) for x in
+                node.properties.get('capabilities', '').split(',') if x)
+
+
+def reserve(api, nodes, profile):
+    suitable_nodes = []
+    for node in nodes:
+        caps = _get_capabilities(node)
+        LOG.debug('Capabilities for node %(node)s: %(cap)s',
+                  {'node': _log_node(node), 'cap': caps})
+        if caps.get('profile') == profile:
+            suitable_nodes.append(node)
+
+    if not suitable_nodes:
+        raise RuntimeError('No nodes found with profile %s' % profile)
+
+    for node in suitable_nodes:
+        try:
+            api.update_node(node.uuid, instance_uuid=node.uuid)
+        except os_api.ir_exc.Conflict:
+            LOG.info('Node %s was occupied, proceeding with the next',
+                     _log_node(node))
+        else:
+            return node
+
+    raise RuntimeError('Unable to reserve any node')
+
+
+def clean_up(api, node):
+    try:
+        api.update_node(node.uuid, instance_uuid=os_api.REMOVE)
+    except Exception:
+        LOG.debug('Failed to remove instance_uuid, assuming already removed')
+
+
+def prepare(api, node, network, image):
+    raise NotImplementedError('Not implemented')
+
+
+def provision(api, node):
+    raise NotImplementedError('Not implemented')
+
+
+def deploy(profile, image_id, network_id, auth_args):
     """Deploy an image on a given profile."""
-    LOG.debug('deploying image %(image)s on node with profile %(profile)s',
-              {'image': image, 'profile': profile})
-    API()
+    LOG.debug('Deploying image %(image)s on node with profile %(profile)s '
+              'on network %(net)s',
+              {'image': image_id, 'profile': profile, 'net': network_id})
+    api = os_api.API(**auth_args)
+
+    image = api.get_image_info(image_id)
+    if image is None:
+        raise RuntimeError('Image %s does not exist' % image_id)
+    LOG.debug('Image: %s', image)
+    network = api.get_network(network_id)
+    if network is None:
+        raise RuntimeError('Network %s does not exist' % network_id)
+    LOG.debug('Network: %s', network)
+
+    nodes = api.list_nodes()
+    LOG.debug('Ironic nodes: %s', nodes)
+    if not len(nodes):
+        raise RuntimeError('No available nodes found')
+    LOG.info('Got list of %d available nodes from Ironic', len(nodes))
+
+    node = reserve(api, nodes, profile)
+    LOG.info('Reserved node %s', _log_node(node))
+
+    try:
+        prepare(api, node, network, image)
+        provision(api, node)
+    except Exception:
+        with excutils.save_and_reraise_exception():
+            LOG.error('Deploy failed, cleaning up')
+            try:
+                clean_up(api, node)
+            except Exception:
+                LOG.exception('Clean up also failed')

@@ -1,4 +1,5 @@
 pbr>=1.6,<2.0
+oslo.utils>=2.0.0 # Apache-2.0
 python-glanceclient>=0.18.0
 python-ironicclient>=0.6.0
 python-keystoneclient>=1.6.0
