@@ -55,13 +55,15 @@ def reserve(api, nodes, profile):
                      {'node': _log_node(node), 'err': exc})
             continue
 
+        if not node.properties.get('local_gb'):
+            LOG.warn('No local_gb for node %s', _log_node(node))
+            continue
+
         try:
-            api.update_node(node.uuid, instance_uuid=node.uuid)
+            return api.update_node(node.uuid, instance_uuid=node.uuid)
         except os_api.ir_exc.Conflict:
             LOG.info('Node %s was occupied, proceeding with the next',
                      _log_node(node))
-        else:
-            return node
 
     raise RuntimeError('Unable to reserve any node')
 
@@ -85,6 +87,12 @@ def clean_up(api, node, instance_info):
 
 
 def provision(api, node, network, image, instance_info):
+    updates = {'/instance_info/ramdisk': image.properties['ramdisk_id'],
+               '/instance_info/kernel': image.properties['kernel_id'],
+               '/instance_info/image_source': image.id,
+               '/instance_info/root_gb': node.properties['local_gb']}
+    node = api.update_node(node.uuid, updates)
+
     node_ports = api.list_node_ports(node.uuid)
     for node_port in node_ports:
         port = api.create_port(mac_address=node_port.address,
@@ -101,7 +109,9 @@ def provision(api, node, network, image, instance_info):
                    'mac': node_port.address,
                    'port': port.id})
 
-    raise NotImplementedError('Not implemented')
+    api.validate_node(node.uuid, validate_deploy=True)
+
+    api.node_action(node.uuid, 'active')
 
 
 def deploy(profile, image_id, network_id, auth_args):
@@ -114,7 +124,11 @@ def deploy(profile, image_id, network_id, auth_args):
     image = api.get_image_info(image_id)
     if image is None:
         raise RuntimeError('Image %s does not exist' % image_id)
+    for im_prop in ('kernel_id', 'ramdisk_id'):
+        if not image.properties.get(im_prop):
+            raise RuntimeError('%s property is required on image' % im_prop)
     LOG.debug('Image: %s', image)
+
     network = api.get_network(network_id)
     if network is None:
         raise RuntimeError('Network %s does not exist' % network_id)
