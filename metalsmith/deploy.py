@@ -103,11 +103,11 @@ def provision(api, node, network, image, instance_info):
         api.update_node_port(node_port.uuid,
                              {'/extra/vif_port_id': port.id})
         instance_info.setdefault('node_ports', []).append(node_port)
-        LOG.debug('Ironic port %(node_port)s (%(mac)s) associated with '
-                  'Neutron port %(port)s',
-                  {'node_port': node_port.uuid,
-                   'mac': node_port.address,
-                   'port': port.id})
+        LOG.info('Ironic port %(node_port)s (%(mac)s) associated with '
+                 'Neutron port %(port)s',
+                 {'node_port': node_port.uuid,
+                  'mac': node_port.address,
+                  'port': port.id})
 
     api.validate_node(node.uuid, validate_deploy=True)
 
