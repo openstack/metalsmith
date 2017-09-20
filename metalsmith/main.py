@@ -94,6 +94,7 @@ def _parse_args(args):
     deploy.add_argument('resource_class', help='node resource class to deploy')
 
     undeploy = subparsers.add_parser('undeploy')
+    undeploy.set_defaults(func=_do_undeploy)
     undeploy.add_argument('node', help='node UUID')
     return parser.parse_args(args)
 
