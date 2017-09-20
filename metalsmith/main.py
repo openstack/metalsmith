@@ -1,4 +1,4 @@
-# Copyright 2015 Red Hat, Inc.
+# Copyright 2015-2017 Red Hat, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ from metalsmith import os_api
 LOG = logging.getLogger(__name__)
 
 
-def main():
+def main(args=sys.argv):
     parser = argparse.ArgumentParser(
         description='Deployment and Scheduling tool for Bare Metal')
     parser.add_argument('--debug', action='store_true',
@@ -46,7 +46,7 @@ def main():
     parser.add_argument('--os-project-domain-name',
                         default=os.environ.get('OS_PROJECT_DOMAIN_NAME'))
     parser.add_argument('profile', help='node profile to deploy')
-    args = parser.parse_args()
+    args = parser.parse_args(args)
 
     log_fmt = ('%(asctime)s %(levelname)s %(name)s: %(message)s' if args.debug
                else '%(asctime)s %(message)s')
@@ -57,10 +57,6 @@ def main():
         logging.getLogger('requests.packages.urllib3.connectionpool').setLevel(
             logging.CRITICAL)
 
-    auth_args = {'auth_url': args.os_auth_url,
-                 'username': args.os_username,
-                 'tenant_name': args.os_tenant_name,
-                 'password': args.os_password}
     auth = generic.Password(auth_url=args.os_auth_url,
                             username=args.os_username,
                             project_name=args.os_project_name,
@@ -70,10 +66,9 @@ def main():
     api = os_api.API(auth)
 
     try:
-        deploy.deploy(api, profile=args.profile, image_id=args.image,
-                      network_id=args.network, auth_args=auth_args)
+        deploy.deploy(api, profile=args.profile,
+                      image_id=args.image,
+                      network_id=args.network)
     except Exception as exc:
         LOG.critical('%s', exc, exc_info=args.debug)
         sys.exit(1)
-    else:
-        sys.exit(0)
