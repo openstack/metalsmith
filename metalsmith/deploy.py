@@ -45,7 +45,9 @@ def _get_capabilities(node):
 def _config_drive_dir(node, ssh_keys):
     d = tempfile.mkdtemp()
     try:
-        metadata = {'public_keys': ssh_keys}
+        metadata = {'public_keys': ssh_keys,
+                    'uuid': node.uuid,
+                    'name': node.name}
         for version in ('2012-08-10', 'latest'):
             subdir = os.path.join(d, 'openstack', version)
             if not os.path.exists(subdir):
