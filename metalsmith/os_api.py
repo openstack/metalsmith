@@ -65,14 +65,9 @@ class API(object):
 
     def list_nodes(self, maintenance=False, associated=False,
                    provision_state='available', detail=True):
-        nodes = self.ironic.node.list(limit=0, maintenance=maintenance,
-                                      associated=associated, detail=detail)
-        if provision_state:
-            # TODO(dtantsur): use Liberty API for filtring by state
-            nodes = [n for n in nodes
-                     if n.provision_state.lower() == provision_state.lower()]
-
-        return nodes
+        return self.ironic.node.list(limit=0, maintenance=maintenance,
+                                     associated=associated, detail=detail,
+                                     provision_state=provision_state)
 
     def list_node_ports(self, node_id):
         return self.ironic.node.list_ports(node_id, limit=0)
