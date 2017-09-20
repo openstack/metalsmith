@@ -32,6 +32,7 @@ class TestMain(unittest.TestCase):
                                             network_id='mynet',
                                             capabilities={},
                                             netboot=False,
+                                            wait=1800,
                                             dry_run=False)
 
     def test_args_debug(self, mock_auth, mock_deploy):
@@ -43,6 +44,7 @@ class TestMain(unittest.TestCase):
                                             network_id='mynet',
                                             capabilities={},
                                             netboot=False,
+                                            wait=1800,
                                             dry_run=False)
 
     def test_args_quiet(self, mock_auth, mock_deploy):
@@ -54,6 +56,7 @@ class TestMain(unittest.TestCase):
                                             network_id='mynet',
                                             capabilities={},
                                             netboot=False,
+                                            wait=1800,
                                             dry_run=False)
 
     @mock.patch.object(main.LOG, 'critical', autospec=True)
@@ -76,4 +79,5 @@ class TestMain(unittest.TestCase):
                                             capabilities={'foo': 'bar',
                                                           'answer': '42'},
                                             netboot=False,
+                                            wait=1800,
                                             dry_run=False)

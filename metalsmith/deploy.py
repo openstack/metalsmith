@@ -96,7 +96,7 @@ def clean_up(api, node, neutron_ports):
             LOG.warning('Failed to delete neutron port %s', port.id)
 
 
-def provision(api, node, network, image, netboot=False):
+def provision(api, node, network, image, netboot=False, wait=None):
     target_caps = {'boot_option': 'netboot' if netboot else 'local'}
     updates = {'/instance_info/ramdisk': image.ramdisk_id,
                '/instance_info/kernel': image.kernel_id,
@@ -123,9 +123,14 @@ def provision(api, node, network, image, netboot=False):
 
         api.validate_node(node.uuid, validate_deploy=True)
         api.node_action(node.uuid, 'active')
-    except Exception as exc:
+        LOG.info('Provisioning started on node %s', _log_node(node))
+
+        if wait is not None:
+            api.ironic.wait_for_provision_state(node.uuid, 'active',
+                                                timeout=max(0, wait))
+    except Exception:
         with excutils.save_and_reraise_exception():
-            LOG.error('Deploy attempt failed: %s', exc)
+            LOG.error('Deploy attempt failed, cleaning up')
             try:
                 clean_up(node, neutron_ports)
             except Exception:
@@ -133,7 +138,7 @@ def provision(api, node, network, image, netboot=False):
 
 
 def deploy(api, resource_class, image_id, network_id, capabilities,
-           netboot=False, dry_run=False):
+           netboot=False, wait=None, dry_run=False):
     """Deploy an image on a given profile."""
     LOG.debug('Deploying image %(image)s on node with class %(class)s '
               'and capabilities %(caps)s on network %(net)s',
@@ -167,5 +172,4 @@ def deploy(api, resource_class, image_id, network_id, capabilities,
         LOG.warning('Dry run, not provisioning node %s', node.uuid)
         return
 
-    provision(api, node, network, image, netboot=netboot)
-    LOG.info('Provisioning started on node %s', _log_node(node))
+    provision(api, node, network, image, netboot=netboot, wait=wait)

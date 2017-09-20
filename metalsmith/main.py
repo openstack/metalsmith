@@ -43,6 +43,11 @@ def _parse_args(args):
                         required=True),
     parser.add_argument('--netboot', action='store_true',
                         help='boot from network instead of local disk')
+    wait = parser.add_mutually_exclusive_group()
+    wait.add_argument('--timeout', type=int, default=1800,
+                      help='deployment timeout (in seconds)')
+    wait.add_argument('--no-wait', action='store_true',
+                      help='disable waiting for deployment to finish')
     parser.add_argument('--os-username', default=os.environ.get('OS_USERNAME'))
     parser.add_argument('--os-password', default=os.environ.get('OS_PASSWORD'))
     parser.add_argument('--os-project-name',
@@ -79,6 +84,10 @@ def main(args=sys.argv[1:]):
     args = _parse_args(args)
     _configure_logging(args)
     capabilities = dict(item.split('=', 1) for item in args.capability)
+    if args.no_wait:
+        wait = None
+    else:
+        wait = args.timeout
 
     auth = generic.Password(auth_url=args.os_auth_url,
                             username=args.os_username,
@@ -94,6 +103,7 @@ def main(args=sys.argv[1:]):
                       network_id=args.network,
                       capabilities=capabilities,
                       netboot=args.netboot,
+                      wait=wait,
                       dry_run=args.dry_run)
     except Exception as exc:
         LOG.critical('%s', exc, exc_info=args.debug)
