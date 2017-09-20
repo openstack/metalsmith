@@ -35,6 +35,8 @@ def _parse_args(args):
                            help='output only errors')
     verbosity.add_argument('--debug', action='store_true',
                            help='output more logging')
+    parser.add_argument('--dry-run', action='store_true',
+                        help='do not take any destructive actions')
     parser.add_argument('--image', help='image to use (name or UUID)',
                         required=True)
     parser.add_argument('--network', help='network to use (name or UUID)',
@@ -48,7 +50,9 @@ def _parse_args(args):
                         default=os.environ.get('OS_USER_DOMAIN_NAME'))
     parser.add_argument('--os-project-domain-name',
                         default=os.environ.get('OS_PROJECT_DOMAIN_NAME'))
-    parser.add_argument('profile', help='node profile to deploy')
+    parser.add_argument('--capability', action='append', metavar='NAME=VALUE',
+                        default=[], help='capabilities the nodes should have')
+    parser.add_argument('resource_class', help='node resource class to deploy')
     return parser.parse_args(args)
 
 
@@ -72,6 +76,7 @@ def _configure_logging(args):
 def main(args=sys.argv[1:]):
     args = _parse_args(args)
     _configure_logging(args)
+    capabilities = dict(item.split('=', 1) for item in args.capability)
 
     auth = generic.Password(auth_url=args.os_auth_url,
                             username=args.os_username,
@@ -82,9 +87,11 @@ def main(args=sys.argv[1:]):
     api = os_api.API(auth)
 
     try:
-        deploy.deploy(api, profile=args.profile,
+        deploy.deploy(api, args.resource_class,
                       image_id=args.image,
-                      network_id=args.network)
+                      network_id=args.network,
+                      capabilities=capabilities,
+                      dry_run=args.dry_run)
     except Exception as exc:
         LOG.critical('%s', exc, exc_info=args.debug)
         sys.exit(1)

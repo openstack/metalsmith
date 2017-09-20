@@ -27,17 +27,31 @@ class TestMain(unittest.TestCase):
         args = ['--network', 'mynet', '--image', 'myimg', 'compute']
         main.main(args)
         mock_deploy.assert_called_once_with(mock.ANY,
-                                            profile='compute',
+                                            resource_class='compute',
                                             image_id='myimg',
-                                            network_id='mynet')
+                                            network_id='mynet',
+                                            capabilities={},
+                                            dry_run=False)
 
     def test_args_debug(self, mock_auth, mock_deploy):
         args = ['--network', 'mynet', '--image', 'myimg', '--debug', 'compute']
         main.main(args)
         mock_deploy.assert_called_once_with(mock.ANY,
-                                            profile='compute',
+                                            resource_class='compute',
                                             image_id='myimg',
-                                            network_id='mynet')
+                                            network_id='mynet',
+                                            capabilities={},
+                                            dry_run=False)
+
+    def test_args_quiet(self, mock_auth, mock_deploy):
+        args = ['--network', 'mynet', '--image', 'myimg', '--quiet', 'compute']
+        main.main(args)
+        mock_deploy.assert_called_once_with(mock.ANY,
+                                            resource_class='compute',
+                                            image_id='myimg',
+                                            network_id='mynet',
+                                            capabilities={},
+                                            dry_run=False)
 
     @mock.patch.object(main.LOG, 'critical', autospec=True)
     def test_deploy_failure(self, mock_log, mock_auth, mock_deploy):
@@ -46,3 +60,16 @@ class TestMain(unittest.TestCase):
         self.assertRaises(SystemExit, main.main, args)
         mock_log.assert_called_once_with('%s', mock_deploy.side_effect,
                                          exc_info=False)
+
+    def test_args_capabilities(self, mock_auth, mock_deploy):
+        args = ['--network', 'mynet', '--image', 'myimg', '--debug',
+                '--capability', 'foo=bar', '--capability', 'answer=42',
+                'compute']
+        main.main(args)
+        mock_deploy.assert_called_once_with(mock.ANY,
+                                            resource_class='compute',
+                                            image_id='myimg',
+                                            network_id='mynet',
+                                            capabilities={'foo': 'bar',
+                                                          'answer': '42'},
+                                            dry_run=False)

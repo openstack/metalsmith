@@ -39,7 +39,8 @@ class API(object):
     """Various OpenStack API's."""
 
     GLANCE_VERSION = '2'
-    IRONIC_VERSION = 1
+    IRONIC_VERSION = '1'
+    IRONIC_MICRO_VERSION = '1.28'
 
     def __init__(self, auth):
         LOG.debug('Creating a session')
@@ -51,7 +52,8 @@ class API(object):
                                           session=self.session)
         self.neutron = neu_client.Client(session=self.session)
         self.ironic = ir_client.get_client(
-            '1', session=self.session, os_ironic_api_version='1.31')
+            self.IRONIC_VERSION, session=self.session,
+            os_ironic_api_version=self.IRONIC_MICRO_VERSION)
 
     def get_image_info(self, image_id):
         for img in self.glance.images.list():
@@ -63,9 +65,10 @@ class API(object):
             if net['name'] == network_id or net['id'] == network_id:
                 return DictWithAttrs(net)
 
-    def list_nodes(self, maintenance=False, associated=False,
-                   provision_state='available', detail=True):
-        return self.ironic.node.list(limit=0, maintenance=maintenance,
+    def list_nodes(self, resource_class=None, maintenance=False,
+                   associated=False, provision_state='available', detail=True):
+        return self.ironic.node.list(limit=0, resource_class=resource_class,
+                                     maintenance=maintenance,
                                      associated=associated, detail=detail,
                                      provision_state=provision_state)
 

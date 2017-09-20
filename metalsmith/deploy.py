@@ -35,35 +35,41 @@ def _get_capabilities(node):
                 node.properties.get('capabilities', '').split(',') if x)
 
 
-def reserve(api, nodes, profile):
+def reserve(api, nodes, capabilities, dry_run=False):
     suitable_nodes = []
     for node in nodes:
         caps = _get_capabilities(node)
         LOG.debug('Capabilities for node %(node)s: %(cap)s',
                   {'node': _log_node(node), 'cap': caps})
-        if caps.get('profile') == profile:
-            suitable_nodes.append(node)
+        for key, value in capabilities.items():
+            if caps.get(key) == value:
+                suitable_nodes.append(node)
 
     if not suitable_nodes:
-        raise RuntimeError('No nodes found with profile %s' % profile)
+        raise RuntimeError('No nodes found with capabilities %s' %
+                           capabilities)
 
     for node in suitable_nodes:
         try:
             api.validate_node(node.uuid)
         except RuntimeError as exc:
-            LOG.warn('Node %(node)s failed validation: %(err)s',
-                     {'node': _log_node(node), 'err': exc})
+            LOG.warning('Node %(node)s failed validation: %(err)s',
+                        {'node': _log_node(node), 'err': exc})
             continue
 
         if not node.properties.get('local_gb'):
-            LOG.warn('No local_gb for node %s', _log_node(node))
+            LOG.warning('No local_gb for node %s', _log_node(node))
             continue
 
-        try:
-            return api.update_node(node.uuid, instance_uuid=node.uuid)
-        except os_api.ir_exc.Conflict:
-            LOG.info('Node %s was occupied, proceeding with the next',
-                     _log_node(node))
+        if dry_run:
+            LOG.debug('Dry run, assuming node %s reserved', _log_node(node))
+            return node
+        else:
+            try:
+                return api.update_node(node.uuid, instance_uuid=node.uuid)
+            except os_api.ir_exc.Conflict:
+                LOG.info('Node %s was occupied, proceeding with the next',
+                         _log_node(node))
 
     raise RuntimeError('Unable to reserve any node')
 
@@ -114,11 +120,13 @@ def provision(api, node, network, image, instance_info):
     api.node_action(node.uuid, 'active')
 
 
-def deploy(api, profile, image_id, network_id):
+def deploy(api, resource_class, image_id, network_id, capabilities,
+           dry_run=False):
     """Deploy an image on a given profile."""
-    LOG.debug('Deploying image %(image)s on node with profile %(profile)s '
-              'on network %(net)s',
-              {'image': image_id, 'profile': profile, 'net': network_id})
+    LOG.debug('Deploying image %(image)s on node with class %(class)s '
+              'and capabilities %(caps)s on network %(net)s',
+              {'image': image_id, 'class': resource_class,
+               'net': network_id, 'capabilities': capabilities})
 
     image = api.get_image_info(image_id)
     if image is None:
@@ -133,14 +141,18 @@ def deploy(api, profile, image_id, network_id):
         raise RuntimeError('Network %s does not exist' % network_id)
     LOG.debug('Network: %s', network)
 
-    nodes = api.list_nodes()
+    nodes = api.list_nodes(resource_class=resource_class)
     LOG.debug('Ironic nodes: %s', nodes)
     if not len(nodes):
         raise RuntimeError('No available nodes found')
     LOG.info('Got list of %d available nodes from Ironic', len(nodes))
 
-    node = reserve(api, nodes, profile)
+    node = reserve(api, nodes, resource_class, capabilities, dry_run=dry_run)
     LOG.info('Reserved node %s', _log_node(node))
+
+    if dry_run:
+        LOG.warning('Dry run, not provisioning node %s', node.uuid)
+        return
 
     instance_info = {}
     try:
