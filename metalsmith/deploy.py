@@ -1,4 +1,4 @@
-# Copyright 2015 Red Hat, Inc.
+# Copyright 2015-2017 Red Hat, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -87,8 +87,8 @@ def clean_up(api, node, instance_info):
 
 
 def provision(api, node, network, image, instance_info):
-    updates = {'/instance_info/ramdisk': image.properties['ramdisk_id'],
-               '/instance_info/kernel': image.properties['kernel_id'],
+    updates = {'/instance_info/ramdisk': image.ramdisk_id,
+               '/instance_info/kernel': image.kernel_id,
                '/instance_info/image_source': image.id,
                '/instance_info/root_gb': node.properties['local_gb']}
     node = api.update_node(node.uuid, updates)
@@ -124,7 +124,7 @@ def deploy(api, profile, image_id, network_id):
     if image is None:
         raise RuntimeError('Image %s does not exist' % image_id)
     for im_prop in ('kernel_id', 'ramdisk_id'):
-        if not image.properties.get(im_prop):
+        if not getattr(image, im_prop, None):
             raise RuntimeError('%s property is required on image' % im_prop)
     LOG.debug('Image: %s', image)
 

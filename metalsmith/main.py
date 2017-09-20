@@ -27,7 +27,7 @@ from metalsmith import os_api
 LOG = logging.getLogger(__name__)
 
 
-def main(args=sys.argv):
+def main(args=sys.argv[1:]):
     parser = argparse.ArgumentParser(
         description='Deployment and Scheduling tool for Bare Metal')
     parser.add_argument('--debug', action='store_true',
@@ -49,13 +49,14 @@ def main(args=sys.argv):
     args = parser.parse_args(args)
 
     log_fmt = ('%(asctime)s %(levelname)s %(name)s: %(message)s' if args.debug
-               else '%(asctime)s %(message)s')
+               else '[%(asctime)s] %(message)s')
     logging.basicConfig(
         level=logging.DEBUG if args.debug else logging.INFO,
         format=log_fmt)
-    if not args.debug:
-        logging.getLogger('requests.packages.urllib3.connectionpool').setLevel(
-            logging.CRITICAL)
+    if args.debug:
+        logging.getLogger('urllib3.connectionpool').setLevel(logging.INFO)
+    else:
+        logging.getLogger('urllib3.connectionpool').setLevel(logging.CRITICAL)
 
     auth = generic.Password(auth_url=args.os_auth_url,
                             username=args.os_username,
