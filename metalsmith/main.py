@@ -29,10 +29,17 @@ LOG = logging.getLogger(__name__)
 
 def _do_deploy(api, args, wait=None):
     capabilities = dict(item.split('=', 1) for item in args.capability)
+    if args.ssh_public_key:
+        with open(args.ssh_public_key) as fp:
+            ssh_keys = {'default': fp.read()}
+    else:
+        ssh_keys = {}
+
     deploy.deploy(api, args.resource_class,
                   image_id=args.image,
                   network_id=args.network,
                   root_disk_size=args.root_disk_size,
+                  ssh_keys=ssh_keys,
                   capabilities=capabilities,
                   netboot=args.netboot,
                   wait=wait,
@@ -79,6 +86,7 @@ def _parse_args(args):
                         '- 2)')
     deploy.add_argument('--capability', action='append', metavar='NAME=VALUE',
                         default=[], help='capabilities the nodes should have')
+    deploy.add_argument('--ssh-public-key', help='SSH public key to load')
     deploy.add_argument('resource_class', help='node resource class to deploy')
     return parser.parse_args(args)
 

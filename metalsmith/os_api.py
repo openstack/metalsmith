@@ -121,5 +121,5 @@ class API(object):
     def delete_port(self, port_id):
         self.neutron.delete_port(port_id)
 
-    def node_action(self, node_id, action):
-        self.ironic.node.set_provision_state(node_id, action)
+    def node_action(self, node_id, action, **kwargs):
+        self.ironic.node.set_provision_state(node_id, action, **kwargs)

@@ -13,7 +13,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import contextlib
+import json
 import logging
+import os
+import shutil
+import tempfile
 
 from ironicclient import exc as ir_exc
 from oslo_utils import excutils
@@ -34,6 +39,24 @@ def _log_node(node):
 def _get_capabilities(node):
     return dict(x.split(':', 1) for x in
                 node.properties.get('capabilities', '').split(',') if x)
+
+
+@contextlib.contextmanager
+def _config_drive_dir(node, ssh_keys):
+    d = tempfile.mkdtemp()
+    try:
+        metadata = {'public_keys': ssh_keys}
+        for version in ('2012-08-10', 'latest'):
+            subdir = os.path.join(d, 'openstack', version)
+            if not os.path.exists(subdir):
+                os.makedirs(subdir)
+
+            with open(os.path.join(subdir, 'meta_data.json'), 'w') as fp:
+                json.dump(metadata, fp)
+
+        yield d
+    finally:
+        shutil.rmtree(d)
 
 
 def reserve(api, nodes, capabilities, dry_run=False):
@@ -97,7 +120,7 @@ def clean_up(api, node, neutron_ports):
 
 
 def provision(api, node, network, image, root_disk_size=None,
-              netboot=False, wait=None):
+              ssh_keys=None, netboot=False, wait=None):
     neutron_ports = []
     target_caps = {'boot_option': 'netboot' if netboot else 'local'}
 
@@ -132,7 +155,8 @@ def provision(api, node, network, image, root_disk_size=None,
                       'port': port.id})
 
         api.validate_node(node.uuid, validate_deploy=True)
-        api.node_action(node.uuid, 'active')
+        with _config_drive_dir(node, ssh_keys) as cd:
+            api.node_action(node.uuid, 'active', configdrive=cd)
         LOG.info('Provisioning started on node %s', _log_node(node))
 
         if wait is not None:
@@ -151,7 +175,8 @@ def provision(api, node, network, image, root_disk_size=None,
 
 
 def deploy(api, resource_class, image_id, network_id, root_disk_size,
-           capabilities=None, netboot=False, wait=None, dry_run=False):
+           ssh_keys, capabilities=None, netboot=False,
+           wait=None, dry_run=False):
     """Deploy an image on a given profile."""
     capabilities = capabilities or {}
     LOG.debug('Deploying image %(image)s on node with class %(class)s '
@@ -185,5 +210,5 @@ def deploy(api, resource_class, image_id, network_id, root_disk_size,
         LOG.warning('Dry run, not provisioning node %s', node.uuid)
         return
 
-    provision(api, node, network, image, root_disk_size,
+    provision(api, node, network, image, root_disk_size, ssh_keys,
               netboot=netboot, wait=wait)

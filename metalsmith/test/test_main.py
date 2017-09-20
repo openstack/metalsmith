@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import tempfile
 import unittest
 
 import mock
@@ -31,6 +32,7 @@ class TestMain(unittest.TestCase):
                                             image_id='myimg',
                                             network_id='mynet',
                                             root_disk_size=None,
+                                            ssh_keys={},
                                             capabilities={},
                                             netboot=False,
                                             wait=1800,
@@ -45,6 +47,7 @@ class TestMain(unittest.TestCase):
                                             image_id='myimg',
                                             network_id='mynet',
                                             root_disk_size=None,
+                                            ssh_keys={},
                                             capabilities={},
                                             netboot=False,
                                             wait=1800,
@@ -59,6 +62,7 @@ class TestMain(unittest.TestCase):
                                             image_id='myimg',
                                             network_id='mynet',
                                             root_disk_size=None,
+                                            ssh_keys={},
                                             capabilities={},
                                             netboot=False,
                                             wait=1800,
@@ -82,8 +86,28 @@ class TestMain(unittest.TestCase):
                                             image_id='myimg',
                                             network_id='mynet',
                                             root_disk_size=None,
+                                            ssh_keys={},
                                             capabilities={'foo': 'bar',
                                                           'answer': '42'},
                                             netboot=False,
                                             wait=1800,
                                             dry_run=False)
+
+    def test_args_configdrive(self, mock_auth, mock_deploy):
+        with tempfile.NamedTemporaryFile() as fp:
+            fp.write('foo')
+            fp.flush()
+
+            args = ['deploy', '--network', 'mynet', '--image', 'myimg',
+                    '--ssh-public-key', fp.name, 'compute']
+            main.main(args)
+            mock_deploy.assert_called_once_with(mock.ANY,
+                                                resource_class='compute',
+                                                image_id='myimg',
+                                                network_id='mynet',
+                                                root_disk_size=None,
+                                                ssh_keys={'default': 'foo'},
+                                                capabilities={},
+                                                netboot=False,
+                                                wait=1800,
+                                                dry_run=False)
