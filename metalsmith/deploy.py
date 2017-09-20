@@ -98,24 +98,25 @@ def clean_up(api, node, neutron_ports):
 
 def provision(api, node, network, image, root_disk_size=None,
               netboot=False, wait=None):
-    target_caps = {'boot_option': 'netboot' if netboot else 'local'}
-    if root_disk_size is None:
-        root_disk_size = node.properties.get('local_gb')
-        if not root_disk_size:
-            raise RuntimeError('No root disk size requested and local_gb '
-                               'is empty')
-        # allow for partitioning and config drive
-        root_disk_size = int(root_disk_size) - 2
-
-    updates = {'/instance_info/ramdisk': image.ramdisk_id,
-               '/instance_info/kernel': image.kernel_id,
-               '/instance_info/image_source': image.id,
-               '/instance_info/root_gb': root_disk_size,
-               '/instance_info/capabilities': target_caps}
-    node = api.update_node(node.uuid, updates)
     neutron_ports = []
+    target_caps = {'boot_option': 'netboot' if netboot else 'local'}
 
     try:
+        if root_disk_size is None:
+            root_disk_size = node.properties.get('local_gb')
+            if not root_disk_size:
+                raise RuntimeError('No root disk size requested and local_gb '
+                                   'is empty')
+            # allow for partitioning and config drive
+            root_disk_size = int(root_disk_size) - 2
+
+        updates = {'/instance_info/ramdisk': image.ramdisk_id,
+                   '/instance_info/kernel': image.kernel_id,
+                   '/instance_info/image_source': image.id,
+                   '/instance_info/root_gb': root_disk_size,
+                   '/instance_info/capabilities': target_caps}
+        node = api.update_node(node.uuid, updates)
+
         node_ports = api.list_node_ports(node.uuid)
         for node_port in node_ports:
             port = api.create_port(mac_address=node_port.address,
