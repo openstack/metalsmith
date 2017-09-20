@@ -215,7 +215,8 @@ def deploy(api, resource_class, image_id, network_id, root_disk_size,
 
 
 def undeploy(api, node_uuid, wait=None):
-    neutron_ports = [port.id for port in api.list_node_attached_ports()]
+    neutron_ports = [port.id
+                     for port in api.list_node_attached_ports(node_uuid)]
 
     api.node_action(node_uuid, 'deleted')
     LOG.info('Deleting started for now %s', node_uuid)
