@@ -32,7 +32,7 @@ class TestMain(unittest.TestCase):
                                             image_id='myimg',
                                             network_id='mynet',
                                             root_disk_size=None,
-                                            ssh_keys={},
+                                            ssh_keys=[],
                                             capabilities={},
                                             netboot=False,
                                             wait=1800,
@@ -47,7 +47,7 @@ class TestMain(unittest.TestCase):
                                             image_id='myimg',
                                             network_id='mynet',
                                             root_disk_size=None,
-                                            ssh_keys={},
+                                            ssh_keys=[],
                                             capabilities={},
                                             netboot=False,
                                             wait=1800,
@@ -62,7 +62,7 @@ class TestMain(unittest.TestCase):
                                             image_id='myimg',
                                             network_id='mynet',
                                             root_disk_size=None,
-                                            ssh_keys={},
+                                            ssh_keys=[],
                                             capabilities={},
                                             netboot=False,
                                             wait=1800,
@@ -86,7 +86,7 @@ class TestMain(unittest.TestCase):
                                             image_id='myimg',
                                             network_id='mynet',
                                             root_disk_size=None,
-                                            ssh_keys={},
+                                            ssh_keys=[],
                                             capabilities={'foo': 'bar',
                                                           'answer': '42'},
                                             netboot=False,
@@ -95,7 +95,7 @@ class TestMain(unittest.TestCase):
 
     def test_args_configdrive(self, mock_auth, mock_deploy):
         with tempfile.NamedTemporaryFile() as fp:
-            fp.write(b'foo')
+            fp.write(b'foo\n')
             fp.flush()
 
             args = ['deploy', '--network', 'mynet', '--image', 'myimg',
@@ -106,7 +106,7 @@ class TestMain(unittest.TestCase):
                                                 image_id='myimg',
                                                 network_id='mynet',
                                                 root_disk_size=None,
-                                                ssh_keys={'default': 'foo'},
+                                                ssh_keys=['foo'],
                                                 capabilities={},
                                                 netboot=False,
                                                 wait=1800,

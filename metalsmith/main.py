@@ -31,9 +31,9 @@ def _do_deploy(api, args, wait=None):
     capabilities = dict(item.split('=', 1) for item in args.capability)
     if args.ssh_public_key:
         with open(args.ssh_public_key) as fp:
-            ssh_keys = {'default': fp.read()}
+            ssh_keys = [fp.read().strip()]
     else:
-        ssh_keys = {}
+        ssh_keys = []
 
     deploy.deploy(api, args.resource_class,
                   image_id=args.image,
