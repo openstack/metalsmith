@@ -96,12 +96,21 @@ def clean_up(api, node, neutron_ports):
             LOG.warning('Failed to delete neutron port %s', port.id)
 
 
-def provision(api, node, network, image, netboot=False, wait=None):
+def provision(api, node, network, image, root_disk_size=None,
+              netboot=False, wait=None):
     target_caps = {'boot_option': 'netboot' if netboot else 'local'}
+    if root_disk_size is None:
+        root_disk_size = node.properties.get('local_gb')
+        if not root_disk_size:
+            raise RuntimeError('No root disk size requested and local_gb '
+                               'is empty')
+        # allow for partitioning and config drive
+        root_disk_size -= 2
+
     updates = {'/instance_info/ramdisk': image.ramdisk_id,
                '/instance_info/kernel': image.kernel_id,
                '/instance_info/image_source': image.id,
-               '/instance_info/root_gb': node.properties['local_gb'],
+               '/instance_info/root_gb': root_disk_size,
                '/instance_info/capabilities': target_caps}
     node = api.update_node(node.uuid, updates)
     neutron_ports = []
@@ -137,9 +146,10 @@ def provision(api, node, network, image, netboot=False, wait=None):
                 LOG.exception('Clean up failed, system needs manual clean up')
 
 
-def deploy(api, resource_class, image_id, network_id, capabilities,
-           netboot=False, wait=None, dry_run=False):
+def deploy(api, resource_class, image_id, network_id, root_disk_size,
+           capabilities=None, netboot=False, wait=None, dry_run=False):
     """Deploy an image on a given profile."""
+    capabilities = capabilities or {}
     LOG.debug('Deploying image %(image)s on node with class %(class)s '
               'and capabilities %(caps)s on network %(net)s',
               {'image': image_id, 'class': resource_class,
@@ -172,4 +182,5 @@ def deploy(api, resource_class, image_id, network_id, capabilities,
         LOG.warning('Dry run, not provisioning node %s', node.uuid)
         return
 
-    provision(api, node, network, image, netboot=netboot, wait=wait)
+    provision(api, node, network, image, root_disk_size,
+              netboot=netboot, wait=wait)

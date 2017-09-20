@@ -48,6 +48,9 @@ def _parse_args(args):
                       help='deployment timeout (in seconds)')
     wait.add_argument('--no-wait', action='store_true',
                       help='disable waiting for deployment to finish')
+    parser.add_argument('--root-disk-size', type=int,
+                        help='root disk size (in GiB), defaults to (local_gb '
+                        '- 2)')
     parser.add_argument('--os-username', default=os.environ.get('OS_USERNAME'))
     parser.add_argument('--os-password', default=os.environ.get('OS_PASSWORD'))
     parser.add_argument('--os-project-name',
@@ -101,6 +104,7 @@ def main(args=sys.argv[1:]):
         deploy.deploy(api, args.resource_class,
                       image_id=args.image,
                       network_id=args.network,
+                      root_disk_size=args.root_disk_size,
                       capabilities=capabilities,
                       netboot=args.netboot,
                       wait=wait,
