@@ -144,10 +144,11 @@ def deploy(api, resource_class, image_id, network_id, capabilities,
     nodes = api.list_nodes(resource_class=resource_class)
     LOG.debug('Ironic nodes: %s', nodes)
     if not len(nodes):
-        raise RuntimeError('No available nodes found')
+        raise RuntimeError('No available nodes found with resource class %s' %
+                           resource_class)
     LOG.info('Got list of %d available nodes from Ironic', len(nodes))
 
-    node = reserve(api, nodes, resource_class, capabilities, dry_run=dry_run)
+    node = reserve(api, nodes, capabilities, dry_run=dry_run)
     LOG.info('Reserved node %s', _log_node(node))
 
     if dry_run:
