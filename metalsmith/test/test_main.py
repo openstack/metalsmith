@@ -95,7 +95,7 @@ class TestMain(unittest.TestCase):
 
     def test_args_configdrive(self, mock_auth, mock_deploy):
         with tempfile.NamedTemporaryFile() as fp:
-            fp.write('foo')
+            fp.write(b'foo')
             fp.flush()
 
             args = ['deploy', '--network', 'mynet', '--image', 'myimg',
