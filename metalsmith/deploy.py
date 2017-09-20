@@ -107,12 +107,16 @@ def clean_up(api, node_uuid, neutron_ports):
         LOG.warning('Failed to remove instance_uuid, assuming already removed')
 
     for port_id in neutron_ports:
+        LOG.debug('Detaching port %(port)s from node %(node)s',
+                  {'port': port_id, 'node': node_uuid})
         try:
             api.detach_port_from_node(node_uuid, port_id)
         except Exception:
             LOG.warning('Failed to remove VIF %(vif)s from node %(node)s, '
                         'assuming already removed',
                         {'vif': port_id, 'node': node_uuid})
+
+        LOG.debug('Deleting port %s', port_id)
         try:
             api.delete_port(port_id)
         except Exception:
@@ -219,10 +223,10 @@ def undeploy(api, node_uuid, wait=None):
                      for port in api.list_node_attached_ports(node_uuid)]
 
     api.node_action(node_uuid, 'deleted')
-    LOG.info('Deleting started for now %s', node_uuid)
+    LOG.info('Deleting started for node %s', node_uuid)
     if wait is not None:
         api.ironic.node.wait_for_provision_state(node_uuid, 'available',
                                                  timeout=max(0, wait))
 
     clean_up(api, node_uuid, neutron_ports)
-    LOG.info('Instance undeployed successfully')
+    LOG.info('Node %s undeployed successfully', node_uuid)
