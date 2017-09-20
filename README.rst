@@ -29,7 +29,7 @@ This is an example suitable for TripleO (replace ``compute`` with the profile
 you want to deploy)::
 
     metalsmith deploy --image overcloud-full --network ctlplane \
-        --capability profile=compute --ssh-public-key ~/.ssh/id_rsa.pu baremetal
+        --capability profile=compute --ssh-public-key ~/.ssh/id_rsa.pub baremetal
 
 To remove the deployed instance::
 
