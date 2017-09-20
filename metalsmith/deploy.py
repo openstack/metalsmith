@@ -15,6 +15,7 @@
 
 import logging
 
+from ironicclient import exc as ir_exc
 from oslo_utils import excutils
 
 from metalsmith import os_api
@@ -42,8 +43,10 @@ def reserve(api, nodes, capabilities, dry_run=False):
         LOG.debug('Capabilities for node %(node)s: %(cap)s',
                   {'node': _log_node(node), 'cap': caps})
         for key, value in capabilities.items():
-            if caps.get(key) == value:
-                suitable_nodes.append(node)
+            if caps.get(key) != value:
+                break
+        else:
+            suitable_nodes.append(node)
 
     if not suitable_nodes:
         raise RuntimeError('No nodes found with capabilities %s' %
@@ -67,7 +70,7 @@ def reserve(api, nodes, capabilities, dry_run=False):
         else:
             try:
                 return api.update_node(node.uuid, instance_uuid=node.uuid)
-            except os_api.ir_exc.Conflict:
+            except ir_exc.Conflict:
                 LOG.info('Node %s was occupied, proceeding with the next',
                          _log_node(node))
 
@@ -143,7 +146,7 @@ def deploy(api, resource_class, image_id, network_id, capabilities,
 
     nodes = api.list_nodes(resource_class=resource_class)
     LOG.debug('Ironic nodes: %s', nodes)
-    if not len(nodes):
+    if not nodes:
         raise RuntimeError('No available nodes found with resource class %s' %
                            resource_class)
     LOG.info('Got list of %d available nodes from Ironic', len(nodes))
