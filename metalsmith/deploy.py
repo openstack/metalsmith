@@ -114,12 +114,11 @@ def provision(api, node, network, image, instance_info):
     api.node_action(node.uuid, 'active')
 
 
-def deploy(profile, image_id, network_id, auth_args):
+def deploy(api, profile, image_id, network_id, auth_args):
     """Deploy an image on a given profile."""
     LOG.debug('Deploying image %(image)s on node with profile %(profile)s '
               'on network %(net)s',
               {'image': image_id, 'profile': profile, 'net': network_id})
-    api = os_api.API(**auth_args)
 
     image = api.get_image_info(image_id)
     if image is None:

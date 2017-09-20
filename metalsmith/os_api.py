@@ -17,17 +17,11 @@ import logging
 
 import glanceclient
 from ironicclient import client as ir_client
-from ironicclient import exc as ir_exc  # noqa
-from keystoneclient.v2_0 import client as ks_client
-from neutronclient.neutron import client as neu_client
+from keystoneauth1 import session
+from neutronclient.v2_0 import client as neu_client
 
 
 LOG = logging.getLogger(__name__)
-DEFAULT_ENDPOINTS = {
-    'image': 'http://127.0.0.1:9292/',
-    'network': 'http://127.0.0.1:9696/',
-    'baremetal': 'http://127.0.0.1:6385/',
-}
 REMOVE = object()
 
 
@@ -44,36 +38,20 @@ class DictWithAttrs(dict):
 class API(object):
     """Various OpenStack API's."""
 
-    GLANCE_VERSION = '1'
-    NEUTRON_VERSION = '2.0'
+    GLANCE_VERSION = '2'
     IRONIC_VERSION = 1
 
-    def __init__(self, **kwargs):
-        LOG.debug('Creating Keystone client')
-        self.keystone = ks_client.Client(**kwargs)
-        self.auth_token = self.keystone.auth_token
-        LOG.debug('Creating service clients')
-        self.glance = glanceclient.Client(
-            self.GLANCE_VERSION, endpoint=self.get_endpoint('image'),
-            token=self.auth_token)
-        self.neutron = neu_client.Client(
-            self.NEUTRON_VERSION, endpoint_url=self.get_endpoint('network'),
-            token=self.auth_token)
-        self.ironic = ir_client.get_client(
-            self.IRONIC_VERSION, ironic_url=self.get_endpoint('baremetal'),
-            os_auth_token=self.auth_token)
+    def __init__(self, auth):
+        LOG.debug('Creating a session')
+        self._auth = auth
+        self.session = session.Session(auth=auth)
 
-    def get_endpoint(self, service_type, endpoint_type='internalurl'):
-        service_id = self.keystone.services.find(type=service_type).id
-        try:
-            endpoint = self.keystone.endpoints.find(service_id=service_id)
-        except Exception as exc:
-            default = DEFAULT_ENDPOINTS.get(service_type)
-            LOG.warn('Failed to detect %(srv)s service endpoint, using '
-                     'the default of %(def)s: %(err)s',
-                     {'srv': service_type, 'def': default, 'err': exc})
-            return default
-        return getattr(endpoint, endpoint_type)
+        LOG.debug('Creating service clients')
+        self.glance = glanceclient.Client(self.GLANCE_VERSION,
+                                          session=self.session)
+        self.neutron = neu_client.Client(session=self.session)
+        self.ironic = ir_client.get_client(
+            '1', session=self.session, os_ironic_api_version='1.31')
 
     def get_image_info(self, image_id):
         for img in self.glance.images.list():

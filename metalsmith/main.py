@@ -18,7 +18,10 @@ import logging
 import os
 import sys
 
+from keystoneauth1.identity import generic
+
 from metalsmith import deploy
+from metalsmith import os_api
 
 
 LOG = logging.getLogger(__name__)
@@ -35,9 +38,13 @@ def main():
                         help='network to use (name or UUID)', required=True),
     parser.add_argument('--os-username', default=os.environ.get('OS_USERNAME'))
     parser.add_argument('--os-password', default=os.environ.get('OS_PASSWORD'))
-    parser.add_argument('--os-tenant-name',
-                        default=os.environ.get('OS_TENANT_NAME'))
+    parser.add_argument('--os-project-name',
+                        default=os.environ.get('OS_PROJECT_NAME'))
     parser.add_argument('--os-auth-url', default=os.environ.get('OS_AUTH_URL'))
+    parser.add_argument('--os-user-domain-name',
+                        default=os.environ.get('OS_USER_DOMAIN_NAME'))
+    parser.add_argument('--os-project-domain-name',
+                        default=os.environ.get('OS_PROJECT_DOMAIN_NAME'))
     parser.add_argument('profile', help='node profile to deploy')
     args = parser.parse_args()
 
@@ -54,9 +61,16 @@ def main():
                  'username': args.os_username,
                  'tenant_name': args.os_tenant_name,
                  'password': args.os_password}
+    auth = generic.Password(auth_url=args.os_auth_url,
+                            username=args.os_username,
+                            project_name=args.os_project_name,
+                            password=args.os_password,
+                            user_domain_name=args.os_user_domain_name,
+                            project_domain_name=args.os_project_domain_name)
+    api = os_api.API(auth)
 
     try:
-        deploy.deploy(profile=args.profile, image_id=args.image,
+        deploy.deploy(api, profile=args.profile, image_id=args.image,
                       network_id=args.network, auth_args=auth_args)
     except Exception as exc:
         LOG.critical('%s', exc, exc_info=args.debug)
