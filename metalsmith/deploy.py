@@ -100,23 +100,23 @@ def reserve(api, nodes, capabilities, dry_run=False):
     raise RuntimeError('Unable to reserve any node')
 
 
-def clean_up(api, node, neutron_ports):
+def clean_up(api, node_uuid, neutron_ports):
     try:
-        api.update_node(node.uuid, instance_uuid=os_api.REMOVE)
+        api.update_node(node_uuid, instance_uuid=os_api.REMOVE)
     except Exception:
         LOG.warning('Failed to remove instance_uuid, assuming already removed')
 
-    for port in neutron_ports:
+    for port_id in neutron_ports:
         try:
-            api.detach_port_from_node(node.uuid, port.id)
+            api.detach_port_from_node(node_uuid, port_id)
         except Exception:
             LOG.warning('Failed to remove VIF %(vif)s from node %(node)s, '
                         'assuming already removed',
-                        {'vif': port.id, 'node': node.uuid})
+                        {'vif': port_id, 'node': node_uuid})
         try:
-            api.delete_port(port.id)
+            api.delete_port(port_id)
         except Exception:
-            LOG.warning('Failed to delete neutron port %s', port.id)
+            LOG.warning('Failed to delete neutron port %s', port_id)
 
 
 def provision(api, node, network, image, root_disk_size=None,
@@ -144,7 +144,7 @@ def provision(api, node, network, image, root_disk_size=None,
         for node_port in node_ports:
             port = api.create_port(mac_address=node_port.address,
                                    network_id=network.id)
-            neutron_ports.append(port)
+            neutron_ports.append(port.id)
             LOG.debug('Created Neutron port %s', port)
 
             api.attach_port_to_node(node.uuid, port.id)
@@ -212,3 +212,16 @@ def deploy(api, resource_class, image_id, network_id, root_disk_size,
 
     provision(api, node, network, image, root_disk_size, ssh_keys,
               netboot=netboot, wait=wait)
+
+
+def undeploy(api, node_uuid, wait=None):
+    neutron_ports = [port.id for port in api.list_node_attached_ports()]
+
+    api.node_action(node_uuid, 'deleted')
+    LOG.info('Deleting started for now %s', node_uuid)
+    if wait is not None:
+        api.ironic.node.wait_for_provision_state(node_uuid, 'available',
+                                                 timeout=max(0, wait))
+
+    clean_up(api, node_uuid, neutron_ports)
+    LOG.info('Instance undeployed successfully')

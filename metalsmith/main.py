@@ -46,6 +46,10 @@ def _do_deploy(api, args, wait=None):
                   dry_run=args.dry_run)
 
 
+def _do_undeploy(api, args, wait=None):
+    deploy.undeploy(api, args.node, wait=wait)
+
+
 def _parse_args(args):
     parser = argparse.ArgumentParser(
         description='Deployment and Scheduling tool for Bare Metal')
@@ -88,6 +92,9 @@ def _parse_args(args):
                         default=[], help='capabilities the nodes should have')
     deploy.add_argument('--ssh-public-key', help='SSH public key to load')
     deploy.add_argument('resource_class', help='node resource class to deploy')
+
+    undeploy = subparsers.add_parser('undeploy')
+    undeploy.add_argument('node', help='node UUID')
     return parser.parse_args(args)
 
 

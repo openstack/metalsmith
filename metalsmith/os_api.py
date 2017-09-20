@@ -100,6 +100,9 @@ class API(object):
     def detach_port_from_node(self, node_id, port_id):
         self.ironic.node.vif_detach(node_id, port_id)
 
+    def list_node_attached_ports(self, node_id):
+        return self.ironic.node.vif_list(node_id)
+
     def validate_node(self, node_id, validate_deploy=False):
         ifaces = ['power', 'management']
         if validate_deploy:
