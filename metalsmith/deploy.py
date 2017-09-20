@@ -77,54 +77,63 @@ def reserve(api, nodes, capabilities, dry_run=False):
     raise RuntimeError('Unable to reserve any node')
 
 
-def clean_up(api, node, instance_info):
+def clean_up(api, node, neutron_ports):
     try:
         api.update_node(node.uuid, instance_uuid=os_api.REMOVE)
     except Exception:
-        LOG.debug('Failed to remove instance_uuid, assuming already removed')
+        LOG.warning('Failed to remove instance_uuid, assuming already removed')
 
-    for port in instance_info.get('ports', ()):
-        api.delete_port(port.id)
-
-    for node_port in instance_info.get('node_ports', ()):
+    for port in neutron_ports:
         try:
-            api.update_node_port(node_port.uuid,
-                                 {'/extra/vif_port_id': os_api.REMOVE})
+            api.detach_port_from_node(node.uuid, port.id)
         except Exception:
-            LOG.debug('Failed to remove VIF id from %s, assuming removed',
-                      node_port.uuid)
+            LOG.warning('Failed to remove VIF %(vif)s from node %(node)s, '
+                        'assuming already removed',
+                        {'vif': port.id, 'node': node.uuid})
+        try:
+            api.delete_port(port.id)
+        except Exception:
+            LOG.warning('Failed to delete neutron port %s', port.id)
 
 
-def provision(api, node, network, image, instance_info):
+def provision(api, node, network, image, netboot=False):
+    target_caps = {'boot_option': 'netboot' if netboot else 'local'}
     updates = {'/instance_info/ramdisk': image.ramdisk_id,
                '/instance_info/kernel': image.kernel_id,
                '/instance_info/image_source': image.id,
-               '/instance_info/root_gb': node.properties['local_gb']}
+               '/instance_info/root_gb': node.properties['local_gb'],
+               '/instance_info/capabilities': target_caps}
     node = api.update_node(node.uuid, updates)
+    neutron_ports = []
 
-    node_ports = api.list_node_ports(node.uuid)
-    for node_port in node_ports:
-        port = api.create_port(mac_address=node_port.address,
-                               network_id=network.id)
-        LOG.debug('Created Neutron port %s', port)
-        instance_info.setdefault('ports', []).append(port)
+    try:
+        node_ports = api.list_node_ports(node.uuid)
+        for node_port in node_ports:
+            port = api.create_port(mac_address=node_port.address,
+                                   network_id=network.id)
+            neutron_ports.append(port)
+            LOG.debug('Created Neutron port %s', port)
 
-        api.update_node_port(node_port.uuid,
-                             {'/extra/vif_port_id': port.id})
-        instance_info.setdefault('node_ports', []).append(node_port)
-        LOG.info('Ironic port %(node_port)s (%(mac)s) associated with '
-                 'Neutron port %(port)s',
-                 {'node_port': node_port.uuid,
-                  'mac': node_port.address,
-                  'port': port.id})
+            api.attach_port_to_node(node.uuid, port.id)
+            LOG.info('Ironic port %(node_port)s (%(mac)s) associated with '
+                     'Neutron port %(port)s',
+                     {'node_port': node_port.uuid,
+                      'mac': node_port.address,
+                      'port': port.id})
 
-    api.validate_node(node.uuid, validate_deploy=True)
-
-    api.node_action(node.uuid, 'active')
+        api.validate_node(node.uuid, validate_deploy=True)
+        api.node_action(node.uuid, 'active')
+    except Exception as exc:
+        with excutils.save_and_reraise_exception():
+            LOG.error('Deploy attempt failed: %s', exc)
+            try:
+                clean_up(node, neutron_ports)
+            except Exception:
+                LOG.exception('Clean up failed, system needs manual clean up')
 
 
 def deploy(api, resource_class, image_id, network_id, capabilities,
-           dry_run=False):
+           netboot=False, dry_run=False):
     """Deploy an image on a given profile."""
     LOG.debug('Deploying image %(image)s on node with class %(class)s '
               'and capabilities %(caps)s on network %(net)s',
@@ -158,13 +167,5 @@ def deploy(api, resource_class, image_id, network_id, capabilities,
         LOG.warning('Dry run, not provisioning node %s', node.uuid)
         return
 
-    instance_info = {}
-    try:
-        provision(api, node, network, image, instance_info)
-    except Exception:
-        with excutils.save_and_reraise_exception():
-            LOG.error('Deploy failed, cleaning up')
-            try:
-                clean_up(api, node, instance_info)
-            except Exception:
-                LOG.exception('Clean up also failed')
+    provision(api, node, network, image, netboot=netboot)
+    LOG.info('Provisioning started on node %s', _log_node(node))

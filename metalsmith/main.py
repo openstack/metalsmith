@@ -41,6 +41,8 @@ def _parse_args(args):
                         required=True)
     parser.add_argument('--network', help='network to use (name or UUID)',
                         required=True),
+    parser.add_argument('--netboot', action='store_true',
+                        help='boot from network instead of local disk')
     parser.add_argument('--os-username', default=os.environ.get('OS_USERNAME'))
     parser.add_argument('--os-password', default=os.environ.get('OS_PASSWORD'))
     parser.add_argument('--os-project-name',
@@ -91,6 +93,7 @@ def main(args=sys.argv[1:]):
                       image_id=args.image,
                       network_id=args.network,
                       capabilities=capabilities,
+                      netboot=args.netboot,
                       dry_run=args.dry_run)
     except Exception as exc:
         LOG.critical('%s', exc, exc_info=args.debug)

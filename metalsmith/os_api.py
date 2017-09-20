@@ -94,11 +94,11 @@ class API(object):
         patches = self._convert_patches(attrs)
         return self.ironic.node.update(node_id, patches)
 
-    def update_node_port(self, port_id, *args, **attrs):
-        if args:
-            attrs.update(args[0])
-        patches = self._convert_patches(attrs)
-        return self.ironic.port.update(port_id, patches)
+    def attach_port_to_node(self, node_id, port_id):
+        self.ironic.node.vif_attach(node_id, port_id)
+
+    def detach_port_from_node(self, node_id, port_id):
+        self.ironic.node.vif_detach(node_id, port_id)
 
     def validate_node(self, node_id, validate_deploy=False):
         ifaces = ['power', 'management']
