@@ -22,12 +22,12 @@ Start with sourcing your OpenStack credentials, for example::
 
 Generic usage is as follows::
 
-    metalsmith --image <GLANCE IMAGE> --network <NEUTRON NET> <RESOURCE CLASS>
+    metalsmith deploy --image <GLANCE IMAGE> --network <NEUTRON NET> <RESOURCE CLASS>
 
 This is an example suitable for TripleO (replace ``compute`` with the profile
 you want to deploy)::
 
-    metalsmith --image overcloud-full --network ctlplane \
+    metalsmith deploy --image overcloud-full --network ctlplane \
         --capability profile=compute baremetal
 
 For all possible options see the built-in help::

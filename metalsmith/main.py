@@ -27,6 +27,18 @@ from metalsmith import os_api
 LOG = logging.getLogger(__name__)
 
 
+def _do_deploy(api, args, wait=None):
+    capabilities = dict(item.split('=', 1) for item in args.capability)
+    deploy.deploy(api, args.resource_class,
+                  image_id=args.image,
+                  network_id=args.network,
+                  root_disk_size=args.root_disk_size,
+                  capabilities=capabilities,
+                  netboot=args.netboot,
+                  wait=wait,
+                  dry_run=args.dry_run)
+
+
 def _parse_args(args):
     parser = argparse.ArgumentParser(
         description='Deployment and Scheduling tool for Bare Metal')
@@ -37,20 +49,11 @@ def _parse_args(args):
                            help='output more logging')
     parser.add_argument('--dry-run', action='store_true',
                         help='do not take any destructive actions')
-    parser.add_argument('--image', help='image to use (name or UUID)',
-                        required=True)
-    parser.add_argument('--network', help='network to use (name or UUID)',
-                        required=True),
-    parser.add_argument('--netboot', action='store_true',
-                        help='boot from network instead of local disk')
     wait = parser.add_mutually_exclusive_group()
     wait.add_argument('--timeout', type=int, default=1800,
-                      help='deployment timeout (in seconds)')
+                      help='action timeout (in seconds)')
     wait.add_argument('--no-wait', action='store_true',
-                      help='disable waiting for deployment to finish')
-    parser.add_argument('--root-disk-size', type=int,
-                        help='root disk size (in GiB), defaults to (local_gb '
-                        '- 2)')
+                      help='disable waiting for action to finish')
     parser.add_argument('--os-username', default=os.environ.get('OS_USERNAME'))
     parser.add_argument('--os-password', default=os.environ.get('OS_PASSWORD'))
     parser.add_argument('--os-project-name',
@@ -60,9 +63,23 @@ def _parse_args(args):
                         default=os.environ.get('OS_USER_DOMAIN_NAME'))
     parser.add_argument('--os-project-domain-name',
                         default=os.environ.get('OS_PROJECT_DOMAIN_NAME'))
-    parser.add_argument('--capability', action='append', metavar='NAME=VALUE',
+
+    subparsers = parser.add_subparsers()
+
+    deploy = subparsers.add_parser('deploy')
+    deploy.set_defaults(func=_do_deploy)
+    deploy.add_argument('--image', help='image to use (name or UUID)',
+                        required=True)
+    deploy.add_argument('--network', help='network to use (name or UUID)',
+                        required=True),
+    deploy.add_argument('--netboot', action='store_true',
+                        help='boot from network instead of local disk')
+    deploy.add_argument('--root-disk-size', type=int,
+                        help='root disk size (in GiB), defaults to (local_gb '
+                        '- 2)')
+    deploy.add_argument('--capability', action='append', metavar='NAME=VALUE',
                         default=[], help='capabilities the nodes should have')
-    parser.add_argument('resource_class', help='node resource class to deploy')
+    deploy.add_argument('resource_class', help='node resource class to deploy')
     return parser.parse_args(args)
 
 
@@ -86,7 +103,6 @@ def _configure_logging(args):
 def main(args=sys.argv[1:]):
     args = _parse_args(args)
     _configure_logging(args)
-    capabilities = dict(item.split('=', 1) for item in args.capability)
     if args.no_wait:
         wait = None
     else:
@@ -101,14 +117,7 @@ def main(args=sys.argv[1:]):
     api = os_api.API(auth)
 
     try:
-        deploy.deploy(api, args.resource_class,
-                      image_id=args.image,
-                      network_id=args.network,
-                      root_disk_size=args.root_disk_size,
-                      capabilities=capabilities,
-                      netboot=args.netboot,
-                      wait=wait,
-                      dry_run=args.dry_run)
+        args.func(api, args, wait=wait)
     except Exception as exc:
         LOG.critical('%s', exc, exc_info=args.debug)
         sys.exit(1)

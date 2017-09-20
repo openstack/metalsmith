@@ -24,7 +24,7 @@ from metalsmith import main
 @mock.patch.object(main.generic, 'Password', autospec=True)
 class TestMain(unittest.TestCase):
     def test_args_ok(self, mock_auth, mock_deploy):
-        args = ['--network', 'mynet', '--image', 'myimg', 'compute']
+        args = ['deploy', '--network', 'mynet', '--image', 'myimg', 'compute']
         main.main(args)
         mock_deploy.assert_called_once_with(mock.ANY,
                                             resource_class='compute',
@@ -37,7 +37,8 @@ class TestMain(unittest.TestCase):
                                             dry_run=False)
 
     def test_args_debug(self, mock_auth, mock_deploy):
-        args = ['--network', 'mynet', '--image', 'myimg', '--debug', 'compute']
+        args = ['--debug', 'deploy', '--network', 'mynet', '--image', 'myimg',
+                'compute']
         main.main(args)
         mock_deploy.assert_called_once_with(mock.ANY,
                                             resource_class='compute',
@@ -50,7 +51,8 @@ class TestMain(unittest.TestCase):
                                             dry_run=False)
 
     def test_args_quiet(self, mock_auth, mock_deploy):
-        args = ['--network', 'mynet', '--image', 'myimg', '--quiet', 'compute']
+        args = ['--quiet', 'deploy', '--network', 'mynet', '--image', 'myimg',
+                'compute']
         main.main(args)
         mock_deploy.assert_called_once_with(mock.ANY,
                                             resource_class='compute',
@@ -64,14 +66,14 @@ class TestMain(unittest.TestCase):
 
     @mock.patch.object(main.LOG, 'critical', autospec=True)
     def test_deploy_failure(self, mock_log, mock_auth, mock_deploy):
-        args = ['--network', 'mynet', '--image', 'myimg', 'compute']
+        args = ['deploy', '--network', 'mynet', '--image', 'myimg', 'compute']
         mock_deploy.side_effect = RuntimeError('boom')
         self.assertRaises(SystemExit, main.main, args)
         mock_log.assert_called_once_with('%s', mock_deploy.side_effect,
                                          exc_info=False)
 
     def test_args_capabilities(self, mock_auth, mock_deploy):
-        args = ['--network', 'mynet', '--image', 'myimg', '--debug',
+        args = ['deploy', '--network', 'mynet', '--image', 'myimg',
                 '--capability', 'foo=bar', '--capability', 'answer=42',
                 'compute']
         main.main(args)
