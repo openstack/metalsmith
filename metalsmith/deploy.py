@@ -136,13 +136,13 @@ def provision(api, node, network, image, root_disk_size=None,
         LOG.info('Provisioning started on node %s', _log_node(node))
 
         if wait is not None:
-            api.ironic.wait_for_provision_state(node.uuid, 'active',
-                                                timeout=max(0, wait))
+            api.ironic.node.wait_for_provision_state(node.uuid, 'active',
+                                                     timeout=max(0, wait))
     except Exception:
         with excutils.save_and_reraise_exception():
             LOG.error('Deploy attempt failed, cleaning up')
             try:
-                clean_up(node, neutron_ports)
+                clean_up(api, node, neutron_ports)
             except Exception:
                 LOG.exception('Clean up failed, system needs manual clean up')
 
