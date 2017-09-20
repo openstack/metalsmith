@@ -47,7 +47,12 @@ def _config_drive_dir(node, ssh_keys):
     try:
         metadata = {'public_keys': ssh_keys,
                     'uuid': node.uuid,
-                    'name': node.name}
+                    'name': node.name,
+                    'hostname': node.name or node.uuid,
+                    'launch_index': 0,
+                    'availability_zone': '',
+                    'files': [],
+                    'meta': {}}
         for version in ('2012-08-10', 'latest'):
             subdir = os.path.join(d, 'openstack', version)
             if not os.path.exists(subdir):
