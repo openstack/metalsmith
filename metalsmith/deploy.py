@@ -105,7 +105,7 @@ def provision(api, node, network, image, root_disk_size=None,
             raise RuntimeError('No root disk size requested and local_gb '
                                'is empty')
         # allow for partitioning and config drive
-        root_disk_size -= 2
+        root_disk_size = int(root_disk_size) - 2
 
     updates = {'/instance_info/ramdisk': image.ramdisk_id,
                '/instance_info/kernel': image.kernel_id,
