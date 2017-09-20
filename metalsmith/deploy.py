@@ -146,6 +146,9 @@ def provision(api, node, network, image, root_disk_size=None,
             except Exception:
                 LOG.exception('Clean up failed, system needs manual clean up')
 
+    if wait is not None:
+        LOG.info('Deploy succeeded on node %s', _log_node(node))
+
 
 def deploy(api, resource_class, image_id, network_id, root_disk_size,
            capabilities=None, netboot=False, wait=None, dry_run=False):
