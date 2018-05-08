@@ -14,9 +14,6 @@
 # limitations under the License.
 
 
-from metalsmith import _utils
-
-
 class Error(Exception):
     """Base class for Metalsmith errors."""
 
@@ -58,17 +55,6 @@ class AllNodesReserved(ReservationFailed):
         super(AllNodesReserved, self).__init__(message,
                                                requested_resource_class,
                                                requested_capabilities)
-
-
-class ReleaseFailed(Error):
-    """Failed to release a lock on the node."""
-
-    def __init__(self, node, error):
-        message = 'Failed to release node %(node)s: %(error)s' % {
-            'node': _utils.log_node(node),
-            'error': error
-        }
-        super(ReleaseFailed, self).__init__(message)
 
 
 class InvalidImage(Error):
