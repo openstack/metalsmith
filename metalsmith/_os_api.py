@@ -17,8 +17,8 @@ import logging
 
 import glanceclient
 from ironicclient import client as ir_client
-from keystoneauth1 import session
 from neutronclient.v2_0 import client as neu_client
+import six
 
 
 LOG = logging.getLogger(__name__)
@@ -42,10 +42,8 @@ class API(object):
     IRONIC_VERSION = '1'
     IRONIC_MICRO_VERSION = '1.28'
 
-    def __init__(self, auth):
-        LOG.debug('Creating a session')
-        self._auth = auth
-        self.session = session.Session(auth=auth)
+    def __init__(self, session):
+        self.session = session
 
         LOG.debug('Creating service clients')
         self.glance = glanceclient.Client(self.GLANCE_VERSION,
@@ -54,6 +52,22 @@ class API(object):
         self.ironic = ir_client.get_client(
             self.IRONIC_VERSION, session=self.session,
             os_ironic_api_version=self.IRONIC_MICRO_VERSION)
+
+    def attach_port_to_node(self, node, port_id):
+        self.ironic.node.vif_attach(_node_id(node), port_id)
+
+    def create_port(self, network_id, **kwargs):
+        port_body = dict(network_id=network_id,
+                         admin_state_up=True,
+                         **kwargs)
+        port = self.neutron.create_port({'port': port_body})
+        return DictWithAttrs(port['port'])
+
+    def delete_port(self, port_id):
+        self.neutron.delete_port(port_id)
+
+    def detach_port_from_node(self, node, port_id):
+        self.ironic.node.vif_detach(_node_id(node), port_id)
 
     def get_image_info(self, image_id):
         for img in self.glance.images.list():
@@ -65,6 +79,18 @@ class API(object):
             if net['name'] == network_id or net['id'] == network_id:
                 return DictWithAttrs(net)
 
+    def get_node(self, node):
+        if isinstance(node, six.string_types):
+            return self.ironic.node.get(node)
+        else:
+            return node
+
+    def list_node_attached_ports(self, node):
+        return self.ironic.node.vif_list(_node_id(node))
+
+    def list_node_ports(self, node):
+        return self.ironic.node.list_ports(_node_id(node), limit=0)
+
     def list_nodes(self, resource_class=None, maintenance=False,
                    associated=False, provision_state='available', detail=True):
         return self.ironic.node.list(limit=0, resource_class=resource_class,
@@ -72,57 +98,53 @@ class API(object):
                                      associated=associated, detail=detail,
                                      provision_state=provision_state)
 
-    def list_node_ports(self, node_id):
-        return self.ironic.node.list_ports(node_id, limit=0)
+    def node_action(self, node, action, **kwargs):
+        self.ironic.node.set_provision_state(_node_id(node), action, **kwargs)
 
-    def _convert_patches(self, attrs):
-        patches = []
-        for key, value in attrs.items():
-            if not key.startswith('/'):
-                key = '/' + key
+    def release_node(self, node):
+        return self.update_node(_node_id(node), instance_uuid=REMOVE)
 
-            if value is REMOVE:
-                patches.append({'op': 'remove', 'path': key})
-            else:
-                patches.append({'op': 'add', 'path': key, 'value': value})
+    def reserve_node(self, node, instance_uuid):
+        return self.update_node(_node_id(node), instance_uuid=instance_uuid)
 
-        return patches
-
-    def update_node(self, node_id, *args, **attrs):
+    def update_node(self, node, *args, **attrs):
         if args:
             attrs.update(args[0])
-        patches = self._convert_patches(attrs)
-        return self.ironic.node.update(node_id, patches)
+        patches = _convert_patches(attrs)
+        return self.ironic.node.update(_node_id(node), patches)
 
-    def attach_port_to_node(self, node_id, port_id):
-        self.ironic.node.vif_attach(node_id, port_id)
-
-    def detach_port_from_node(self, node_id, port_id):
-        self.ironic.node.vif_detach(node_id, port_id)
-
-    def list_node_attached_ports(self, node_id):
-        return self.ironic.node.vif_list(node_id)
-
-    def validate_node(self, node_id, validate_deploy=False):
+    def validate_node(self, node, validate_deploy=False):
         ifaces = ['power', 'management']
         if validate_deploy:
             ifaces += ['deploy']
 
-        validation = self.ironic.node.validate(node_id)
+        validation = self.ironic.node.validate(_node_id(node))
         for iface in ifaces:
             result = getattr(validation, iface)
             if not result['result']:
                 raise RuntimeError('%s: %s' % (iface, result['reason']))
 
-    def create_port(self, network_id, mac_address):
-        port_body = {'mac_address': mac_address,
-                     'network_id': network_id,
-                     'admin_state_up': True}
-        port = self.neutron.create_port({'port': port_body})
-        return DictWithAttrs(port['port'])
+    def wait_for_active(self, node, timeout):
+        self.ironic.node.wait_for_provision_state(_node_id(node), 'active',
+                                                  timeout=timeout)
 
-    def delete_port(self, port_id):
-        self.neutron.delete_port(port_id)
 
-    def node_action(self, node_id, action, **kwargs):
-        self.ironic.node.set_provision_state(node_id, action, **kwargs)
+def _node_id(node):
+    if isinstance(node, six.string_types):
+        return node
+    else:
+        return node.uuid
+
+
+def _convert_patches(attrs):
+    patches = []
+    for key, value in attrs.items():
+        if not key.startswith('/'):
+            key = '/' + key
+
+        if value is REMOVE:
+            patches.append({'op': 'remove', 'path': key})
+        else:
+            patches.append({'op': 'add', 'path': key, 'value': value})
+
+    return patches

@@ -19,9 +19,9 @@ import os
 import sys
 
 from keystoneauth1.identity import generic
+from keystoneauth1 import session
 
-from metalsmith import deploy
-from metalsmith import os_api
+from metalsmith import _provisioner
 
 
 LOG = logging.getLogger(__name__)
@@ -35,19 +35,18 @@ def _do_deploy(api, args, wait=None):
     else:
         ssh_keys = []
 
-    deploy.deploy(api, args.resource_class,
-                  image_id=args.image,
-                  network_id=args.network,
-                  root_disk_size=args.root_disk_size,
-                  ssh_keys=ssh_keys,
-                  capabilities=capabilities,
-                  netboot=args.netboot,
-                  wait=wait,
-                  dry_run=args.dry_run)
+    node = api.reserve_node(args.resource_class, capabilities=capabilities)
+    api.provision_node(node,
+                       image_ref=args.image,
+                       network_refs=[args.network],
+                       root_disk_size=args.root_disk_size,
+                       ssh_keys=ssh_keys,
+                       netboot=args.netboot,
+                       wait=wait)
 
 
 def _do_undeploy(api, args, wait=None):
-    deploy.undeploy(api, args.node, wait=wait)
+    api.unprovision_node(args.node, wait=wait)
 
 
 def _parse_args(args):
@@ -130,7 +129,8 @@ def main(args=sys.argv[1:]):
                             password=args.os_password,
                             user_domain_name=args.os_user_domain_name,
                             project_domain_name=args.os_project_domain_name)
-    api = os_api.API(auth)
+    sess = session.Session(auth=auth)
+    api = _provisioner.Provisioner(sess, dry_run=args.dry_run)
 
     try:
         args.func(api, args, wait=wait)
