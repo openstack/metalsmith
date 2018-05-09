@@ -136,8 +136,24 @@ class Provisioner(object):
 
         if wait is not None:
             LOG.info('Deploy succeeded on node %s', _utils.log_node(node))
+            self._log_ips(node, created_ports)
 
         return node
+
+    def _log_ips(self, node, created_ports):
+        ips = []
+        for port in created_ports:
+            # Refresh the port to get its IP(s)
+            port = self._api.get_port(port)
+            for ip in port.fixed_ips:
+                if ip.get('ip_address'):
+                    ips.append(ip['ip_address'])
+        if ips:
+            LOG.info('IPs for %(node)s: %(ips)s',
+                     {'node': _utils.log_node(node),
+                      'ips': ', '.join(ips)})
+        else:
+            LOG.warning('No IPs for node %s', _utils.log_node(node))
 
     def _clean_up(self, node, created_ports):
         try:

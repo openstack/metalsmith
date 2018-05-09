@@ -85,6 +85,10 @@ class API(object):
         else:
             return node
 
+    def get_port(self, port_id):
+        port = self.neutron.show_port(port_id)
+        return DictWithAttrs(port['port'])
+
     def list_node_attached_ports(self, node):
         return self.ironic.node.vif_list(_node_id(node))
 

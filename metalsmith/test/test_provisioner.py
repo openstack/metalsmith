@@ -103,6 +103,10 @@ class TestProvisionNode(Base):
         self.assertFalse(self.api.delete_port.called)
 
     def test_with_wait(self):
+        self.api.get_port.return_value = mock.Mock(
+            spec=['fixed_ips'],
+            fixed_ips=[{'ip': '192.168.1.5'}]
+        )
         self.pr.provision_node(self.node, 'image', ['network'], wait=3600)
 
         self.api.create_port.assert_called_once_with(
@@ -126,6 +130,8 @@ class TestProvisionNode(Base):
         self.api.wait_for_node_state.assert_called_once_with(self.node,
                                                              'active',
                                                              timeout=3600)
+        self.api.get_port.assert_called_once_with(
+            self.api.create_port.return_value.id)
         self.assertFalse(self.api.release_node.called)
         self.assertFalse(self.api.delete_port.called)
 
