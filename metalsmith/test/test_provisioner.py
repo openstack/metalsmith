@@ -105,7 +105,7 @@ class TestProvisionNode(Base):
     def test_with_wait(self):
         self.api.get_port.return_value = mock.Mock(
             spec=['fixed_ips'],
-            fixed_ips=[{'ip': '192.168.1.5'}]
+            fixed_ips=[{'ip_address': '192.168.1.5'}, {}]
         )
         self.pr.provision_node(self.node, 'image', ['network'], wait=3600)
 
@@ -134,6 +134,20 @@ class TestProvisionNode(Base):
             self.api.create_port.return_value.id)
         self.assertFalse(self.api.release_node.called)
         self.assertFalse(self.api.delete_port.called)
+
+    @mock.patch.object(_provisioner.LOG, 'warning', autospec=True)
+    def test_with_wait_no_ips(self, mock_warn):
+        self.api.get_port.return_value = mock.Mock(
+            spec=['fixed_ips'], fixed_ips=[]
+        )
+        self.pr.provision_node(self.node, 'image', ['network'], wait=3600)
+
+        self.api.node_action.assert_called_once_with(self.node, 'active',
+                                                     configdrive=mock.ANY)
+        self.api.wait_for_node_state.assert_called_once_with(self.node,
+                                                             'active',
+                                                             timeout=3600)
+        mock_warn.assert_called_once_with('No IPs for node %s', mock.ANY)
 
     def test_dry_run(self):
         self.pr._dry_run = True
