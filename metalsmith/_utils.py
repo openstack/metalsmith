@@ -52,7 +52,6 @@ def config_drive_dir(node, ssh_keys):
                 os.makedirs(subdir)
 
             with open(os.path.join(subdir, 'meta_data.json'), 'w') as fp:
-                print(metadata)
                 json.dump(metadata, fp)
 
         yield d
