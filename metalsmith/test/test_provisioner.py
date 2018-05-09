@@ -17,17 +17,29 @@ import mock
 import testtools
 
 from metalsmith import _exceptions
+from metalsmith import _os_api
 from metalsmith import _provisioner
 
 
-class TestReserveNode(testtools.TestCase):
+class Base(testtools.TestCase):
 
     def setUp(self):
-        super(TestReserveNode, self).setUp()
-        self.api = mock.Mock(spec=['list_nodes', 'reserve_node',
-                                   'validate_node'])
+        super(Base, self).setUp()
         self.pr = _provisioner.Provisioner(mock.Mock())
+        self._reset_api_mock()
+        self.node = mock.Mock(spec=['name', 'uuid', 'properties', 'extra'],
+                              uuid='000', properties={'local_gb': 100},
+                              extra={})
+        self.node.name = 'control-0'
+
+    def _reset_api_mock(self):
+        self.api = mock.Mock(spec=_os_api.API)
+        self.api.get_node.side_effect = lambda n: n
+        self.api.update_node.side_effect = lambda n, _u: n
         self.pr._api = self.api
+
+
+class TestReserveNode(Base):
 
     def test_no_nodes(self):
         self.api.list_nodes.return_value = []
@@ -63,21 +75,184 @@ class TestReserveNode(testtools.TestCase):
         self.assertIs(node, expected)
 
 
-class TestProvisionNode(testtools.TestCase):
-
-    def setUp(self):
-        super(TestProvisionNode, self).setUp()
-        self.api = mock.Mock(spec=['get_node', 'get_image_info', 'get_network',
-                                   'update_node', 'validate_node',
-                                   'create_port', 'attach_port_to_node',
-                                   'node_action', 'wait_for_active'])
-        self.api.get_node.side_effect = lambda n: n
-        self.api.update_node.side_effect = lambda n, _u: n
-        self.pr = _provisioner.Provisioner(mock.Mock())
-        self.pr._api = self.api
-        self.node = mock.Mock(spec=['name', 'uuid', 'properties'],
-                              uuid='000', properties={'local_gb': 100})
-        self.node.name = 'control-0'
+class TestProvisionNode(Base):
 
     def test_ok(self):
         self.pr.provision_node(self.node, 'image', ['network'])
+
+        self.api.create_port.assert_called_once_with(
+            network_id=self.api.get_network.return_value.id)
+        self.api.attach_port_to_node.assert_called_once_with(
+            self.node.uuid, self.api.create_port.return_value.id)
+        image = self.api.get_image_info.return_value
+        updates = {'/instance_info/ramdisk': image.ramdisk_id,
+                   '/instance_info/kernel': image.kernel_id,
+                   '/instance_info/image_source': image.id,
+                   '/instance_info/root_gb': 99,  # 100 - 1
+                   '/instance_info/capabilities': {'boot_option': 'local'},
+                   '/extra/metalsmith_created_ports': [
+                       self.api.create_port.return_value.id
+                   ]}
+        self.api.update_node.assert_called_once_with(self.node, updates)
+        self.api.validate_node.assert_called_once_with(self.node,
+                                                       validate_deploy=True)
+        self.api.node_action.assert_called_once_with(self.node, 'active',
+                                                     configdrive=mock.ANY)
+        self.assertFalse(self.api.wait_for_node_state.called)
+        self.assertFalse(self.api.release_node.called)
+        self.assertFalse(self.api.delete_port.called)
+
+    def test_with_wait(self):
+        self.pr.provision_node(self.node, 'image', ['network'], wait=3600)
+
+        self.api.create_port.assert_called_once_with(
+            network_id=self.api.get_network.return_value.id)
+        self.api.attach_port_to_node.assert_called_once_with(
+            self.node.uuid, self.api.create_port.return_value.id)
+        image = self.api.get_image_info.return_value
+        updates = {'/instance_info/ramdisk': image.ramdisk_id,
+                   '/instance_info/kernel': image.kernel_id,
+                   '/instance_info/image_source': image.id,
+                   '/instance_info/root_gb': 99,  # 100 - 1
+                   '/instance_info/capabilities': {'boot_option': 'local'},
+                   '/extra/metalsmith_created_ports': [
+                       self.api.create_port.return_value.id
+                   ]}
+        self.api.update_node.assert_called_once_with(self.node, updates)
+        self.api.validate_node.assert_called_once_with(self.node,
+                                                       validate_deploy=True)
+        self.api.node_action.assert_called_once_with(self.node, 'active',
+                                                     configdrive=mock.ANY)
+        self.api.wait_for_node_state.assert_called_once_with(self.node,
+                                                             'active',
+                                                             timeout=3600)
+        self.assertFalse(self.api.release_node.called)
+        self.assertFalse(self.api.delete_port.called)
+
+    def test_dry_run(self):
+        self.pr._dry_run = True
+        self.pr.provision_node(self.node, 'image', ['network'])
+
+        self.assertFalse(self.api.create_port.called)
+        self.assertFalse(self.api.attach_port_to_node.called)
+        self.assertFalse(self.api.update_node.called)
+        self.assertFalse(self.api.node_action.called)
+        self.assertFalse(self.api.wait_for_node_state.called)
+        self.assertFalse(self.api.release_node.called)
+        self.assertFalse(self.api.delete_port.called)
+
+    def test_deploy_failure(self):
+        self.api.node_action.side_effect = RuntimeError('boom')
+        self.assertRaisesRegex(RuntimeError, 'boom',
+                               self.pr.provision_node, self.node,
+                               'image', ['network'], wait=3600)
+
+        self.assertFalse(self.api.wait_for_node_state.called)
+        self.api.release_node.assert_called_once_with(self.node)
+        self.api.delete_port.assert_called_once_with(
+            self.api.create_port.return_value.id)
+        self.api.detach_port_from_node.assert_called_once_with(
+            self.node, self.api.create_port.return_value.id)
+
+    def test_port_creation_failure(self):
+        self.api.create_port.side_effect = RuntimeError('boom')
+        self.assertRaisesRegex(RuntimeError, 'boom',
+                               self.pr.provision_node, self.node,
+                               'image', ['network'], wait=3600)
+
+        self.assertFalse(self.api.node_action.called)
+        self.api.release_node.assert_called_once_with(self.node)
+        self.assertFalse(self.api.delete_port.called)
+        self.assertFalse(self.api.detach_port_from_node.called)
+
+    def test_port_attach_failure(self):
+        self.api.attach_port_to_node.side_effect = RuntimeError('boom')
+        self.assertRaisesRegex(RuntimeError, 'boom',
+                               self.pr.provision_node, self.node,
+                               'image', ['network'], wait=3600)
+
+        self.assertFalse(self.api.node_action.called)
+        self.api.release_node.assert_called_once_with(self.node)
+        self.api.delete_port.assert_called_once_with(
+            self.api.create_port.return_value.id)
+        self.api.detach_port_from_node.assert_called_once_with(
+            self.node, self.api.create_port.return_value.id)
+
+    @mock.patch.object(_provisioner.LOG, 'exception', autospec=True)
+    def test_failure_during_deploy_failure(self, mock_log_exc):
+        for failed_call in ['detach_port_from_node',
+                            'delete_port', 'release_node']:
+            self._reset_api_mock()
+            getattr(self.api, failed_call).side_effect = AssertionError()
+            self.api.node_action.side_effect = RuntimeError('boom')
+            self.assertRaisesRegex(RuntimeError, 'boom',
+                                   self.pr.provision_node, self.node,
+                                   'image', ['network'], wait=3600)
+
+            self.assertFalse(self.api.wait_for_node_state.called)
+            self.api.release_node.assert_called_once_with(self.node)
+            self.api.delete_port.assert_called_once_with(
+                self.api.create_port.return_value.id)
+            self.api.detach_port_from_node.assert_called_once_with(
+                self.node, self.api.create_port.return_value.id)
+            self.assertEqual(mock_log_exc.called,
+                             failed_call == 'release_node')
+
+    def test_invalid_image(self):
+        for result, error in [
+                (None, 'does not exist'),
+                (mock.Mock(kernel_id=None), 'kernel_id is required'),
+                (mock.Mock(ramdisk_id=None), 'ramdisk_id is required')
+        ]:
+            self.api.get_image_info.return_value = result
+            self.assertRaisesRegex(_exceptions.InvalidImage, error,
+                                   self.pr.provision_node,
+                                   self.node, 'image', ['network'])
+        self.assertFalse(self.api.update_node.called)
+        self.assertFalse(self.api.node_action.called)
+
+    def test_invalid_network(self):
+        self.api.get_network.return_value = None
+        self.assertRaises(_exceptions.InvalidNetwork,
+                          self.pr.provision_node,
+                          self.node, 'image', ['network'])
+        self.assertFalse(self.api.create_port.called)
+        self.assertFalse(self.api.node_action.called)
+
+
+class TestUnprovisionNode(Base):
+
+    def test_ok(self):
+        self.node.extra['metalsmith_created_ports'] = ['port1']
+        self.pr.unprovision_node(self.node)
+
+        self.api.delete_port.assert_called_once_with('port1')
+        self.api.detach_port_from_node.assert_called_once_with(self.node,
+                                                               'port1')
+        self.api.node_action.assert_called_once_with(self.node, 'deleted')
+        self.api.release_node.assert_called_once_with(self.node)
+        self.assertFalse(self.api.wait_for_node_state.called)
+
+    def test_with_wait(self):
+        self.node.extra['metalsmith_created_ports'] = ['port1']
+        self.pr.unprovision_node(self.node, wait=3600)
+
+        self.api.delete_port.assert_called_once_with('port1')
+        self.api.detach_port_from_node.assert_called_once_with(self.node,
+                                                               'port1')
+        self.api.node_action.assert_called_once_with(self.node, 'deleted')
+        self.api.release_node.assert_called_once_with(self.node)
+        self.api.wait_for_node_state.assert_called_once_with(self.node,
+                                                             'available',
+                                                             timeout=3600)
+
+    def test_dry_run(self):
+        self.pr._dry_run = True
+        self.node.extra['metalsmith_created_ports'] = ['port1']
+        self.pr.unprovision_node(self.node)
+
+        self.assertFalse(self.api.node_action.called)
+        self.assertFalse(self.api.release_node.called)
+        self.assertFalse(self.api.delete_port.called)
+        self.assertFalse(self.api.detach_port_from_node.called)
+        self.assertFalse(self.api.wait_for_node_state.called)

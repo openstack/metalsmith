@@ -124,7 +124,7 @@ class Provisioner(object):
             LOG.info('Provisioning started on node %s', _utils.log_node(node))
 
             if wait is not None:
-                self._api.wait_for_active(node, timeout=wait)
+                self._api.wait_for_node_state(node, 'active', timeout=wait)
 
             # Update the node to return it's latest state
             node = self._api.get_node(node)
@@ -132,15 +132,19 @@ class Provisioner(object):
             with excutils.save_and_reraise_exception():
                 LOG.error('Deploy attempt failed on node %s, cleaning up',
                           _utils.log_node(node))
-                try:
-                    self._clean_up(node, created_ports)
-                except Exception:
-                    LOG.exception('Clean up failed')
+                self._clean_up(node, created_ports)
 
         if wait is not None:
             LOG.info('Deploy succeeded on node %s', _utils.log_node(node))
 
         return node
+
+    def _clean_up(self, node, created_ports):
+        try:
+            self._delete_ports(node, created_ports)
+            self._api.release_node(node)
+        except Exception:
+            LOG.exception('Clean up failed')
 
     def _get_networks(self, network_refs):
         """Validate and get the networks."""
@@ -153,39 +157,6 @@ class Provisioner(object):
             LOG.debug('Network: %s', network)
             networks.append(network)
         return networks
-
-    def _clean_up(self, node, created_ports=None):
-        """Clean up a failed deployment."""
-        if self._dry_run:
-            LOG.debug("Dry run, not cleaning up")
-            return
-
-        if created_ports is None:
-            created_ports = node.extra.get(_CREATED_PORTS, [])
-
-        for port_id in created_ports:
-            LOG.debug('Detaching port %(port)s from node %(node)s',
-                      {'port': port_id, 'node': node.uuid})
-            try:
-                self._api.detach_port_from_node(node.uuid, port_id)
-            except Exception as exc:
-                LOG.debug('Failed to remove VIF %(vif)s from node %(node)s, '
-                          'assuming already removed: %(exc)s',
-                          {'vif': port_id, 'node': _utils.log_node(node),
-                           'exc': exc})
-
-            LOG.debug('Deleting port %s', port_id)
-            try:
-                self._api.delete_port(port_id)
-            except Exception:
-                LOG.warning('Failed to delete neutron port %s', port_id)
-
-        try:
-            self._api.release_node(node)
-        except Exception as exc:
-            LOG.warning('Failed to remove instance_uuid from node %(node)s, '
-                        'assuming already removed: %(exc)s',
-                        {'node': _utils.log_node(node), 'exc': exc})
 
     def _create_ports(self, node, networks):
         """Create and attach ports on given networks."""
@@ -203,12 +174,30 @@ class Provisioner(object):
         except Exception:
             with excutils.save_and_reraise_exception():
                 LOG.error('Creating and binding ports failed, cleaning up')
-                try:
-                    self._clean_up(node, created_ports)
-                except Exception:
-                    LOG.exception('Clean up failed, delete and detach ports '
-                                  '%s manually', created_ports)
+                self._clean_up(node, created_ports)
+
         return created_ports
+
+    def _delete_ports(self, node, created_ports=None):
+        if created_ports is None:
+            created_ports = node.extra.get(_CREATED_PORTS, [])
+
+        for port_id in created_ports:
+            LOG.debug('Detaching port %(port)s from node %(node)s',
+                      {'port': port_id, 'node': node.uuid})
+            try:
+                self._api.detach_port_from_node(node, port_id)
+            except Exception as exc:
+                LOG.debug('Failed to remove VIF %(vif)s from node %(node)s, '
+                          'assuming already removed: %(exc)s',
+                          {'vif': port_id, 'node': _utils.log_node(node),
+                           'exc': exc})
+
+            LOG.debug('Deleting port %s', port_id)
+            try:
+                self._api.delete_port(port_id)
+            except Exception:
+                LOG.warning('Failed to delete neutron port %s', port_id)
 
     def unprovision_node(self, node, wait=None):
         """Unprovision a previously provisioned node.
@@ -218,13 +207,17 @@ class Provisioner(object):
             None to return immediately.
         """
         node = self._api.get_node(node)
+        if self._dry_run:
+            LOG.debug("Dry run, not unprovisioning")
+            return
 
-        self._api.node_action(node.uuid, 'deleted')
+        self._delete_ports(node)
+
+        self._api.node_action(node, 'deleted')
         LOG.info('Deleting started for node %s', _utils.log_node(node))
 
         if wait is not None:
-            self._api.ironic.node.wait_for_provision_state(
-                node.uuid, 'available', timeout=max(0, wait))
+            self._api.wait_for_node_state(node, 'available', timeout=wait)
 
-        self._clean_up(node)
+        self._api.release_node(node)
         LOG.info('Node %s undeployed successfully', _utils.log_node(node))

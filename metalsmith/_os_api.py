@@ -124,8 +124,9 @@ class API(object):
             if not result['result']:
                 raise RuntimeError('%s: %s' % (iface, result['reason']))
 
-    def wait_for_active(self, node, timeout):
-        self.ironic.node.wait_for_provision_state(_node_id(node), 'active',
+    def wait_for_node_state(self, node, state, timeout):
+        self.ironic.node.wait_for_provision_state(_node_id(node),
+                                                  state,
                                                   timeout=timeout)
 
 

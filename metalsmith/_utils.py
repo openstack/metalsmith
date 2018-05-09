@@ -71,6 +71,6 @@ def get_root_disk(root_disk_size, node):
                              "a positive integer, got %d" % root_disk_size)
     else:
         # allow for partitioning and config drive
-        root_disk_size = int(node.properties['local_gb']) - 2
+        root_disk_size = int(node.properties['local_gb']) - 1
 
     return root_disk_size
