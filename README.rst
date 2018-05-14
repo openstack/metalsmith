@@ -1,9 +1,6 @@
 Deployment and Scheduling tool for Bare Metal
 =============================================
 
-.. image:: https://travis-ci.org/dtantsur/metalsmith.svg?branch=master
-    :target: https://travis-ci.org/dtantsur/metalsmith
-
 Overview
 --------
 
@@ -12,6 +9,13 @@ Metal Service (ironic) <https://docs.openstack.org/ironic/latest/>`_,
 `OpenStack Image Service (glance) <https://docs.openstack.org/glance/latest/>`_
 and `OpenStack Networking Service (neutron)
 <https://docs.openstack.org/neutron/latest/>`_.
+
+Installation
+------------
+
+::
+
+    pip install --user metalsmith
 
 Usage
 -----
@@ -38,3 +42,14 @@ To remove the deployed instance::
 For all possible options see the built-in help::
 
     metalsmith --help
+
+Contributing
+------------
+
+* Pull requests: `Gerrit
+  <https://review.openstack.org/#/q/project:openstack/metalsmith>`_
+  (see `developer's guide
+  <https://docs.openstack.org/infra/manual/developers.html>`_)
+* Bugs and RFEs:  `StoryBoard
+  <https://storyboard.openstack.org/#!/project/1000>`_
+  (please do NOT report bugs to Github)
