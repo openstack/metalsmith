@@ -102,6 +102,32 @@ class TestProvisionNode(Base):
         self.assertFalse(self.api.release_node.called)
         self.assertFalse(self.api.delete_port.called)
 
+    def test_with_root_disk_size(self):
+        self.pr.provision_node(self.node, 'image', ['network'],
+                               root_disk_size=50)
+
+        self.api.create_port.assert_called_once_with(
+            network_id=self.api.get_network.return_value.id)
+        self.api.attach_port_to_node.assert_called_once_with(
+            self.node.uuid, self.api.create_port.return_value.id)
+        image = self.api.get_image_info.return_value
+        updates = {'/instance_info/ramdisk': image.ramdisk_id,
+                   '/instance_info/kernel': image.kernel_id,
+                   '/instance_info/image_source': image.id,
+                   '/instance_info/root_gb': 50,
+                   '/instance_info/capabilities': {'boot_option': 'local'},
+                   '/extra/metalsmith_created_ports': [
+                       self.api.create_port.return_value.id
+                   ]}
+        self.api.update_node.assert_called_once_with(self.node, updates)
+        self.api.validate_node.assert_called_once_with(self.node,
+                                                       validate_deploy=True)
+        self.api.node_action.assert_called_once_with(self.node, 'active',
+                                                     configdrive=mock.ANY)
+        self.assertFalse(self.api.wait_for_node_state.called)
+        self.assertFalse(self.api.release_node.called)
+        self.assertFalse(self.api.delete_port.called)
+
     def test_with_wait(self):
         self.api.get_port.return_value = mock.Mock(
             spec=['fixed_ips'],
@@ -236,6 +262,35 @@ class TestProvisionNode(Base):
         self.assertRaises(_exceptions.InvalidNetwork,
                           self.pr.provision_node,
                           self.node, 'image', ['network'])
+        self.assertFalse(self.api.create_port.called)
+        self.assertFalse(self.api.node_action.called)
+
+    def test_no_local_gb(self):
+        self.node.properties = {}
+        self.assertRaises(_exceptions.UnknownRootDiskSize,
+                          self.pr.provision_node,
+                          self.node, 'image', ['network'])
+        self.assertFalse(self.api.create_port.called)
+        self.assertFalse(self.api.node_action.called)
+
+    def test_invalid_local_gb(self):
+        for value in (None, 'meow', -42, []):
+            self.node.properties = {'local_gb': value}
+            self.assertRaises(_exceptions.UnknownRootDiskSize,
+                              self.pr.provision_node,
+                              self.node, 'image', ['network'])
+        self.assertFalse(self.api.create_port.called)
+        self.assertFalse(self.api.node_action.called)
+
+    def test_invalid_root_disk_size(self):
+        self.assertRaises(TypeError,
+                          self.pr.provision_node,
+                          self.node, 'image', ['network'],
+                          root_disk_size={})
+        self.assertRaises(ValueError,
+                          self.pr.provision_node,
+                          self.node, 'image', ['network'],
+                          root_disk_size=0)
         self.assertFalse(self.api.create_port.called)
         self.assertFalse(self.api.node_action.called)
 

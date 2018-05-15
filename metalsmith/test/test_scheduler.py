@@ -173,33 +173,11 @@ class TestValidationFilter(testtools.TestCase):
                                                 {'profile': 'compute'})
 
     def test_pass(self):
-        node = mock.Mock(properties={'local_gb': 100},
-                         spec=['properties', 'uuid', 'name'])
+        node = mock.Mock(spec=['uuid', 'name'])
         self.assertTrue(self.fltr(node))
 
-    def test_fail_without_local_gb(self):
-        node = mock.Mock(properties={},
-                         spec=['properties', 'uuid', 'name'])
-        self.assertFalse(self.fltr(node))
-
-        self.assertRaisesRegex(_exceptions.ValidationFailed,
-                               'All available nodes have failed validation: '
-                               'No local_gb for node',
-                               self.fltr.fail)
-
-    def test_fail_malformed_local_gb(self):
-        node = mock.Mock(properties={'local_gb': []},
-                         spec=['properties', 'uuid', 'name'])
-        self.assertFalse(self.fltr(node))
-
-        self.assertRaisesRegex(_exceptions.ValidationFailed,
-                               'All available nodes have failed validation: '
-                               'The local_gb for node .* is invalid',
-                               self.fltr.fail)
-
     def test_fail_validation(self):
-        node = mock.Mock(properties={'local_gb': 100},
-                         spec=['properties', 'uuid', 'name'])
+        node = mock.Mock(spec=['uuid', 'name'])
         self.api.validate_node.side_effect = RuntimeError('boom')
         self.assertFalse(self.fltr(node))
 

@@ -19,6 +19,8 @@ import os
 import shutil
 import tempfile
 
+from metalsmith import _exceptions
+
 
 def log_node(node):
     if node.name:
@@ -69,6 +71,19 @@ def get_root_disk(root_disk_size, node):
             raise ValueError("The root_disk_size argument must be "
                              "a positive integer, got %d" % root_disk_size)
     else:
+        try:
+            assert int(node.properties['local_gb']) > 0
+        except KeyError:
+            raise _exceptions.UnknownRootDiskSize(
+                'No local_gb for node %s and no root disk size requested' %
+                log_node(node))
+        except (TypeError, ValueError, AssertionError):
+            raise _exceptions.UnknownRootDiskSize(
+                'The local_gb for node %(node)s is invalid: '
+                'expected positive integer, got %(value)s' %
+                {'node': log_node(node),
+                 'value': node.properties['local_gb']})
+
         # allow for partitioning and config drive
         root_disk_size = int(node.properties['local_gb']) - 1
 

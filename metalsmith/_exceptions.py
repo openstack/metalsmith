@@ -63,3 +63,7 @@ class InvalidImage(Error):
 
 class InvalidNetwork(Error):
     """Requested network is invalid and cannot be used."""
+
+
+class UnknownRootDiskSize(Error):
+    """Cannot determine the root disk size."""

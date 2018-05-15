@@ -180,22 +180,6 @@ class ValidationFilter(Filter):
             self._failed_validation.append(message)
             return False
 
-        try:
-            assert int(node.properties['local_gb']) > 0
-        except KeyError:
-            message = 'No local_gb for node %s' % _utils.log_node(node)
-            LOG.warning(message)
-            self._failed_validation.append(message)
-            return False
-        except (TypeError, AssertionError):
-            message = ('The local_gb for node %(node)s is invalid: '
-                       'expected positive integer, got %(value)s' %
-                       {'node': _utils.log_node(node),
-                        'value': node.properties['local_gb']})
-            LOG.warning(message)
-            self._failed_validation.append(message)
-            return False
-
         return True
 
     def fail(self):
