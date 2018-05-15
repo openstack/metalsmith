@@ -1,0 +1,105 @@
+- job:
+    name: metalsmith-integration-base
+    description: |
+        Base job for devstack-based metalsmith jobs.
+    parent: devstack-minimal
+    pre-run: playbooks/integration/pre.yaml
+    irrelevant-files:
+      - ^.*\.rst$
+      - ^doc/.*$
+      - ^metalsmith/test/.*$
+      - ^releasenotes/.*$
+      - ^setup.cfg$
+      - ^test-requirements.txt$
+      - ^tools/.*$
+      - ^tox.ini$
+    timeout: 3600
+    required-projects:
+      - openstack/keystone
+      - openstack/neutron
+      - openstack/glance
+      - openstack/ironic
+      - openstack/metalsmith
+    vars:
+      devstack_services:
+        dstat: true
+        etcd3: true
+        mysql: true
+        peakmem_tracker: true
+        rabbit: true
+        tls-proxy: true
+        # Keystone services
+        key: true
+        # Glance services
+        g-api: true
+        g-reg: true
+        # Nova services
+        n-api: false
+        n-api-meta: false
+        n-cauth: false
+        n-cond: false
+        n-cpu: false
+        n-novnc: false
+        n-obj: false
+        n-sch: false
+        placement-api: false
+        # Neutron services
+        q-agt: false
+        q-dhcp: false
+        q-l3: false
+        q-meta: false
+        q-metering: false
+        q-svc: false
+        neutron-api: true
+        neutron-agent: true
+        neutron-dhcp: true
+        neutron-l3: true
+        neutron-metadata-agent: true
+        neutron-metering: true
+        # Swift services
+        s-account: false
+        s-container: false
+        s-object: false
+        s-proxy: false
+        # Cinder services
+        c-api: false
+        c-bak: false
+        c-sch: false
+        c-vol: false
+        cinder: false
+        # Ceilometer services
+        ceilometer-acentral: False
+        ceilometer-acompute: False
+        ceilometer-alarm-evaluator: False
+        ceilometer-alarm-notifier: False
+        ceilometer-anotification: False
+        ceilometer-api: False
+        ceilometer-collector: False
+        # Services we don't need.
+        horizon: false
+        tempest: false
+      devstack_plugins:
+        ironic: https://git.openstack.org/openstack/ironic
+      devstack_localrc:
+        IRONIC_BAREMETAL_BASIC_OPS: true
+        IRONIC_BUILD_DEPLOY_RAMDISK: false
+        IRONIC_DEPLOY_DRIVER: ipmi
+        IRONIC_RAMDISK_TYPE: tinyipa
+        IRONIC_VM_COUNT: 1
+        IRONIC_VM_SPECS_DISK: 10
+        IRONIC_VM_SPECS_RAM: 384
+
+- job:
+    name: metalsmith-integration-glance
+    description: |
+        Integration job using Glance as image source.
+    parent: metalsmith-integration-base
+    run: playbooks/integration/run.yaml
+
+- project:
+    check:
+      jobs:
+        - metalsmith-integration-glance
+    gate:
+      jobs:
+        - metalsmith-integration-glance

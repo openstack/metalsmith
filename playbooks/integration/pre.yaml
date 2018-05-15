@@ -1,0 +1,10 @@
+- hosts: all
+  roles:
+    - run-devstack
+
+  tasks:
+    - name: Install metalsmith
+      pip:
+        name: /opt/stack/metalsmith
+        editable: true
+      become: true
