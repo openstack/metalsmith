@@ -15,11 +15,9 @@
 
 import argparse
 import logging
-import os
 import sys
 
-from keystoneauth1.identity import generic
-from keystoneauth1 import session
+from openstack import config as os_config
 
 from metalsmith import _provisioner
 
@@ -49,7 +47,7 @@ def _do_undeploy(api, args, wait=None):
     api.unprovision_node(args.node, wait=wait)
 
 
-def _parse_args(args):
+def _parse_args(args, config):
     parser = argparse.ArgumentParser(
         description='Deployment and Scheduling tool for Bare Metal')
     verbosity = parser.add_mutually_exclusive_group()
@@ -60,19 +58,12 @@ def _parse_args(args):
     parser.add_argument('--dry-run', action='store_true',
                         help='do not take any destructive actions')
     wait = parser.add_mutually_exclusive_group()
-    wait.add_argument('--timeout', type=int, default=1800,
+    wait.add_argument('--wait', type=int, default=1800,
                       help='action timeout (in seconds)')
     wait.add_argument('--no-wait', action='store_true',
                       help='disable waiting for action to finish')
-    parser.add_argument('--os-username', default=os.environ.get('OS_USERNAME'))
-    parser.add_argument('--os-password', default=os.environ.get('OS_PASSWORD'))
-    parser.add_argument('--os-project-name',
-                        default=os.environ.get('OS_PROJECT_NAME'))
-    parser.add_argument('--os-auth-url', default=os.environ.get('OS_AUTH_URL'))
-    parser.add_argument('--os-user-domain-name',
-                        default=os.environ.get('OS_USER_DOMAIN_NAME'))
-    parser.add_argument('--os-project-domain-name',
-                        default=os.environ.get('OS_PROJECT_DOMAIN_NAME'))
+
+    config.register_argparse_arguments(parser, sys.argv[1:])
 
     subparsers = parser.add_subparsers()
 
@@ -116,21 +107,16 @@ def _configure_logging(args):
 
 
 def main(args=sys.argv[1:]):
-    args = _parse_args(args)
+    config = os_config.OpenStackConfig()
+    args = _parse_args(args, config)
     _configure_logging(args)
     if args.no_wait:
         wait = None
     else:
-        wait = args.timeout
+        wait = args.wait
 
-    auth = generic.Password(auth_url=args.os_auth_url,
-                            username=args.os_username,
-                            project_name=args.os_project_name,
-                            password=args.os_password,
-                            user_domain_name=args.os_user_domain_name,
-                            project_domain_name=args.os_project_domain_name)
-    sess = session.Session(auth=auth)
-    api = _provisioner.Provisioner(sess, dry_run=args.dry_run)
+    region = config.get_one(argparse=args)
+    api = _provisioner.Provisioner(cloud_region=region, dry_run=args.dry_run)
 
     try:
         args.func(api, args, wait=wait)

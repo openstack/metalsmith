@@ -1,4 +1,4 @@
-# Copyright 2015 Red Hat, Inc.
+# Copyright 2015-2018 Red Hat, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -42,8 +42,17 @@ class API(object):
     IRONIC_VERSION = '1'
     IRONIC_MICRO_VERSION = '1.28'
 
-    def __init__(self, session):
-        self.session = session
+    def __init__(self, session=None, cloud_region=None):
+        if cloud_region is None:
+            if session is None:
+                raise TypeError('Either session or cloud_region must '
+                                'be provided')
+            self.session = session
+        elif session is not None:
+            raise TypeError('Either session or cloud_region must be provided, '
+                            'but not both')
+        else:
+            self.session = cloud_region.get_session()
 
         LOG.debug('Creating service clients')
         self.glance = glanceclient.Client(self.GLANCE_VERSION,

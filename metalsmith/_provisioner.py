@@ -32,8 +32,8 @@ _CREATED_PORTS = 'metalsmith_created_ports'
 class Provisioner(object):
     """API to deploy/undeploy nodes with OpenStack."""
 
-    def __init__(self, session, dry_run=False):
-        self._api = _os_api.API(session)
+    def __init__(self, session=None, cloud_region=None, dry_run=False):
+        self._api = _os_api.API(session=session, cloud_region=cloud_region)
         self._dry_run = dry_run
 
     def reserve_node(self, resource_class, capabilities=None):

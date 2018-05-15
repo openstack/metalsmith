@@ -37,22 +37,14 @@
         ssh_key_file: "{{ ssh_key_result.stdout }}"
 
     - name: Deploy a node
-      shell: |
-        # FIXME(dtantsur): just use OS_CLOUD
-        source /opt/stack/devstack/openrc admin admin
-        metalsmith --debug deploy \
-          --network private \
-          --image {{ cirros_image }} \
-          --ssh-public-key {{ ssh_key_file }} \
-          --root-disk-size 9 \
-          --netboot \
+      command: >
+        metalsmith --debug deploy
+          --network private
+          --image {{ cirros_image }}
+          --ssh-public-key {{ ssh_key_file }}
+          --root-disk-size 9
+          --netboot
           baremetal
-      args:
-        executable: /bin/bash
-      environment:
-        # FIXME(dtantsur): just use OS_CLOUD
-        OS_USER_DOMAIN_NAME: Default
-        OS_PROJECT_DOMAIN_NAME: Default
 
     - name: Find the deployed node
       command: openstack baremetal node list --provision-state active -f value -c UUID
@@ -71,16 +63,7 @@
       command: openstack baremetal node show {{ active_node }}
 
     - name: Undeploy a node
-      shell: |
-        # FIXME(dtantsur): just use OS_CLOUD
-        source /opt/stack/devstack/openrc admin admin
-        metalsmith --debug undeploy {{ active_node }}
-      args:
-        executable: /bin/bash
-      environment:
-        # FIXME(dtantsur): just use OS_CLOUD
-        OS_USER_DOMAIN_NAME: Default
-        OS_PROJECT_DOMAIN_NAME: Default
+      command: metalsmith --debug undeploy {{ active_node }}
 
     - name: Get the current status of the deployed node
       command: openstack baremetal node show {{ active_node }} -f value -c provision_state

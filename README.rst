@@ -20,24 +20,22 @@ Installation
 Usage
 -----
 
-Start with sourcing your OpenStack credentials, for example::
-
-    . ~/stackrc
-
 Generic usage is as follows::
 
-    metalsmith deploy --image <GLANCE IMAGE> --network <NEUTRON NET> \
-        --ssh-public-key <PATH TO SSH PUBLIC KEY> <RESOURCE CLASS>
+    metalsmith --os-cloud <CLOUD NAME> deploy --image <GLANCE IMAGE> \
+        --network <NEUTRON NET> --ssh-public-key <PATH TO SSH PUBLIC KEY> \
+        <RESOURCE CLASS>
 
 This is an example suitable for TripleO (replace ``compute`` with the profile
 you want to deploy)::
 
+    source ~/stackrc
     metalsmith deploy --image overcloud-full --network ctlplane \
         --capability profile=compute --ssh-public-key ~/.ssh/id_rsa.pub baremetal
 
 To remove the deployed instance::
 
-    metalsmith undeploy <NODE UUID>
+    metalsmith --os-cloud <CLOUD NAME> undeploy <NODE UUID>
 
 For all possible options see the built-in help::
 
