@@ -16,7 +16,6 @@
 import logging
 
 from ironicclient import client as ir_client
-from neutronclient.v2_0 import client as neu_client
 from openstack import connection
 import six
 
@@ -56,7 +55,6 @@ class API(object):
             self.connection = connection.Connection(config=cloud_region)
 
         LOG.debug('Creating service clients')
-        self.neutron = neu_client.Client(session=self.session)
         self.ironic = ir_client.get_client(
             self.IRONIC_VERSION, session=self.session,
             os_ironic_api_version=self.IRONIC_MICRO_VERSION)
@@ -65,14 +63,13 @@ class API(object):
         self.ironic.node.vif_attach(_node_id(node), port_id)
 
     def create_port(self, network_id, **kwargs):
-        port_body = dict(network_id=network_id,
-                         admin_state_up=True,
-                         **kwargs)
-        port = self.neutron.create_port({'port': port_body})
-        return DictWithAttrs(port['port'])
+        return self.connection.network.create_port(network_id=network_id,
+                                                   admin_state_up=True,
+                                                   **kwargs)
 
     def delete_port(self, port_id):
-        self.neutron.delete_port(port_id)
+        self.connection.network.delete_port(port_id,
+                                            ignore_missing=False)
 
     def detach_port_from_node(self, node, port_id):
         self.ironic.node.vif_detach(_node_id(node), port_id)
@@ -82,9 +79,8 @@ class API(object):
                                                 ignore_missing=False)
 
     def get_network(self, network_id):
-        for net in self.neutron.list_networks()['networks']:
-            if net['name'] == network_id or net['id'] == network_id:
-                return DictWithAttrs(net)
+        return self.connection.network.find_network(network_id,
+                                                    ignore_missing=False)
 
     def get_node(self, node):
         if isinstance(node, six.string_types):
@@ -93,8 +89,7 @@ class API(object):
             return node
 
     def get_port(self, port_id):
-        port = self.neutron.show_port(port_id)
-        return DictWithAttrs(port['port'])
+        return self.connection.network.get_port(port_id)
 
     def list_node_attached_ports(self, node):
         return self.ironic.node.vif_list(_node_id(node))
