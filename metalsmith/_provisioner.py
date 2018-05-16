@@ -80,41 +80,45 @@ class Provisioner(object):
             None to return immediately.
         :return: Reservation
         """
-        node = self._api.get_node(node)
-
-        root_disk_size = _utils.get_root_disk(root_disk_size, node)
-
-        image = self._api.get_image_info(image_ref)
-        if image is None:
-            raise _exceptions.InvalidImage('Image %s does not exist' %
-                                           image_ref)
-
-        # TODO(dtantsur): support whole-disk images
-        for im_prop in ('kernel_id', 'ramdisk_id'):
-            if not getattr(image, im_prop, None):
-                raise _exceptions.InvalidImage('%s is required on image' %
-                                               im_prop)
-        LOG.debug('Image: %s', image)
-
-        networks = self._get_networks(network_refs)
-
-        if self._dry_run:
-            LOG.warning('Dry run, not provisioning node %s',
-                        _utils.log_node(node))
-            return node
-
-        created_ports = self._create_ports(node, networks)
-
-        target_caps = {'boot_option': 'netboot' if netboot else 'local'}
-        # TODO(dtantsur): support whole-disk images
-        updates = {'/instance_info/ramdisk': image.ramdisk_id,
-                   '/instance_info/kernel': image.kernel_id,
-                   '/instance_info/image_source': image.id,
-                   '/instance_info/root_gb': root_disk_size,
-                   '/instance_info/capabilities': target_caps,
-                   '/extra/%s' % _CREATED_PORTS: created_ports}
+        created_ports = []
 
         try:
+            node = self._api.get_node(node)
+
+            root_disk_size = _utils.get_root_disk(root_disk_size, node)
+
+            try:
+                image = self._api.get_image_info(image_ref)
+            except Exception as exc:
+                raise _exceptions.InvalidImage(
+                    'Cannot find image %(image)s: %(error)s' %
+                    {'image': image_ref, 'error': exc})
+
+            # TODO(dtantsur): support whole-disk images
+            for im_prop in ('kernel_id', 'ramdisk_id'):
+                if not getattr(image, im_prop, None):
+                    raise _exceptions.InvalidImage('%s is required on image' %
+                                                   im_prop)
+            LOG.debug('Image: %s', image)
+
+            networks = self._get_networks(network_refs)
+
+            if self._dry_run:
+                LOG.warning('Dry run, not provisioning node %s',
+                            _utils.log_node(node))
+                return node
+
+            self._create_ports(node, networks, created_ports)
+
+            target_caps = {'boot_option': 'netboot' if netboot else 'local'}
+            # TODO(dtantsur): support whole-disk images
+            updates = {'/instance_info/ramdisk': image.ramdisk_id,
+                       '/instance_info/kernel': image.kernel_id,
+                       '/instance_info/image_source': image.id,
+                       '/instance_info/root_gb': root_disk_size,
+                       '/instance_info/capabilities': target_caps,
+                       '/extra/%s' % _CREATED_PORTS: created_ports}
+
             node = self._api.update_node(node, updates)
             self._api.validate_node(node, validate_deploy=True)
 
@@ -166,33 +170,28 @@ class Provisioner(object):
         """Validate and get the networks."""
         networks = []
         for network_ref in network_refs:
-            network = self._api.get_network(network_ref)
-            if network is None:
-                raise _exceptions.InvalidNetwork('Network %s does not exist' %
-                                                 network_ref)
+            try:
+                network = self._api.get_network(network_ref)
+            except Exception as exc:
+                raise _exceptions.InvalidNetwork(
+                    'Cannot find network %(net)s: %(error)s' %
+                    {'net': network_ref, 'error': exc})
+
             LOG.debug('Network: %s', network)
             networks.append(network)
         return networks
 
-    def _create_ports(self, node, networks):
+    def _create_ports(self, node, networks, created_ports):
         """Create and attach ports on given networks."""
-        created_ports = []
-        try:
-            for network in networks:
-                port = self._api.create_port(network_id=network.id)
-                created_ports.append(port.id)
-                LOG.debug('Created Neutron port %s', port)
+        for network in networks:
+            port = self._api.create_port(network_id=network.id)
+            created_ports.append(port.id)
+            LOG.debug('Created Neutron port %s', port)
 
-                self._api.attach_port_to_node(node.uuid, port.id)
-                LOG.info('Attached port %(port)s to node %(node)s',
-                         {'port': port.id,
-                          'node': _utils.log_node(node)})
-        except Exception:
-            with excutils.save_and_reraise_exception():
-                LOG.error('Creating and binding ports failed, cleaning up')
-                self._clean_up(node, created_ports)
-
-        return created_ports
+            self._api.attach_port_to_node(node.uuid, port.id)
+            LOG.info('Attached port %(port)s to node %(node)s',
+                     {'port': port.id,
+                      'node': _utils.log_node(node)})
 
     def _delete_ports(self, node, created_ports=None):
         if created_ports is None:

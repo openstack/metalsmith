@@ -244,9 +244,17 @@ class TestProvisionNode(Base):
             self.assertEqual(mock_log_exc.called,
                              failed_call == 'release_node')
 
+    def test_missing_image(self):
+        self.api.get_image_info.side_effect = RuntimeError('Not found')
+        self.assertRaisesRegex(_exceptions.InvalidImage, 'Not found',
+                               self.pr.provision_node,
+                               self.node, 'image', ['network'])
+        self.assertFalse(self.api.update_node.called)
+        self.assertFalse(self.api.node_action.called)
+        self.api.release_node.assert_called_once_with(self.node)
+
     def test_invalid_image(self):
         for result, error in [
-                (None, 'does not exist'),
                 (mock.Mock(kernel_id=None), 'kernel_id is required'),
                 (mock.Mock(ramdisk_id=None), 'ramdisk_id is required')
         ]:
@@ -256,14 +264,16 @@ class TestProvisionNode(Base):
                                    self.node, 'image', ['network'])
         self.assertFalse(self.api.update_node.called)
         self.assertFalse(self.api.node_action.called)
+        self.api.release_node.assert_called_with(self.node)
 
     def test_invalid_network(self):
-        self.api.get_network.return_value = None
-        self.assertRaises(_exceptions.InvalidNetwork,
-                          self.pr.provision_node,
-                          self.node, 'image', ['network'])
+        self.api.get_network.side_effect = RuntimeError('Not found')
+        self.assertRaisesRegex(_exceptions.InvalidNetwork, 'Not found',
+                               self.pr.provision_node,
+                               self.node, 'image', ['network'])
         self.assertFalse(self.api.create_port.called)
         self.assertFalse(self.api.node_action.called)
+        self.api.release_node.assert_called_once_with(self.node)
 
     def test_no_local_gb(self):
         self.node.properties = {}
@@ -272,6 +282,7 @@ class TestProvisionNode(Base):
                           self.node, 'image', ['network'])
         self.assertFalse(self.api.create_port.called)
         self.assertFalse(self.api.node_action.called)
+        self.api.release_node.assert_called_once_with(self.node)
 
     def test_invalid_local_gb(self):
         for value in (None, 'meow', -42, []):
@@ -281,6 +292,7 @@ class TestProvisionNode(Base):
                               self.node, 'image', ['network'])
         self.assertFalse(self.api.create_port.called)
         self.assertFalse(self.api.node_action.called)
+        self.api.release_node.assert_called_with(self.node)
 
     def test_invalid_root_disk_size(self):
         self.assertRaises(TypeError,
@@ -293,6 +305,7 @@ class TestProvisionNode(Base):
                           root_disk_size=0)
         self.assertFalse(self.api.create_port.called)
         self.assertFalse(self.api.node_action.called)
+        self.api.release_node.assert_called_with(self.node)
 
 
 class TestUnprovisionNode(Base):
