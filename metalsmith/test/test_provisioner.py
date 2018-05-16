@@ -102,6 +102,32 @@ class TestProvisionNode(Base):
         self.assertFalse(self.api.release_node.called)
         self.assertFalse(self.api.delete_port.called)
 
+    def test_whole_disk(self):
+        image = self.api.get_image_info.return_value
+        image.kernel_id = None
+        image.ramdisk_id = None
+
+        self.pr.provision_node(self.node, 'image', ['network'])
+
+        self.api.create_port.assert_called_once_with(
+            network_id=self.api.get_network.return_value.id)
+        self.api.attach_port_to_node.assert_called_once_with(
+            self.node.uuid, self.api.create_port.return_value.id)
+        updates = {'/instance_info/image_source': image.id,
+                   '/instance_info/root_gb': 99,  # 100 - 1
+                   '/instance_info/capabilities': {'boot_option': 'local'},
+                   '/extra/metalsmith_created_ports': [
+                       self.api.create_port.return_value.id
+                   ]}
+        self.api.update_node.assert_called_once_with(self.node, updates)
+        self.api.validate_node.assert_called_once_with(self.node,
+                                                       validate_deploy=True)
+        self.api.node_action.assert_called_once_with(self.node, 'active',
+                                                     configdrive=mock.ANY)
+        self.assertFalse(self.api.wait_for_node_state.called)
+        self.assertFalse(self.api.release_node.called)
+        self.assertFalse(self.api.delete_port.called)
+
     def test_with_root_disk_size(self):
         self.pr.provision_node(self.node, 'image', ['network'],
                                root_disk_size=50)
@@ -252,19 +278,6 @@ class TestProvisionNode(Base):
         self.assertFalse(self.api.update_node.called)
         self.assertFalse(self.api.node_action.called)
         self.api.release_node.assert_called_once_with(self.node)
-
-    def test_invalid_image(self):
-        for result, error in [
-                (mock.Mock(kernel_id=None), 'kernel_id is required'),
-                (mock.Mock(ramdisk_id=None), 'ramdisk_id is required')
-        ]:
-            self.api.get_image_info.return_value = result
-            self.assertRaisesRegex(_exceptions.InvalidImage, error,
-                                   self.pr.provision_node,
-                                   self.node, 'image', ['network'])
-        self.assertFalse(self.api.update_node.called)
-        self.assertFalse(self.api.node_action.called)
-        self.api.release_node.assert_called_with(self.node)
 
     def test_invalid_network(self):
         self.api.get_network.side_effect = RuntimeError('Not found')
