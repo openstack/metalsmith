@@ -3,6 +3,12 @@
     - run-devstack
 
   tasks:
+    - name: Install requirements for metalsmith
+      pip:
+        name: -r /opt/stack/metalsmith/requirements.txt
+        extra_args: -c /opt/stack/requirements/upper-constraints.txt
+      become: true
+
     - name: Install metalsmith
       pip:
         name: /opt/stack/metalsmith
