@@ -15,9 +15,9 @@
 
 import logging
 
-import glanceclient
 from ironicclient import client as ir_client
 from neutronclient.v2_0 import client as neu_client
+from openstack import connection
 import six
 
 
@@ -38,7 +38,6 @@ class DictWithAttrs(dict):
 class API(object):
     """Various OpenStack API's."""
 
-    GLANCE_VERSION = '2'
     IRONIC_VERSION = '1'
     IRONIC_MICRO_VERSION = '1.28'
 
@@ -48,15 +47,15 @@ class API(object):
                 raise TypeError('Either session or cloud_region must '
                                 'be provided')
             self.session = session
+            self.connection = connection.Connection(session=session)
         elif session is not None:
             raise TypeError('Either session or cloud_region must be provided, '
                             'but not both')
         else:
             self.session = cloud_region.get_session()
+            self.connection = connection.Connection(config=cloud_region)
 
         LOG.debug('Creating service clients')
-        self.glance = glanceclient.Client(self.GLANCE_VERSION,
-                                          session=self.session)
         self.neutron = neu_client.Client(session=self.session)
         self.ironic = ir_client.get_client(
             self.IRONIC_VERSION, session=self.session,
@@ -79,9 +78,8 @@ class API(object):
         self.ironic.node.vif_detach(_node_id(node), port_id)
 
     def get_image_info(self, image_id):
-        for img in self.glance.images.list():
-            if img.name == image_id or img.id == image_id:
-                return img
+        return self.connection.image.find_image(image_id,
+                                                ignore_missing=False)
 
     def get_network(self, network_id):
         for net in self.neutron.list_networks()['networks']:

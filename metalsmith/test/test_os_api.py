@@ -32,7 +32,9 @@ class TestInit(testtools.TestCase):
         api = _os_api.API(session=session)
         self.assertIs(api.session, session)
 
-    def test_cloud_region_only(self):
+    @mock.patch.object(_os_api.connection, 'Connection', autospec=True)
+    def test_cloud_region_only(self, mock_conn):
         region = mock.Mock()
         api = _os_api.API(cloud_region=region)
         self.assertIs(api.session, region.get_session.return_value)
+        mock_conn.assert_called_once_with(config=region)
