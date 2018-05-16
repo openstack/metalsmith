@@ -99,11 +99,15 @@ def schedule_node(nodes, filters, reserver, dry_run=False):
 
     for node in nodes:
         try:
-            return reserver(node)
+            result = reserver(node)
         except Exception as exc:
             LOG.debug('Node %(node)s was not reserved (%(exc)s), moving on '
                       'to the next one',
                       {'node': _utils.log_node(node), 'exc': exc})
+        else:
+            LOG.info('Node %s reserved for deployment',
+                     _utils.log_node(result))
+            return result
 
     LOG.debug('No nodes could be reserved')
     reserver.fail()
