@@ -94,11 +94,6 @@ class Provisioner(object):
                     'Cannot find image %(image)s: %(error)s' %
                     {'image': image_ref, 'error': exc})
 
-            # TODO(dtantsur): support whole-disk images
-            for im_prop in ('kernel_id', 'ramdisk_id'):
-                if not getattr(image, im_prop, None):
-                    raise _exceptions.InvalidImage('%s is required on image' %
-                                                   im_prop)
             LOG.debug('Image: %s', image)
 
             networks = self._get_networks(network_refs)
@@ -111,13 +106,16 @@ class Provisioner(object):
             self._create_ports(node, networks, created_ports)
 
             target_caps = {'boot_option': 'netboot' if netboot else 'local'}
-            # TODO(dtantsur): support whole-disk images
-            updates = {'/instance_info/ramdisk': image.ramdisk_id,
-                       '/instance_info/kernel': image.kernel_id,
-                       '/instance_info/image_source': image.id,
+
+            updates = {'/instance_info/image_source': image.id,
                        '/instance_info/root_gb': root_disk_size,
                        '/instance_info/capabilities': target_caps,
                        '/extra/%s' % _CREATED_PORTS: created_ports}
+
+            for prop in ('kernel', 'ramdisk'):
+                value = getattr(image, '%s_id' % prop, None)
+                if value:
+                    updates['/instance_info/%s' % prop] = value
 
             node = self._api.update_node(node, updates)
             self._api.validate_node(node, validate_deploy=True)

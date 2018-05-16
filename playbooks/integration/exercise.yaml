@@ -1,0 +1,37 @@
+- name: Deploy a node
+  command: >
+    metalsmith --debug deploy
+      --network private
+      --image {{ image }}
+      --ssh-public-key {{ ssh_key_file }}
+      --root-disk-size 9
+      --netboot
+      baremetal
+
+- name: Find the deployed node
+  command: openstack baremetal node list --provision-state active -f value -c UUID
+  register: active_node_result
+
+- name: Check that the deployed node was found
+  fail:
+    msg: The deployed node cannot be found
+  when: active_node_result.stdout == ""
+
+- name: Set active node fact
+  set_fact:
+    active_node: "{{ active_node_result.stdout }}"
+
+- name: Show active node information
+  command: openstack baremetal node show {{ active_node }}
+
+- name: Undeploy a node
+  command: metalsmith --debug undeploy {{ active_node }}
+
+- name: Get the current status of the deployed node
+  command: openstack baremetal node show {{ active_node }} -f value -c provision_state
+  register: undeployed_node_result
+
+- name: Check that the node was undeployed
+  fail:
+    msg: The node is in unexpected status {{ undeployed_node_result.stdout }}
+  when: undeployed_node_result.stdout != "available"

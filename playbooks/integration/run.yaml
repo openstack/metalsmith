@@ -7,12 +7,23 @@
       shell: |
         openstack image list -f value -c ID -c Name \
           | awk '/cirros.*uec/ { print $1; exit 0; }'
-      register: cirros_image_result
+      register: cirros_uec_image_result
+
+    - name: Find Cirros disk image
+      shell: |
+        openstack image list -f value -c ID -c Name \
+          | awk '/cirros.*disk/ { print $1; exit 0; }'
+      register: cirros_disk_image_result
 
     - name: Check that Cirros UEC image was found
       fail:
         msg: No Cirros UEC image found
-      when: cirros_image_result.stdout == ""
+      when: cirros_uec_image_result.stdout == ""
+
+    - name: Check that Cirros disk image was found
+      fail:
+        msg: No Cirros disk image found
+      when: cirros_disk_image_result.stdout == ""
 
     - name: Find a suitable SSH public key
       shell: |
@@ -33,43 +44,14 @@
 
     - name: Set deployment facts
       set_fact:
-        cirros_image: "{{ cirros_image_result.stdout }}"
+        cirros_uec_image: "{{ cirros_uec_image_result.stdout }}"
+        cirros_disk_image: "{{ cirros_disk_image_result.stdout }}"
         ssh_key_file: "{{ ssh_key_result.stdout }}"
 
-    - name: Deploy a node
-      command: >
-        metalsmith --debug deploy
-          --network private
-          --image {{ cirros_image }}
-          --ssh-public-key {{ ssh_key_file }}
-          --root-disk-size 9
-          --netboot
-          baremetal
+    - include: exercise.yaml
+      vars:
+        image: "{{ cirros_uec_image }}"
 
-    - name: Find the deployed node
-      command: openstack baremetal node list --provision-state active -f value -c UUID
-      register: active_node_result
-
-    - name: Check that the deployed node was found
-      fail:
-        msg: The deployed node cannot be found
-      when: active_node_result.stdout == ""
-
-    - name: Set active node fact
-      set_fact:
-        active_node: "{{ active_node_result.stdout }}"
-
-    - name: Show active node information
-      command: openstack baremetal node show {{ active_node }}
-
-    - name: Undeploy a node
-      command: metalsmith --debug undeploy {{ active_node }}
-
-    - name: Get the current status of the deployed node
-      command: openstack baremetal node show {{ active_node }} -f value -c provision_state
-      register: undeployed_node_result
-
-    - name: Check that the node was undeployed
-      fail:
-        msg: The node is in unexpected status {{ undeployed_node_result.stdout }}
-      when: undeployed_node_result.stdout != "available"
+    - include: exercise.yaml
+      vars:
+        image: "{{ cirros_disk_image }}"
