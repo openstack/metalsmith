@@ -16,8 +16,9 @@
 import collections
 import logging
 import random
+import sys
 
-from oslo_utils import excutils
+import six
 
 from metalsmith import _exceptions
 from metalsmith import _os_api
@@ -138,10 +139,17 @@ class Provisioner(object):
             # Update the node to return it's latest state
             node = self._api.get_node(node)
         except Exception:
-            with excutils.save_and_reraise_exception():
+            exc_info = sys.exc_info()
+
+            try:
                 LOG.error('Deploy attempt failed on node %s, cleaning up',
                           _utils.log_node(node))
-                self._clean_up(node, created_ports, attached_ports)
+                self._delete_ports(node, created_ports, attached_ports)
+                self._api.release_node(node)
+            except Exception:
+                LOG.exception('Clean up failed')
+
+            six.reraise(*exc_info)
 
         if wait is not None:
             LOG.info('Deploy succeeded on node %s', _utils.log_node(node))
@@ -163,13 +171,6 @@ class Provisioner(object):
                       'ips': ', '.join(ips)})
         else:
             LOG.warning('No IPs for node %s', _utils.log_node(node))
-
-    def _clean_up(self, node, created_ports, attached_ports):
-        try:
-            self._delete_ports(node, created_ports, attached_ports)
-            self._api.release_node(node)
-        except Exception:
-            LOG.exception('Clean up failed')
 
     def _get_nics(self, nics):
         """Validate and get the NICs."""
