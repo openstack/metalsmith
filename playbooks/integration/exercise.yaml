@@ -1,7 +1,21 @@
+- name: Create a port
+  command: openstack port create --network private test-port
+  when: precreate_port
+
+- name: Set port argument
+  set_fact:
+    nic: --port test-port
+  when: precreate_port
+
+- name: Set network argument
+  set_fact:
+    nic: --network private
+  when: not precreate_port
+
 - name: Deploy a node
   command: >
     metalsmith --debug deploy
-      --network private
+      {{ nic }}
       --image {{ image }}
       --ssh-public-key {{ ssh_key_file }}
       --root-disk-size 9
@@ -28,10 +42,37 @@
   command: metalsmith --debug undeploy {{ active_node }}
 
 - name: Get the current status of the deployed node
-  command: openstack baremetal node show {{ active_node }} -f value -c provision_state
+  command: openstack baremetal node show {{ active_node }} -f json
   register: undeployed_node_result
+
+- name: Parse node state
+  set_fact:
+    undeployed_node: "{{ undeployed_node_result.stdout | from_json }}"
 
 - name: Check that the node was undeployed
   fail:
-    msg: The node is in unexpected status {{ undeployed_node_result.stdout }}
-  when: undeployed_node_result.stdout != "available"
+    msg: The node is in unexpected status {{ undeployed_node }}
+  when: undeployed_node.provision_state != "available"
+
+- name: Check that the node extra was cleared
+  fail:
+    msg: The node still has extra {{ undeployed_node }}
+  when: undeployed_node.extra != {}
+
+- name: Get attached VIFs for the node
+  command: openstack baremetal node vif list {{ active_node }} -f value -c ID
+  register: vif_list_output
+
+- name: Check that no VIFs are still attached
+  fail:
+    msg: Some VIFs are still attached
+  when: vif_list_output.stdout != ""
+
+- name: Show remaining ports
+  command: openstack port list
+
+- name: Delete created port
+  command: openstack port delete test-port
+  when: precreate_port
+  # FIXME(dtantsur): fails because of ironic mis-behavior
+  ignore_errors: true

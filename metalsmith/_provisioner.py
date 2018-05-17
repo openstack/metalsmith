@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import collections
 import logging
 import random
 
@@ -27,6 +28,7 @@ from metalsmith import _utils
 LOG = logging.getLogger(__name__)
 
 _CREATED_PORTS = 'metalsmith_created_ports'
+_ATTACHED_PORTS = 'metalsmith_attached_ports'
 
 
 class Provisioner(object):
@@ -63,14 +65,16 @@ class Provisioner(object):
         return _scheduler.schedule_node(nodes, filters, reserver,
                                         dry_run=self._dry_run)
 
-    def provision_node(self, node, image_ref, network_refs,
-                       root_disk_size=None, ssh_keys=None, netboot=False,
-                       wait=None):
+    def provision_node(self, node, image_ref, nics=None, root_disk_size=None,
+                       ssh_keys=None, netboot=False, wait=None):
         """Provision the node with the given image.
 
         :param node: Node object, UUID or name.
         :param image_ref: Image name or UUID to provision.
-        :param network_refs: List of network names or UUIDs to use.
+        :param nics: List of virtual NICs to attach to physical ports.
+            Each item is a dict with a key describing the type of the NIC:
+            either a port (``{"port": "<port name or ID>"}``) or a network
+            to create a port on (``{"network": "<network name or ID>"}``).
         :param root_disk_size: The size of the root partition. By default
             the value of the local_gb property is used.
         :param ssh_keys: list of public parts of the SSH keys to upload
@@ -81,6 +85,7 @@ class Provisioner(object):
         :return: Reservation
         """
         created_ports = []
+        attached_ports = []
 
         try:
             node = self._api.get_node(node)
@@ -96,21 +101,23 @@ class Provisioner(object):
 
             LOG.debug('Image: %s', image)
 
-            networks = self._get_networks(network_refs)
+            nics = self._get_nics(nics or [])
 
             if self._dry_run:
                 LOG.warning('Dry run, not provisioning node %s',
                             _utils.log_node(node))
                 return node
 
-            self._create_ports(node, networks, created_ports)
+            self._create_and_attach_ports(node, nics,
+                                          created_ports, attached_ports)
 
             target_caps = {'boot_option': 'netboot' if netboot else 'local'}
 
             updates = {'/instance_info/image_source': image.id,
                        '/instance_info/root_gb': root_disk_size,
                        '/instance_info/capabilities': target_caps,
-                       '/extra/%s' % _CREATED_PORTS: created_ports}
+                       '/extra/%s' % _CREATED_PORTS: created_ports,
+                       '/extra/%s' % _ATTACHED_PORTS: attached_ports}
 
             for prop in ('kernel', 'ramdisk'):
                 value = getattr(image, '%s_id' % prop, None)
@@ -134,7 +141,7 @@ class Provisioner(object):
             with excutils.save_and_reraise_exception():
                 LOG.error('Deploy attempt failed on node %s, cleaning up',
                           _utils.log_node(node))
-                self._clean_up(node, created_ports)
+                self._clean_up(node, created_ports, attached_ports)
 
         if wait is not None:
             LOG.info('Deploy succeeded on node %s', _utils.log_node(node))
@@ -157,45 +164,73 @@ class Provisioner(object):
         else:
             LOG.warning('No IPs for node %s', _utils.log_node(node))
 
-    def _clean_up(self, node, created_ports):
+    def _clean_up(self, node, created_ports, attached_ports):
         try:
-            self._delete_ports(node, created_ports)
+            self._delete_ports(node, created_ports, attached_ports)
             self._api.release_node(node)
         except Exception:
             LOG.exception('Clean up failed')
 
-    def _get_networks(self, network_refs):
-        """Validate and get the networks."""
-        networks = []
-        for network_ref in network_refs:
-            try:
-                network = self._api.get_network(network_ref)
-            except Exception as exc:
-                raise _exceptions.InvalidNetwork(
-                    'Cannot find network %(net)s: %(error)s' %
-                    {'net': network_ref, 'error': exc})
+    def _get_nics(self, nics):
+        """Validate and get the NICs."""
+        result = []
+        if not isinstance(nics, collections.Sequence):
+            raise TypeError("NICs must be a list of dicts")
 
-            LOG.debug('Network: %s', network)
-            networks.append(network)
-        return networks
+        for nic in nics:
+            if not isinstance(nic, collections.Mapping) or len(nic) != 1:
+                raise TypeError("Each NIC must be a dict with one item, "
+                                "got %s" % nic)
 
-    def _create_ports(self, node, networks, created_ports):
+            nic_type, nic_id = next(iter(nic.items()))
+            if nic_type == 'network':
+                try:
+                    network = self._api.get_network(nic_id)
+                except Exception as exc:
+                    raise _exceptions.InvalidNIC(
+                        'Cannot find network %(net)s: %(error)s' %
+                        {'net': nic_id, 'error': exc})
+                else:
+                    result.append((nic_type, network))
+            elif nic_type == 'port':
+                try:
+                    port = self._api.get_port(nic_id)
+                except Exception as exc:
+                    raise _exceptions.InvalidNIC(
+                        'Cannot find port %(port)s: %(error)s' %
+                        {'port': nic_id, 'error': exc})
+                else:
+                    result.append((nic_type, port))
+            else:
+                raise ValueError("Unexpected NIC type %s, supported values: "
+                                 "'port', 'network'" % nic_type)
+
+        return result
+
+    def _create_and_attach_ports(self, node, nics, created_ports,
+                                 attached_ports):
         """Create and attach ports on given networks."""
-        for network in networks:
-            port = self._api.create_port(network_id=network.id)
-            created_ports.append(port.id)
-            LOG.debug('Created Neutron port %s', port)
+        for nic_type, nic in nics:
+            if nic_type == 'network':
+                port = self._api.create_port(network_id=nic.id)
+                created_ports.append(port.id)
+                LOG.debug('Created Neutron port %s', port)
+            else:
+                port = nic
 
             self._api.attach_port_to_node(node.uuid, port.id)
             LOG.info('Attached port %(port)s to node %(node)s',
                      {'port': port.id,
                       'node': _utils.log_node(node)})
+            attached_ports.append(port.id)
 
-    def _delete_ports(self, node, created_ports=None):
+    def _delete_ports(self, node, created_ports=None, attached_ports=None):
         if created_ports is None:
             created_ports = node.extra.get(_CREATED_PORTS, [])
+        if attached_ports is None:
+            attached_ports = node.extra.get(_ATTACHED_PORTS, [])
 
-        for port_id in created_ports:
+        for port_id in set(attached_ports + created_ports):
             LOG.debug('Detaching port %(port)s from node %(node)s',
                       {'port': port_id, 'node': node.uuid})
             try:
@@ -206,11 +241,20 @@ class Provisioner(object):
                           {'vif': port_id, 'node': _utils.log_node(node),
                            'exc': exc})
 
+        for port_id in created_ports:
             LOG.debug('Deleting port %s', port_id)
             try:
                 self._api.delete_port(port_id)
             except Exception:
                 LOG.warning('Failed to delete neutron port %s', port_id)
+
+        update = {'/extra/%s' % item: _os_api.REMOVE
+                  for item in (_CREATED_PORTS, _ATTACHED_PORTS)}
+        try:
+            self._api.update_node(node, update)
+        except Exception as exc:
+            LOG.warning('Failed to clear node %(node)s extra: %(exc)s',
+                        {'node': _utils.log_node(node), 'exc': exc})
 
     def unprovision_node(self, node, wait=None):
         """Unprovision a previously provisioned node.

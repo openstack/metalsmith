@@ -38,7 +38,7 @@ class TestMain(testtools.TestCase):
         mock_pr.return_value.provision_node.assert_called_once_with(
             mock_pr.return_value.reserve_node.return_value,
             image_ref='myimg',
-            network_refs=['mynet'],
+            nics=[{'network': 'mynet'}],
             root_disk_size=None,
             ssh_keys=[],
             netboot=False,
@@ -58,7 +58,7 @@ class TestMain(testtools.TestCase):
         mock_pr.return_value.provision_node.assert_called_once_with(
             mock_pr.return_value.reserve_node.return_value,
             image_ref='myimg',
-            network_refs=['mynet'],
+            nics=[{'network': 'mynet'}],
             root_disk_size=None,
             ssh_keys=[],
             netboot=False,
@@ -78,7 +78,7 @@ class TestMain(testtools.TestCase):
         mock_pr.return_value.provision_node.assert_called_once_with(
             mock_pr.return_value.reserve_node.return_value,
             image_ref='myimg',
-            network_refs=['mynet'],
+            nics=[{'network': 'mynet'}],
             root_disk_size=None,
             ssh_keys=[],
             netboot=False,
@@ -98,7 +98,7 @@ class TestMain(testtools.TestCase):
         mock_pr.return_value.provision_node.assert_called_once_with(
             mock_pr.return_value.reserve_node.return_value,
             image_ref='myimg',
-            network_refs=['mynet'],
+            nics=[{'network': 'mynet'}],
             root_disk_size=None,
             ssh_keys=[],
             netboot=False,
@@ -135,7 +135,7 @@ class TestMain(testtools.TestCase):
         mock_pr.return_value.provision_node.assert_called_once_with(
             mock_pr.return_value.reserve_node.return_value,
             image_ref='myimg',
-            network_refs=['mynet'],
+            nics=[{'network': 'mynet'}],
             root_disk_size=None,
             ssh_keys=[],
             netboot=False,
@@ -159,8 +159,68 @@ class TestMain(testtools.TestCase):
             mock_pr.return_value.provision_node.assert_called_once_with(
                 mock_pr.return_value.reserve_node.return_value,
                 image_ref='myimg',
-                network_refs=['mynet'],
+                nics=[{'network': 'mynet'}],
                 root_disk_size=None,
                 ssh_keys=['foo'],
                 netboot=False,
                 wait=1800)
+
+    def test_args_port(self, mock_os_conf, mock_pr):
+        args = ['deploy', '--port', 'myport', '--image', 'myimg', 'compute']
+        _cmd.main(args)
+        mock_pr.assert_called_once_with(
+            cloud_region=mock_os_conf.return_value.get_one.return_value,
+            dry_run=False)
+        mock_pr.return_value.reserve_node.assert_called_once_with(
+            resource_class='compute',
+            capabilities={}
+        )
+        mock_pr.return_value.provision_node.assert_called_once_with(
+            mock_pr.return_value.reserve_node.return_value,
+            image_ref='myimg',
+            nics=[{'port': 'myport'}],
+            root_disk_size=None,
+            ssh_keys=[],
+            netboot=False,
+            wait=1800)
+
+    def test_args_no_nics(self, mock_os_conf, mock_pr):
+        args = ['deploy', '--image', 'myimg', 'compute']
+        _cmd.main(args)
+        mock_pr.assert_called_once_with(
+            cloud_region=mock_os_conf.return_value.get_one.return_value,
+            dry_run=False)
+        mock_pr.return_value.reserve_node.assert_called_once_with(
+            resource_class='compute',
+            capabilities={}
+        )
+        mock_pr.return_value.provision_node.assert_called_once_with(
+            mock_pr.return_value.reserve_node.return_value,
+            image_ref='myimg',
+            nics=None,
+            root_disk_size=None,
+            ssh_keys=[],
+            netboot=False,
+            wait=1800)
+
+    def test_args_networks_and_ports(self, mock_os_conf, mock_pr):
+        args = ['deploy', '--network', 'net1', '--port', 'port1',
+                '--port', 'port2', '--network', 'net2',
+                '--image', 'myimg', 'compute']
+        _cmd.main(args)
+        mock_pr.assert_called_once_with(
+            cloud_region=mock_os_conf.return_value.get_one.return_value,
+            dry_run=False)
+        mock_pr.return_value.reserve_node.assert_called_once_with(
+            resource_class='compute',
+            capabilities={}
+        )
+        mock_pr.return_value.provision_node.assert_called_once_with(
+            mock_pr.return_value.reserve_node.return_value,
+            image_ref='myimg',
+            nics=[{'network': 'net1'}, {'port': 'port1'},
+                  {'port': 'port2'}, {'network': 'net2'}],
+            root_disk_size=None,
+            ssh_keys=[],
+            netboot=False,
+            wait=1800)

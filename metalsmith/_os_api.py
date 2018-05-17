@@ -89,7 +89,8 @@ class API(object):
             return node
 
     def get_port(self, port_id):
-        return self.connection.network.get_port(port_id)
+        return self.connection.network.find_port(port_id,
+                                                 ignore_missing=False)
 
     def list_node_attached_ports(self, node):
         return self.ironic.node.vif_list(_node_id(node))

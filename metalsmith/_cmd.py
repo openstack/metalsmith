@@ -25,6 +25,17 @@ from metalsmith import _provisioner
 LOG = logging.getLogger(__name__)
 
 
+class NICAction(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        assert option_string in ('--port', '--network')
+        nics = getattr(namespace, self.dest, None) or []
+        if option_string == '--network':
+            nics.append({'network': values})
+        else:
+            nics.append({'port': values})
+        setattr(namespace, self.dest, nics)
+
+
 def _do_deploy(api, args, wait=None):
     capabilities = dict(item.split('=', 1) for item in args.capability)
     if args.ssh_public_key:
@@ -36,7 +47,7 @@ def _do_deploy(api, args, wait=None):
     node = api.reserve_node(args.resource_class, capabilities=capabilities)
     api.provision_node(node,
                        image_ref=args.image,
-                       network_refs=[args.network],
+                       nics=args.nics,
                        root_disk_size=args.root_disk_size,
                        ssh_keys=ssh_keys,
                        netboot=args.netboot,
@@ -72,7 +83,9 @@ def _parse_args(args, config):
     deploy.add_argument('--image', help='image to use (name or UUID)',
                         required=True)
     deploy.add_argument('--network', help='network to use (name or UUID)',
-                        required=True),
+                        dest='nics', action=NICAction)
+    deploy.add_argument('--port', help='port to attach (name or UUID)',
+                        dest='nics', action=NICAction)
     deploy.add_argument('--netboot', action='store_true',
                         help='boot from network instead of local disk')
     deploy.add_argument('--root-disk-size', type=int,

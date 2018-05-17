@@ -61,8 +61,8 @@ class InvalidImage(Error):
     """Requested image is invalid and cannot be used."""
 
 
-class InvalidNetwork(Error):
-    """Requested network is invalid and cannot be used."""
+class InvalidNIC(Error):
+    """Requested NIC is invalid and cannot be used."""
 
 
 class UnknownRootDiskSize(Error):

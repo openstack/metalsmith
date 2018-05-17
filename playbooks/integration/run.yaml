@@ -51,7 +51,9 @@
     - include: exercise.yaml
       vars:
         image: "{{ cirros_uec_image }}"
+        precreate_port: false
 
     - include: exercise.yaml
       vars:
         image: "{{ cirros_disk_image }}"
+        precreate_port: true
