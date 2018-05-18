@@ -20,10 +20,10 @@ import sys
 
 import six
 
-from metalsmith import _exceptions
 from metalsmith import _os_api
 from metalsmith import _scheduler
 from metalsmith import _utils
+from metalsmith import exceptions
 
 
 LOG = logging.getLogger(__name__)
@@ -33,7 +33,15 @@ _ATTACHED_PORTS = 'metalsmith_attached_ports'
 
 
 class Provisioner(object):
-    """API to deploy/undeploy nodes with OpenStack."""
+    """API to deploy/undeploy nodes with OpenStack.
+
+    :param session: `Session` object (from ``keystoneauth``) to use when
+        making API requests. Mutually exclusive with **cloud_region**.
+    :param cloud_region: cloud configuration object (from ``openstacksdk``)
+        to use when making API requests. Mutually exclusive with **session**.
+    :param dry_run: boolean value, set to ``True`` to prevent any API calls
+        from being actually made.
+    """
 
     def __init__(self, session=None, cloud_region=None, dry_run=False):
         self._api = _os_api.API(session=session, cloud_region=cloud_region)
@@ -42,17 +50,22 @@ class Provisioner(object):
     def reserve_node(self, resource_class, capabilities=None):
         """Find and reserve a suitable node.
 
+        Example::
+
+         node = provisioner.reserve_node("compute",
+                                         capabilities={"boot_mode": "uefi"})
+
         :param resource_class: Requested resource class.
         :param capabilities: Requested capabilities as a dict.
-        :return: reserved Node object
-        :raises: ReservationFailed
+        :return: reserved `Node` object.
+        :raises: :py:class:`metalsmith.exceptions.ReservationFailed`
         """
         capabilities = capabilities or {}
 
         nodes = self._api.list_nodes(resource_class=resource_class)
         if not nodes:
-            raise _exceptions.ResourceClassNotFound(resource_class,
-                                                    capabilities)
+            raise exceptions.ResourceClassNotFound(resource_class,
+                                                   capabilities)
 
         # Make sure parallel executions don't try nodes in the same sequence
         random.shuffle(nodes)
@@ -70,6 +83,14 @@ class Provisioner(object):
                        ssh_keys=None, netboot=False, wait=None):
         """Provision the node with the given image.
 
+        Example::
+
+         provisioner.provision_node("compute-1", "centos",
+                                    nics=[{"network": "private"},
+                                          {"network": "external"}],
+                                    root_disk_size=50,
+                                    wait=3600)
+
         :param node: Node object, UUID or name.
         :param image_ref: Image name or UUID to provision.
         :param nics: List of virtual NICs to attach to physical ports.
@@ -83,7 +104,8 @@ class Provisioner(object):
         :param netboot: Whether to use networking boot for final instances.
         :param wait: How many seconds to wait for the deployment to finish,
             None to return immediately.
-        :return: Reservation
+        :return: provisioned `Node` object.
+        :raises: :py:class:`metalsmith.exceptions.Error`
         """
         created_ports = []
         attached_ports = []
@@ -96,7 +118,7 @@ class Provisioner(object):
             try:
                 image = self._api.get_image_info(image_ref)
             except Exception as exc:
-                raise _exceptions.InvalidImage(
+                raise exceptions.InvalidImage(
                     'Cannot find image %(image)s: %(error)s' %
                     {'image': image_ref, 'error': exc})
 
@@ -188,7 +210,7 @@ class Provisioner(object):
                 try:
                     network = self._api.get_network(nic_id)
                 except Exception as exc:
-                    raise _exceptions.InvalidNIC(
+                    raise exceptions.InvalidNIC(
                         'Cannot find network %(net)s: %(error)s' %
                         {'net': nic_id, 'error': exc})
                 else:
@@ -197,7 +219,7 @@ class Provisioner(object):
                 try:
                     port = self._api.get_port(nic_id)
                 except Exception as exc:
-                    raise _exceptions.InvalidNIC(
+                    raise exceptions.InvalidNIC(
                         'Cannot find port %(port)s: %(error)s' %
                         {'port': nic_id, 'error': exc})
                 else:
@@ -263,6 +285,7 @@ class Provisioner(object):
         :param node: node object, UUID or name.
         :param wait: How many seconds to wait for the process to finish,
             None to return immediately.
+        :return: nothing.
         """
         node = self._api.get_node(node)
         if self._dry_run:

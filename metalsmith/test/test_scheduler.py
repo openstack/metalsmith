@@ -16,8 +16,8 @@
 import mock
 import testtools
 
-from metalsmith import _exceptions
 from metalsmith import _scheduler
+from metalsmith import exceptions
 
 
 class TestScheduleNode(testtools.TestCase):
@@ -114,7 +114,7 @@ class TestCapabilitiesFilter(testtools.TestCase):
 
     def test_fail_no_capabilities(self):
         fltr = _scheduler.CapabilitiesFilter('rsc', {'profile': 'compute'})
-        self.assertRaisesRegex(_exceptions.CapabilitiesNotFound,
+        self.assertRaisesRegex(exceptions.CapabilitiesNotFound,
                                'No available nodes found with capabilities '
                                'profile=compute, existing capabilities: none',
                                fltr.fail)
@@ -146,7 +146,7 @@ class TestCapabilitiesFilter(testtools.TestCase):
             properties={'capabilities': 'profile:control'},
             spec=['properties', 'name', 'uuid'])
         self.assertFalse(fltr(node))
-        self.assertRaisesRegex(_exceptions.CapabilitiesNotFound,
+        self.assertRaisesRegex(exceptions.CapabilitiesNotFound,
                                'No available nodes found with capabilities '
                                'profile=compute, existing capabilities: '
                                r'profile=control \(1 node\(s\)\)',
@@ -158,7 +158,7 @@ class TestCapabilitiesFilter(testtools.TestCase):
             node = mock.Mock(properties={'capabilities': cap},
                              spec=['properties', 'name', 'uuid'])
             self.assertFalse(fltr(node))
-        self.assertRaisesRegex(_exceptions.CapabilitiesNotFound,
+        self.assertRaisesRegex(exceptions.CapabilitiesNotFound,
                                'No available nodes found with capabilities '
                                'profile=compute, existing capabilities: none',
                                fltr.fail)
@@ -181,7 +181,7 @@ class TestValidationFilter(testtools.TestCase):
         self.api.validate_node.side_effect = RuntimeError('boom')
         self.assertFalse(self.fltr(node))
 
-        self.assertRaisesRegex(_exceptions.ValidationFailed,
+        self.assertRaisesRegex(exceptions.ValidationFailed,
                                'All available nodes have failed validation: '
                                'Node .* failed validation: boom',
                                self.fltr.fail)
@@ -198,7 +198,7 @@ class TestIronicReserver(testtools.TestCase):
         self.reserver = _scheduler.IronicReserver(self.api, 'rsc', {})
 
     def test_fail(self, mock_validation):
-        self.assertRaisesRegex(_exceptions.AllNodesReserved,
+        self.assertRaisesRegex(exceptions.AllNodesReserved,
                                'All the candidate nodes are already reserved',
                                self.reserver.fail)
 

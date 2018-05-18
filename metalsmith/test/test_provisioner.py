@@ -16,9 +16,9 @@
 import mock
 import testtools
 
-from metalsmith import _exceptions
 from metalsmith import _os_api
 from metalsmith import _provisioner
+from metalsmith import exceptions
 
 
 class Base(testtools.TestCase):
@@ -44,7 +44,7 @@ class TestReserveNode(Base):
     def test_no_nodes(self):
         self.api.list_nodes.return_value = []
 
-        self.assertRaises(_exceptions.ResourceClassNotFound,
+        self.assertRaises(exceptions.ResourceClassNotFound,
                           self.pr.reserve_node, 'control')
         self.assertFalse(self.api.reserve_node.called)
 
@@ -315,7 +315,7 @@ class TestProvisionNode(Base):
 
     def test_missing_image(self):
         self.api.get_image_info.side_effect = RuntimeError('Not found')
-        self.assertRaisesRegex(_exceptions.InvalidImage, 'Not found',
+        self.assertRaisesRegex(exceptions.InvalidImage, 'Not found',
                                self.pr.provision_node,
                                self.node, 'image', [{'network': 'network'}])
         self.api.update_node.assert_called_once_with(self.node, CLEAN_UP)
@@ -324,7 +324,7 @@ class TestProvisionNode(Base):
 
     def test_invalid_network(self):
         self.api.get_network.side_effect = RuntimeError('Not found')
-        self.assertRaisesRegex(_exceptions.InvalidNIC, 'Not found',
+        self.assertRaisesRegex(exceptions.InvalidNIC, 'Not found',
                                self.pr.provision_node,
                                self.node, 'image', [{'network': 'network'}])
         self.api.update_node.assert_called_once_with(self.node, CLEAN_UP)
@@ -334,7 +334,7 @@ class TestProvisionNode(Base):
 
     def test_invalid_port(self):
         self.api.get_port.side_effect = RuntimeError('Not found')
-        self.assertRaisesRegex(_exceptions.InvalidNIC, 'Not found',
+        self.assertRaisesRegex(exceptions.InvalidNIC, 'Not found',
                                self.pr.provision_node,
                                self.node, 'image', [{'port': 'port1'}])
         self.api.update_node.assert_called_once_with(self.node, CLEAN_UP)
@@ -344,7 +344,7 @@ class TestProvisionNode(Base):
 
     def test_no_local_gb(self):
         self.node.properties = {}
-        self.assertRaises(_exceptions.UnknownRootDiskSize,
+        self.assertRaises(exceptions.UnknownRootDiskSize,
                           self.pr.provision_node,
                           self.node, 'image', [{'network': 'network'}])
         self.assertFalse(self.api.create_port.called)
@@ -354,7 +354,7 @@ class TestProvisionNode(Base):
     def test_invalid_local_gb(self):
         for value in (None, 'meow', -42, []):
             self.node.properties = {'local_gb': value}
-            self.assertRaises(_exceptions.UnknownRootDiskSize,
+            self.assertRaises(exceptions.UnknownRootDiskSize,
                               self.pr.provision_node,
                               self.node, 'image', [{'network': 'network'}])
         self.assertFalse(self.api.create_port.called)

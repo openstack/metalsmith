@@ -17,8 +17,8 @@ Installation
 
     pip install --user metalsmith
 
-Usage
------
+CLI Usage
+---------
 
 Generic usage is as follows::
 

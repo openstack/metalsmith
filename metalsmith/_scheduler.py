@@ -19,8 +19,8 @@ import logging
 
 import six
 
-from metalsmith import _exceptions
 from metalsmith import _utils
+from metalsmith import exceptions
 
 
 LOG = logging.getLogger(__name__)
@@ -159,9 +159,9 @@ class CapabilitiesFilter(Filter):
         message = ("No available nodes found with capabilities %(req)s, "
                    "existing capabilities: %(exist)s" %
                    {'req': requested, 'exist': existing or 'none'})
-        raise _exceptions.CapabilitiesNotFound(message,
-                                               self._resource_class,
-                                               self._capabilities)
+        raise exceptions.CapabilitiesNotFound(message,
+                                              self._resource_class,
+                                              self._capabilities)
 
 
 class ValidationFilter(Filter):
@@ -189,9 +189,9 @@ class ValidationFilter(Filter):
     def fail(self):
         errors = ", ".join(self._failed_validation)
         message = "All available nodes have failed validation: %s" % errors
-        raise _exceptions.ValidationFailed(message,
-                                           self._resource_class,
-                                           self._capabilities)
+        raise exceptions.ValidationFailed(message,
+                                          self._resource_class,
+                                          self._capabilities)
 
 
 class IronicReserver(Reserver):
@@ -221,5 +221,5 @@ class IronicReserver(Reserver):
         return result
 
     def fail(self):
-        raise _exceptions.AllNodesReserved(self._resource_class,
-                                           self._capabilities)
+        raise exceptions.AllNodesReserved(self._resource_class,
+                                          self._capabilities)
