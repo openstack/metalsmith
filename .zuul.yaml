@@ -97,6 +97,8 @@
     run: playbooks/integration/run.yaml
 
 - project:
+    templates:
+      - docs-on-readthedocs
     check:
       jobs:
         - metalsmith-integration-glance

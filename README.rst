@@ -10,6 +10,11 @@ Metal Service (ironic) <https://docs.openstack.org/ironic/latest/>`_,
 and `OpenStack Networking Service (neutron)
 <https://docs.openstack.org/neutron/latest/>`_.
 
+* License: Apache License, Version 2.0
+* Documentation: https://metalsmith.readthedocs.io
+* Source: https://git.openstack.org/cgit/openstack/metalsmith
+* Bugs: https://storyboard.openstack.org/#!/project/1000
+
 Installation
 ------------
 
