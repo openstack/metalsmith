@@ -1,0 +1,4 @@
+# This file is needed because readthedocs people refuse to support several
+# requirements files at once, and using autodoc requires installing both.
+-r requirements.txt
+-r ../requirements.txt
