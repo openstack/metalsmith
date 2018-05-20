@@ -19,7 +19,7 @@
       --image {{ image }}
       --ssh-public-key {{ ssh_key_file }}
       --root-disk-size 9
-      --netboot
+      {{ extra_args }}
       baremetal
 
 - name: Find the deployed node

@@ -2,6 +2,9 @@
   environment:
     OS_CLOUD: devstack-admin
 
+  vars:
+    centos_file: CentOS-7-x86_64-GenericCloud.qcow2
+
   tasks:
     - include: ssh-key.yaml
 
@@ -27,12 +30,37 @@
         msg: No Cirros disk image found
       when: cirros_disk_image_result.stdout == ""
 
+    - name: Download the CentOS image
+      get_url:
+        url: https://cloud.centos.org/centos/7/images/{{ centos_file }}.xz
+        dest: ~/{{ centos_file }}.xz
+      register: centos_image_result
+      until: centos_image_result | succeeded
+      retries: 3
+      delay: 10
+
+    - name: Unpack the CentOS image
+      command: xz -d {{ centos_file }}.xz
+
+    - name: Upload the CentOS image
+      command: >
+          openstack image create --disk-format qcow2
+          --file {{ centos_file }} test-centos-image
+
     - include: exercise.yaml
       vars:
         image: "{{ cirros_uec_image_result.stdout }}"
         precreate_port: false
+        extra_args: --netboot
 
     - include: exercise.yaml
       vars:
         image: "{{ cirros_disk_image_result.stdout }}"
         precreate_port: true
+        extra_args: --netboot
+
+    - include: exercise.yaml
+      vars:
+        image: test-centos-image
+        precreate_port: false
+        extra_args: ''
