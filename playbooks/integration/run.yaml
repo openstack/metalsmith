@@ -2,65 +2,55 @@
   environment:
     OS_CLOUD: devstack-admin
 
-  vars:
-    centos_file: CentOS-7-x86_64-GenericCloud.qcow2
-
   tasks:
     - include: ssh-key.yaml
 
-    - name: Find Cirros UEC image
-      shell: |
-        openstack image list -f value -c ID -c Name \
-          | awk '/cirros.*uec/ { print $1; exit 0; }'
-      register: cirros_uec_image_result
+    - include: centos-image.yaml
 
-    - name: Find Cirros disk image
-      shell: |
-        openstack image list -f value -c ID -c Name \
-          | awk '/cirros.*disk/ { print $1; exit 0; }'
-      register: cirros_disk_image_result
-
-    - name: Check that Cirros UEC image was found
-      fail:
-        msg: No Cirros UEC image found
-      when: cirros_uec_image_result.stdout == ""
-
-    - name: Check that Cirros disk image was found
-      fail:
-        msg: No Cirros disk image found
-      when: cirros_disk_image_result.stdout == ""
-
-    - name: Download the CentOS image
-      get_url:
-        url: https://cloud.centos.org/centos/7/images/{{ centos_file }}.xz
-        dest: ~/{{ centos_file }}.xz
-      register: centos_image_result
-      until: centos_image_result | succeeded
-      retries: 3
-      delay: 10
-
-    - name: Unpack the CentOS image
-      command: xz -d {{ centos_file }}.xz
-
-    - name: Upload the CentOS image
+    - name: Upload the CentOS whole-disk image
       command: >
           openstack image create --disk-format qcow2
-          --file {{ centos_file }} test-centos-image
+          --public --file {{ centos_image_file }} test-centos-wholedisk
 
-    - include: exercise.yaml
+    - name: Upload the CentOS kernel image
+      command: >
+          openstack image create --disk-format aki --container-format aki \
+          --public --file {{ centos_kernel_file }} -f value -c id test-centos-kernel
+      register: centos_kernel_id
+      failed_when: centos_kernel_id.stdout == ""
+
+    - name: Upload the CentOS initramfs image
+      command: >
+          openstack image create --disk-format ari --container-format ari \
+          --public --file {{ centos_initramfs_file }} -f value -c id test-centos-initramfs
+      register: centos_initramfs_id
+      failed_when: centos_initramfs_id.stdout == ""
+
+    - name: Upload the CentOS partition image
+      command: >
+          openstack image create --disk-format qcow2
+          --public --file {{ centos_partition_file }}
+          --property kernel_id={{ centos_kernel_id.stdout }}
+          --property ramdisk_id={{ centos_initramfs_id.stdout }}
+          test-centos-partition
+
+    - name: Test partition image with netboot
+      include: exercise.yaml
       vars:
-        image: "{{ cirros_uec_image_result.stdout }}"
+        image: test-centos-partition
         precreate_port: false
         extra_args: --netboot
 
-    - include: exercise.yaml
+    - name: Test whole-disk image with local boot
+      include: exercise.yaml
       vars:
-        image: "{{ cirros_disk_image_result.stdout }}"
+        image: test-centos-wholedisk
+        precreate_port: false
+        extra_args: ''
+
+    - name: Test partition image with local boot and port
+      include: exercise.yaml
+      vars:
+        image: test-centos-partition
         precreate_port: true
-        extra_args: --netboot
-
-    - include: exercise.yaml
-      vars:
-        image: test-centos-image
-        precreate_port: false
         extra_args: ''

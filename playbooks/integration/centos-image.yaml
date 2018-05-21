@@ -1,0 +1,78 @@
+- name: Install guestfish
+  package:
+    name: libguestfs-tools
+    state: present
+  become: true
+
+- name: Make kernel files readable (workaround for Ubuntu)
+  shell: chmod 0644 /boot/vmlinuz-*
+  become: true
+
+- name: Set CentOS image name
+  set_fact:
+    centos_image_name: CentOS-7-x86_64-GenericCloud
+
+- name: Set CentOS image facts
+  set_fact:
+    centos_image_url: https://cloud.centos.org/centos/7/images/{{ centos_image_name }}.qcow2.xz
+    centos_image_file: ~/{{ centos_image_name }}.qcow2
+    centos_kernel_file: ~/{{ centos_image_name }}.kernel
+    centos_initramfs_file: ~/{{ centos_image_name }}.initramfs
+    centos_partition_file: ~/{{ centos_image_name }}-root.qcow2
+
+- name: Download the CentOS image
+  get_url:
+    url: "{{ centos_image_url }}"
+    dest: "{{ centos_image_file }}.xz"
+  register: centos_image_result
+  until: centos_image_result | succeeded
+  retries: 3
+  delay: 10
+
+- name: Unpack the CentOS image
+  command: xz -d {{ centos_image_file }}.xz
+
+- name: Print filesystems from the image
+  command: virt-filesystems -a {{ centos_image_file }} -l --extra --block-devices
+
+- name: Create a temporary directory for extraction
+  tempfile:
+    state: directory
+    suffix: boot
+  register: temp_dir
+
+- name: Extract kernel/ramdisk from the image
+  command: >
+      virt-get-kernel -a {{ centos_image_file }}
+      -o {{ temp_dir.path }} --unversioned-names
+  environment:
+    LIBGUESTFS_DEBUG: 1
+
+- name: Copy the kernel and ramdisk to the target directory
+  copy:
+    src: "{{ temp_dir.path }}/{{ item.src }}"
+    dest: "{{ item.dest }}"
+    remote_src: yes
+  with_items:
+    - src: vmlinuz
+      dest: "{{ centos_kernel_file }}"
+    - src: initramfs
+      dest: "{{ centos_initramfs_file }}"
+
+- name: Extract the root file system
+  command: virt-tar-out -a {{ centos_image_file }} / {{ temp_dir.path }}/root.tar
+  environment:
+    LIBGUESTFS_DEBUG: 1
+
+- name: Pack the root file system into a partition image
+  command: virt-make-fs {{ temp_dir.path }}/root.tar {{ centos_partition_file }}
+  environment:
+    LIBGUESTFS_DEBUG: 1
+
+- name: Print filesystems from the image
+  command: virt-filesystems -a {{ centos_partition_file }} -l --extra --block-devices
+
+- name: Remove the temporary directory
+  file:
+    state: absent
+    path: "{{ temp_dir.path }}"
