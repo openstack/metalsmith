@@ -67,3 +67,7 @@ class InvalidNIC(Error):
 
 class UnknownRootDiskSize(Error):
     """Cannot determine the root disk size."""
+
+
+class InvalidNode(Error):
+    """This node cannot be deployed onto."""

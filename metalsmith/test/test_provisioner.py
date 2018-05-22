@@ -27,15 +27,21 @@ class Base(testtools.TestCase):
         super(Base, self).setUp()
         self.pr = _provisioner.Provisioner(mock.Mock())
         self._reset_api_mock()
-        self.node = mock.Mock(spec=['name', 'uuid', 'properties', 'extra'],
-                              uuid='000', properties={'local_gb': 100},
-                              extra={})
+        self.node = mock.Mock(spec=_os_api.NODE_FIELDS,
+                              uuid='000', instance_uuid=None,
+                              properties={'local_gb': 100},
+                              maintenance=False, extra={})
         self.node.name = 'control-0'
 
     def _reset_api_mock(self):
         self.api = mock.Mock(spec=_os_api.API)
         self.api.get_node.side_effect = lambda n: n
         self.api.update_node.side_effect = lambda n, _u: n
+        self.api.list_node_ports.return_value = [
+            mock.Mock(spec=['uuid', 'pxe_enabled'],
+                      uuid=uuid, pxe_enabled=pxe)
+            for (uuid, pxe) in [('000', True), ('111', False)]
+        ]
         self.pr._api = self.api
 
 
@@ -86,6 +92,7 @@ class TestProvisionNode(Base):
     def setUp(self):
         super(TestProvisionNode, self).setUp()
         image = self.api.get_image_info.return_value
+        self.node.instance_uuid = self.node.uuid
         self.updates = {
             '/instance_info/ramdisk': image.ramdisk_id,
             '/instance_info/kernel': image.kernel_id,
@@ -103,6 +110,26 @@ class TestProvisionNode(Base):
     def test_ok(self):
         self.pr.provision_node(self.node, 'image', [{'network': 'network'}])
 
+        self.api.create_port.assert_called_once_with(
+            network_id=self.api.get_network.return_value.id)
+        self.api.attach_port_to_node.assert_called_once_with(
+            self.node.uuid, self.api.create_port.return_value.id)
+        self.api.update_node.assert_called_once_with(self.node, self.updates)
+        self.api.validate_node.assert_called_once_with(self.node,
+                                                       validate_deploy=True)
+        self.api.node_action.assert_called_once_with(self.node, 'active',
+                                                     configdrive=mock.ANY)
+        self.assertFalse(self.api.wait_for_node_state.called)
+        self.assertFalse(self.api.release_node.called)
+        self.assertFalse(self.api.delete_port.called)
+
+    def test_unreserved(self):
+        self.node.instance_uuid = None
+
+        self.pr.provision_node(self.node, 'image', [{'network': 'network'}])
+
+        self.api.reserve_node.assert_called_once_with(
+            self.node, instance_uuid=self.node.uuid)
         self.api.create_port.assert_called_once_with(
             network_id=self.api.get_network.return_value.id)
         self.api.attach_port_to_node.assert_called_once_with(
@@ -225,6 +252,21 @@ class TestProvisionNode(Base):
         self.pr._dry_run = True
         self.pr.provision_node(self.node, 'image', [{'network': 'network'}])
 
+        self.assertFalse(self.api.create_port.called)
+        self.assertFalse(self.api.attach_port_to_node.called)
+        self.assertFalse(self.api.update_node.called)
+        self.assertFalse(self.api.node_action.called)
+        self.assertFalse(self.api.wait_for_node_state.called)
+        self.assertFalse(self.api.release_node.called)
+        self.assertFalse(self.api.delete_port.called)
+
+    def test_unreserve_dry_run(self):
+        self.pr._dry_run = True
+        self.node.instance_uuid = None
+
+        self.pr.provision_node(self.node, 'image', [{'network': 'network'}])
+
+        self.assertFalse(self.api.reserve_node.called)
         self.assertFalse(self.api.create_port.called)
         self.assertFalse(self.api.attach_port_to_node.called)
         self.assertFalse(self.api.update_node.called)
@@ -401,6 +443,39 @@ class TestProvisionNode(Base):
         self.assertFalse(self.api.attach_port_to_node.called)
         self.assertFalse(self.api.node_action.called)
         self.api.release_node.assert_called_once_with(self.node)
+
+    def test_node_not_found(self):
+        self.api.get_node.side_effect = RuntimeError('not found')
+        self.assertRaisesRegex(exceptions.InvalidNode, 'not found',
+                               self.pr.provision_node,
+                               self.node, 'image', [{'network': 'network'}])
+        self.assertFalse(self.api.create_port.called)
+        self.assertFalse(self.api.update_node.called)
+        self.assertFalse(self.api.node_action.called)
+        self.assertFalse(self.api.release_node.called)
+
+    def test_node_with_external_instance_uuid(self):
+        self.node.instance_uuid = 'nova'
+        self.assertRaisesRegex(exceptions.InvalidNode,
+                               'reserved by instance nova',
+                               self.pr.provision_node,
+                               self.node, 'image', [{'network': 'network'}])
+        self.assertFalse(self.api.create_port.called)
+        self.assertFalse(self.api.update_node.called)
+        self.assertFalse(self.api.node_action.called)
+        self.assertFalse(self.api.release_node.called)
+
+    def test_node_in_maintenance(self):
+        self.node.maintenance = True
+        self.node.maintenance_reason = 'power failure'
+        self.assertRaisesRegex(exceptions.InvalidNode,
+                               'in maintenance mode .* power failure',
+                               self.pr.provision_node,
+                               self.node, 'image', [{'network': 'network'}])
+        self.assertFalse(self.api.create_port.called)
+        self.assertFalse(self.api.update_node.called)
+        self.assertFalse(self.api.node_action.called)
+        self.assertFalse(self.api.release_node.called)
 
 
 class TestUnprovisionNode(Base):
