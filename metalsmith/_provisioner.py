@@ -79,6 +79,35 @@ class Provisioner(object):
         return _scheduler.schedule_node(nodes, filters, reserver,
                                         dry_run=self._dry_run)
 
+    def _check_node_for_deploy(self, node):
+        """Check that node is ready and reserve it if needed."""
+        try:
+            node = self._api.get_node(node)
+        except Exception as exc:
+            raise exceptions.InvalidNode('Cannot find node %(node)s: %(exc)s' %
+                                         {'node': node, 'exc': exc})
+
+        if not node.instance_uuid:
+            if not self._dry_run:
+                LOG.debug('Node %s not reserved yet, reserving',
+                          _utils.log_node(node))
+                self._api.reserve_node(node, instance_uuid=node.uuid)
+        elif node.instance_uuid != node.uuid:
+            raise exceptions.InvalidNode('Node %(node)s already reserved '
+                                         'by instance %(inst)s outside of '
+                                         'metalsmith, cannot deploy on it' %
+                                         {'node': _utils.log_node(node),
+                                          'inst': node.instance_uuid})
+
+        if node.maintenance:
+            raise exceptions.InvalidNode('Refusing to deploy on node %(node)s '
+                                         'which is in maintenance mode due to '
+                                         '%(reason)s' %
+                                         {'node': _utils.log_node(node),
+                                          'reason': node.maintenance_reason})
+
+        return node
+
     def provision_node(self, node, image_ref, nics=None, root_disk_size=None,
                        ssh_keys=None, netboot=False, wait=None):
         """Provision the node with the given image.
@@ -91,7 +120,9 @@ class Provisioner(object):
                                     root_disk_size=50,
                                     wait=3600)
 
-        :param node: Node object, UUID or name.
+        :param node: Node object, UUID or name. Will be reserved first, if
+            not reserved already. Must be in the "available" state with
+            maintenance mode off.
         :param image_ref: Image name or UUID to provision.
         :param nics: List of virtual NICs to attach to physical ports.
             Each item is a dict with a key describing the type of the NIC:
@@ -107,11 +138,11 @@ class Provisioner(object):
         :return: provisioned `Node` object.
         :raises: :py:class:`metalsmith.exceptions.Error`
         """
+        node = self._check_node_for_deploy(node)
         created_ports = []
         attached_ports = []
 
         try:
-            node = self._api.get_node(node)
 
             root_disk_size = _utils.get_root_disk(root_disk_size, node)
 

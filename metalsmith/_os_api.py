@@ -22,6 +22,8 @@ import six
 
 LOG = logging.getLogger(__name__)
 REMOVE = object()
+NODE_FIELDS = ['name', 'uuid', 'instance_uuid', 'maintenance',
+               'maintenance_reason', 'properties', 'extra']
 
 
 class DictWithAttrs(dict):
@@ -84,7 +86,7 @@ class API(object):
 
     def get_node(self, node):
         if isinstance(node, six.string_types):
-            return self.ironic.node.get(node)
+            return self.ironic.node.get(node, fields=NODE_FIELDS)
         else:
             return node
 
@@ -99,11 +101,12 @@ class API(object):
         return self.ironic.node.list_ports(_node_id(node), limit=0)
 
     def list_nodes(self, resource_class=None, maintenance=False,
-                   associated=False, provision_state='available', detail=True):
+                   associated=False, provision_state='available'):
         return self.ironic.node.list(limit=0, resource_class=resource_class,
                                      maintenance=maintenance,
-                                     associated=associated, detail=detail,
-                                     provision_state=provision_state)
+                                     associated=associated,
+                                     provision_state=provision_state,
+                                     fields=NODE_FIELDS)
 
     def node_action(self, node, action, **kwargs):
         self.ironic.node.set_provision_state(_node_id(node), action, **kwargs)
