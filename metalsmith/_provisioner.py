@@ -30,6 +30,72 @@ LOG = logging.getLogger(__name__)
 
 _CREATED_PORTS = 'metalsmith_created_ports'
 _ATTACHED_PORTS = 'metalsmith_attached_ports'
+# NOTE(dtantsur): include available since there is a period of time between
+# claiming the instance and starting the actual provisioning via ironic.
+_DEPLOYING_STATES = frozenset(['available', 'deploying', 'wait call-back',
+                               'deploy complete'])
+_ACTIVE_STATES = frozenset(['active'])
+_ERROR_STATE = frozenset(['error', 'deploy failed'])
+
+_HEALTHY_STATES = frozenset(['deploying', 'active'])
+
+
+class Instance(object):
+    """Instance status in metalsmith."""
+
+    def __init__(self, api, node):
+        self._api = api
+        self._uuid = node.uuid
+        self._node = node
+
+    @property
+    def is_deployed(self):
+        """Whether the node is deployed."""
+        return self._node.provision_state in _ACTIVE_STATES
+
+    @property
+    def is_healthy(self):
+        """Whether the node is not at fault or maintenance."""
+        return self.state in _HEALTHY_STATES and not self._node.maintenance
+
+    @property
+    def node(self):
+        """Underlying `Node` object."""
+        return self._node
+
+    @property
+    def state(self):
+        """Instance state.
+
+        ``deploying``
+            deployment is in progress
+        ``active``
+            node is provisioned
+        ``maintenance``
+            node is provisioned but is in maintenance mode
+        ``error``
+            node has a failure
+        ``unknown``
+            node in unexpected state (maybe unprovisioned or modified by
+            a third party)
+        """
+        prov_state = self._node.provision_state
+        if prov_state in _DEPLOYING_STATES:
+            return 'deploying'
+        elif prov_state in _ERROR_STATE:
+            return 'error'
+        elif prov_state in _ACTIVE_STATES:
+            if self._node.maintenance:
+                return 'maintenance'
+            else:
+                return 'active'
+        else:
+            return 'unknown'
+
+    @property
+    def uuid(self):
+        """Instance UUID (the same as `Node` UUID for metalsmith)."""
+        return self._uuid
 
 
 class Provisioner(object):
@@ -135,7 +201,9 @@ class Provisioner(object):
         :param netboot: Whether to use networking boot for final instances.
         :param wait: How many seconds to wait for the deployment to finish,
             None to return immediately.
-        :return: provisioned `Node` object.
+        :return: :py:class:`metalsmith.Instance` object with the current
+            status of provisioning. If ``wait`` is not ``None``, provisioning
+            is already finished.
         :raises: :py:class:`metalsmith.exceptions.Error`
         """
         node = self._check_node_for_deploy(node)
@@ -208,7 +276,7 @@ class Provisioner(object):
             LOG.info('Deploy succeeded on node %s', _utils.log_node(node))
             self._log_ips(node, created_ports)
 
-        return node
+        return Instance(self._api, node)
 
     def _log_ips(self, node, created_ports):
         ips = []
@@ -313,7 +381,8 @@ class Provisioner(object):
     def unprovision_node(self, node, wait=None):
         """Unprovision a previously provisioned node.
 
-        :param node: node object, UUID or name.
+        :param node: `Node` object, :py:class:`metalsmith.Instance`,
+            UUID or name.
         :param wait: How many seconds to wait for the process to finish,
             None to return immediately.
         :return: nothing.
