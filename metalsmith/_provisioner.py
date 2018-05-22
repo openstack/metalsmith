@@ -293,12 +293,11 @@ class Provisioner(object):
             return
 
         self._delete_ports(node)
-
+        self._api.release_node(node)
         self._api.node_action(node, 'deleted')
+
         LOG.info('Deleting started for node %s', _utils.log_node(node))
 
         if wait is not None:
             self._api.wait_for_node_state(node, 'available', timeout=wait)
-
-        self._api.release_node(node)
-        LOG.info('Node %s undeployed successfully', _utils.log_node(node))
+            LOG.info('Node %s undeployed successfully', _utils.log_node(node))

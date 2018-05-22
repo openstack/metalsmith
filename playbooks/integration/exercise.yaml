@@ -39,7 +39,7 @@
   command: openstack baremetal node show {{ active_node }}
 
 - name: Undeploy a node
-  command: metalsmith --debug undeploy {{ active_node }}
+  command: metalsmith --debug undeploy --wait 900 {{ active_node }}
 
 - name: Get the current status of the deployed node
   command: openstack baremetal node show {{ active_node }} -f json

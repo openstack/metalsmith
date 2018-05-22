@@ -68,11 +68,6 @@ def _parse_args(args, config):
                            help='output more logging')
     parser.add_argument('--dry-run', action='store_true',
                         help='do not take any destructive actions')
-    wait = parser.add_mutually_exclusive_group()
-    wait.add_argument('--wait', type=int, default=1800,
-                      help='action timeout (in seconds)')
-    wait.add_argument('--no-wait', action='store_true',
-                      help='disable waiting for action to finish')
 
     config.register_argparse_arguments(parser, sys.argv[1:])
 
@@ -80,6 +75,12 @@ def _parse_args(args, config):
 
     deploy = subparsers.add_parser('deploy')
     deploy.set_defaults(func=_do_deploy)
+    wait = deploy.add_mutually_exclusive_group()
+    wait.add_argument('--wait', type=int, default=1800,
+                      help='time (in seconds) to wait for node to become '
+                      'active')
+    wait.add_argument('--no-wait', action='store_true',
+                      help='disable waiting for deploy to finish')
     deploy.add_argument('--image', help='image to use (name or UUID)',
                         required=True)
     deploy.add_argument('--network', help='network to use (name or UUID)',
@@ -99,6 +100,10 @@ def _parse_args(args, config):
     undeploy = subparsers.add_parser('undeploy')
     undeploy.set_defaults(func=_do_undeploy)
     undeploy.add_argument('node', help='node UUID')
+    wait = undeploy.add_mutually_exclusive_group()
+    wait.add_argument('--wait', type=int,
+                      help='time (in seconds) to wait for node to become '
+                      'available for deployment again')
     return parser.parse_args(args)
 
 
@@ -123,7 +128,7 @@ def main(args=sys.argv[1:]):
     config = os_config.OpenStackConfig()
     args = _parse_args(args, config)
     _configure_logging(args)
-    if args.no_wait:
+    if getattr(args, 'no_wait', None):
         wait = None
     else:
         wait = args.wait

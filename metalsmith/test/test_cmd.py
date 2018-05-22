@@ -24,7 +24,7 @@ from metalsmith import _provisioner
 
 @mock.patch.object(_provisioner, 'Provisioner', autospec=True)
 @mock.patch.object(_cmd.os_config, 'OpenStackConfig', autospec=True)
-class TestMain(testtools.TestCase):
+class TestDeploy(testtools.TestCase):
     def test_args_ok(self, mock_os_conf, mock_pr):
         args = ['deploy', '--network', 'mynet', '--image', 'myimg', 'compute']
         _cmd.main(args)
@@ -224,3 +224,77 @@ class TestMain(testtools.TestCase):
             ssh_keys=[],
             netboot=False,
             wait=1800)
+
+    def test_args_custom_wait(self, mock_os_conf, mock_pr):
+        args = ['deploy', '--network', 'mynet', '--image', 'myimg',
+                '--wait', '3600', 'compute']
+        _cmd.main(args)
+        mock_pr.assert_called_once_with(
+            cloud_region=mock_os_conf.return_value.get_one.return_value,
+            dry_run=False)
+        mock_pr.return_value.reserve_node.assert_called_once_with(
+            resource_class='compute',
+            capabilities={}
+        )
+        mock_pr.return_value.provision_node.assert_called_once_with(
+            mock_pr.return_value.reserve_node.return_value,
+            image_ref='myimg',
+            nics=[{'network': 'mynet'}],
+            root_disk_size=None,
+            ssh_keys=[],
+            netboot=False,
+            wait=3600)
+
+    def test_args_no_wait(self, mock_os_conf, mock_pr):
+        args = ['deploy', '--network', 'mynet', '--image', 'myimg',
+                '--no-wait', 'compute']
+        _cmd.main(args)
+        mock_pr.assert_called_once_with(
+            cloud_region=mock_os_conf.return_value.get_one.return_value,
+            dry_run=False)
+        mock_pr.return_value.reserve_node.assert_called_once_with(
+            resource_class='compute',
+            capabilities={}
+        )
+        mock_pr.return_value.provision_node.assert_called_once_with(
+            mock_pr.return_value.reserve_node.return_value,
+            image_ref='myimg',
+            nics=[{'network': 'mynet'}],
+            root_disk_size=None,
+            ssh_keys=[],
+            netboot=False,
+            wait=None)
+
+
+@mock.patch.object(_provisioner, 'Provisioner', autospec=True)
+@mock.patch.object(_cmd.os_config, 'OpenStackConfig', autospec=True)
+class TestUndeploy(testtools.TestCase):
+    def test_ok(self, mock_os_conf, mock_pr):
+        args = ['undeploy', '123456']
+        _cmd.main(args)
+        mock_pr.assert_called_once_with(
+            cloud_region=mock_os_conf.return_value.get_one.return_value,
+            dry_run=False)
+        mock_pr.return_value.unprovision_node.assert_called_once_with(
+            '123456', wait=None
+        )
+
+    def test_custom_wait(self, mock_os_conf, mock_pr):
+        args = ['undeploy', '--wait', '1800', '123456']
+        _cmd.main(args)
+        mock_pr.assert_called_once_with(
+            cloud_region=mock_os_conf.return_value.get_one.return_value,
+            dry_run=False)
+        mock_pr.return_value.unprovision_node.assert_called_once_with(
+            '123456', wait=1800
+        )
+
+    def test_dry_run(self, mock_os_conf, mock_pr):
+        args = ['--dry-run', 'undeploy', '123456']
+        _cmd.main(args)
+        mock_pr.assert_called_once_with(
+            cloud_region=mock_os_conf.return_value.get_one.return_value,
+            dry_run=True)
+        mock_pr.return_value.unprovision_node.assert_called_once_with(
+            '123456', wait=None
+        )
