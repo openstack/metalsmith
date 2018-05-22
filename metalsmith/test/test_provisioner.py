@@ -108,7 +108,11 @@ class TestProvisionNode(Base):
         }
 
     def test_ok(self):
-        self.pr.provision_node(self.node, 'image', [{'network': 'network'}])
+        inst = self.pr.provision_node(self.node, 'image',
+                                      [{'network': 'network'}])
+
+        self.assertEqual(inst.uuid, self.node.uuid)
+        self.assertEqual(inst.node, self.node)
 
         self.api.create_port.assert_called_once_with(
             network_id=self.api.get_network.return_value.id)
@@ -529,3 +533,53 @@ class TestUnprovisionNode(Base):
         self.assertFalse(self.api.detach_port_from_node.called)
         self.assertFalse(self.api.wait_for_node_state.called)
         self.assertFalse(self.api.update_node.called)
+
+
+class TestInstance(Base):
+    def setUp(self):
+        super(TestInstance, self).setUp()
+        self.instance = _provisioner.Instance(self.api, self.node)
+
+    def test_state_deploying(self):
+        self.node.provision_state = 'wait call-back'
+        self.assertEqual('deploying', self.instance.state)
+        self.assertFalse(self.instance.is_deployed)
+        self.assertTrue(self.instance.is_healthy)
+
+    def test_state_deploying_when_available(self):
+        self.node.provision_state = 'available'
+        self.assertEqual('deploying', self.instance.state)
+        self.assertFalse(self.instance.is_deployed)
+        self.assertTrue(self.instance.is_healthy)
+
+    def test_state_deploying_maintenance(self):
+        self.node.maintenance = True
+        self.node.provision_state = 'wait call-back'
+        self.assertEqual('deploying', self.instance.state)
+        self.assertFalse(self.instance.is_deployed)
+        self.assertFalse(self.instance.is_healthy)
+
+    def test_state_active(self):
+        self.node.provision_state = 'active'
+        self.assertEqual('active', self.instance.state)
+        self.assertTrue(self.instance.is_deployed)
+        self.assertTrue(self.instance.is_healthy)
+
+    def test_state_maintenance(self):
+        self.node.maintenance = True
+        self.node.provision_state = 'active'
+        self.assertEqual('maintenance', self.instance.state)
+        self.assertTrue(self.instance.is_deployed)
+        self.assertFalse(self.instance.is_healthy)
+
+    def test_state_error(self):
+        self.node.provision_state = 'deploy failed'
+        self.assertEqual('error', self.instance.state)
+        self.assertFalse(self.instance.is_deployed)
+        self.assertFalse(self.instance.is_healthy)
+
+    def test_state_unknown(self):
+        self.node.provision_state = 'enroll'
+        self.assertEqual('unknown', self.instance.state)
+        self.assertFalse(self.instance.is_deployed)
+        self.assertFalse(self.instance.is_healthy)

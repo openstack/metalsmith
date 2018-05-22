@@ -23,7 +23,7 @@ import six
 LOG = logging.getLogger(__name__)
 REMOVE = object()
 NODE_FIELDS = ['name', 'uuid', 'instance_uuid', 'maintenance',
-               'maintenance_reason', 'properties', 'extra']
+               'maintenance_reason', 'properties', 'provision_state', 'extra']
 
 
 class DictWithAttrs(dict):
@@ -87,6 +87,9 @@ class API(object):
     def get_node(self, node):
         if isinstance(node, six.string_types):
             return self.ironic.node.get(node, fields=NODE_FIELDS)
+        elif hasattr(node, 'node'):
+            # Instance object
+            return node.node
         else:
             return node
 
