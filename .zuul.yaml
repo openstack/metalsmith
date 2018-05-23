@@ -21,6 +21,7 @@
       - openstack/keystone
       - openstack/neutron
       - openstack/glance
+      - openstack/swift
       - openstack/ironic
       - openstack/metalsmith
     vars:
@@ -61,10 +62,10 @@
         neutron-metadata-agent: true
         neutron-metering: true
         # Swift services
-        s-account: false
-        s-container: false
-        s-object: false
-        s-proxy: false
+        s-account: true
+        s-container: true
+        s-object: true
+        s-proxy: true
         # Cinder services
         c-api: false
         c-bak: false
@@ -87,6 +88,7 @@
       devstack_localrc:
         IRONIC_BAREMETAL_BASIC_OPS: true
         IRONIC_BUILD_DEPLOY_RAMDISK: false
+        IRONIC_DEFAULT_DEPLOY_INTERFACE: iscsi
         IRONIC_DEPLOY_DRIVER: ipmi
         IRONIC_RAMDISK_TYPE: tinyipa
         IRONIC_VM_COUNT: 1
@@ -94,6 +96,10 @@
         IRONIC_VM_SPECS_CPU: 2
         IRONIC_VM_SPECS_DISK: 10
         IRONIC_VM_SPECS_RAM: 1024
+        SWIFT_ENABLE_TEMPURLS: true
+        SWIFT_HASH: 54bd5642300c4b45-846f8636a70a07d2
+        SWIFT_START_ALL_SERVICES: false
+        SWIFT_TEMPURL_KEY: 54bd5642300c4b45846f8636a70a07d2
       centos_glance_initramds_image: test-centos-initramfs
       centos_glance_kernel_image: test-centos-kernel
       centos_glance_root_image: test-centos-partition
@@ -119,12 +125,23 @@
       metalsmith_whole_disk_image: test-centos-wholedisk
 
 - job:
-    name: metalsmith-integration-glance-netboot-cirros
+    name: metalsmith-integration-glance-netboot-cirros-iscsi
     description: |
         Integration job using Glance as image source and CirrOS with netboot.
     parent: metalsmith-integration-base
     vars:
       metalsmith_netboot: true
+
+- job:
+    name: metalsmith-integration-glance-netboot-cirros-direct
+    description: |
+        Integration job using Glance as image source and direct deploy.
+    parent: metalsmith-integration-base
+    run: playbooks/integration/run.yaml
+    vars:
+      metalsmith_netboot: true
+      devstack_localrc:
+        IRONIC_DEFAULT_DEPLOY_INTERFACE: direct
 
 - project:
     templates:
@@ -135,9 +152,11 @@
       jobs:
         - openstack-tox-lower-constraints
         - metalsmith-integration-glance-localboot-centos7
-        - metalsmith-integration-glance-netboot-cirros
+        - metalsmith-integration-glance-netboot-cirros-iscsi
+        - metalsmith-integration-glance-netboot-cirros-direct
     gate:
       jobs:
         - openstack-tox-lower-constraints
         - metalsmith-integration-glance-localboot-centos7
-        - metalsmith-integration-glance-netboot-cirros
+        - metalsmith-integration-glance-netboot-cirros-iscsi
+        - metalsmith-integration-glance-netboot-cirros-direct
