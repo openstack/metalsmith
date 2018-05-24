@@ -1,0 +1,14 @@
+- hosts: all
+  tasks:
+    - name: Check that VM logs exist
+      stat:
+        path: '{{ ironic_bm_logs }}'
+      register: bm_logs_result
+
+    - name: Copy VM logs
+      synchronize:
+        src: '{{ ironic_bm_logs }}'
+        dest: '{{ zuul.executor.log_root }}/{{ inventory_hostname }}'
+        mode: pull
+      become: true
+      when: bm_logs_result.stat.exists

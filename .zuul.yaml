@@ -4,6 +4,7 @@
         Base job for devstack-based metalsmith jobs.
     parent: devstack-minimal
     pre-run: playbooks/integration/pre.yaml
+    post-run: playbooks/integration/post.yaml
     irrelevant-files:
       - ^.*\.rst$
       - ^doc/.*$
@@ -21,6 +22,7 @@
       - openstack/ironic
       - openstack/metalsmith
     vars:
+      ironic_bm_logs: /opt/stack/logs/ironic-bm-logs
       devstack_services:
         dstat: true
         etcd3: true
@@ -86,8 +88,9 @@
         IRONIC_DEPLOY_DRIVER: ipmi
         IRONIC_RAMDISK_TYPE: tinyipa
         IRONIC_VM_COUNT: 1
+        IRONIC_VM_LOG_DIR: /opt/stack/logs/ironic-bm-logs
         IRONIC_VM_SPECS_DISK: 10
-        IRONIC_VM_SPECS_RAM: 384
+        IRONIC_VM_SPECS_RAM: 512
 
 - job:
     name: metalsmith-integration-glance
