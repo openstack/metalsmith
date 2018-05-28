@@ -232,25 +232,8 @@ class TestProvisionNode(Base):
         self.api.wait_for_node_state.assert_called_once_with(self.node,
                                                              'active',
                                                              timeout=3600)
-        self.api.get_port.assert_called_once_with(
-            self.api.create_port.return_value.id)
         self.assertFalse(self.api.release_node.called)
         self.assertFalse(self.api.delete_port.called)
-
-    @mock.patch.object(_provisioner.LOG, 'warning', autospec=True)
-    def test_with_wait_no_ips(self, mock_warn):
-        self.api.get_port.return_value = mock.Mock(
-            spec=['fixed_ips'], fixed_ips=[]
-        )
-        self.pr.provision_node(self.node, 'image', [{'network': 'network'}],
-                               wait=3600)
-
-        self.api.node_action.assert_called_once_with(self.node, 'active',
-                                                     configdrive=mock.ANY)
-        self.api.wait_for_node_state.assert_called_once_with(self.node,
-                                                             'active',
-                                                             timeout=3600)
-        mock_warn.assert_called_once_with('No IPs for node %s', mock.ANY)
 
     def test_dry_run(self):
         self.pr._dry_run = True
@@ -550,9 +533,9 @@ class TestUnprovisionNode(Base):
         self.assertFalse(self.api.update_node.called)
 
 
-class TestInstance(Base):
+class TestInstanceStates(Base):
     def setUp(self):
-        super(TestInstance, self).setUp()
+        super(TestInstanceStates, self).setUp()
         self.instance = _provisioner.Instance(self.api, self.node)
 
     def test_state_deploying(self):
@@ -599,10 +582,47 @@ class TestInstance(Base):
         self.assertFalse(self.instance.is_deployed)
         self.assertFalse(self.instance.is_healthy)
 
-    def test_to_dict(self):
+    @mock.patch.object(_provisioner.Instance, 'ip_addresses', autospec=True)
+    def test_to_dict(self, mock_ips):
         self.node.provision_state = 'wait call-back'
         self.node.to_dict.return_value = {'node': 'dict'}
-        self.assertEqual({'node': {'node': 'dict'},
+        mock_ips.return_value = {'private': ['1.2.3.4']}
+
+        self.assertEqual({'ip_addresses': {'private': ['1.2.3.4']},
+                          'node': {'node': 'dict'},
                           'state': 'deploying',
                           'uuid': self.node.uuid},
                          self.instance.to_dict())
+
+
+class TestInstanceIPAddresses(Base):
+    def setUp(self):
+        super(TestInstanceIPAddresses, self).setUp()
+        self.instance = _provisioner.Instance(self.api, self.node)
+        self.api.list_node_attached_ports.return_value = [
+            mock.Mock(spec=['id'], id=i) for i in ('111', '222')
+        ]
+        self.ports = [
+            mock.Mock(spec=['network_id', 'fixed_ips', 'network'],
+                      network_id=n, fixed_ips=[{'ip_address': ip}])
+            for n, ip in [('0', '192.168.0.1'), ('1', '10.0.0.2')]
+        ]
+        self.api.get_port.side_effect = self.ports
+        self.nets = [
+            mock.Mock(spec=['id', 'name'], id=str(i)) for i in range(2)
+        ]
+        for n in self.nets:
+            n.name = 'name-%s' % n.id
+        self.api.get_network.side_effect = self.nets
+
+    def test_ip_addresses(self):
+        ips = self.instance.ip_addresses()
+        self.assertEqual({'name-0': ['192.168.0.1'],
+                          'name-1': ['10.0.0.2']},
+                         ips)
+
+    def test_missing_ip(self):
+        self.ports[0].fixed_ips = {}
+        ips = self.instance.ip_addresses()
+        self.assertEqual({'name-0': [],
+                          'name-1': ['10.0.0.2']}, ips)

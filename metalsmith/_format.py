@@ -46,6 +46,13 @@ class DefaultFormat(object):
         _print("Node %(node)s, current state is %(state)s",
                node=_utils.log_node(instance.node), state=instance.state)
 
+        if instance.is_deployed:
+            ips = instance.ip_addresses()
+            if ips:
+                ips = '; '.join('%s=%s' % (net, ','.join(ips))
+                                for net, ips in ips.items())
+                _print('IP addresses: %(ips)s', ips=ips)
+
     def undeploy(self, node):
         """Output result of undeploy."""
         if node.provision_state == 'available':
