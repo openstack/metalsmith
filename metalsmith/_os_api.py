@@ -21,9 +21,21 @@ import six
 
 
 LOG = logging.getLogger(__name__)
-REMOVE = object()
 NODE_FIELDS = ['name', 'uuid', 'instance_uuid', 'maintenance',
                'maintenance_reason', 'properties', 'provision_state', 'extra']
+
+
+class _Remove(object):
+    """Indicator that a field should be removed."""
+
+    __slots__ = ()
+
+    def __repr__(self):
+        """Allow nicer logging."""
+        return '<REMOVE>'
+
+
+REMOVE = _Remove()
 
 
 class DictWithAttrs(dict):

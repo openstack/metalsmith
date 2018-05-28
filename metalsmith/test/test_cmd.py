@@ -25,7 +25,8 @@ from metalsmith import _provisioner
 @mock.patch.object(_provisioner, 'Provisioner', autospec=True)
 @mock.patch.object(_cmd.os_config, 'OpenStackConfig', autospec=True)
 class TestDeploy(testtools.TestCase):
-    def test_args_ok(self, mock_os_conf, mock_pr):
+    @mock.patch.object(_cmd, 'logging', autospec=True)
+    def test_args_ok(self, mock_log, mock_os_conf, mock_pr):
         args = ['deploy', '--network', 'mynet', '--image', 'myimg', 'compute']
         _cmd.main(args)
         mock_pr.assert_called_once_with(
@@ -43,6 +44,13 @@ class TestDeploy(testtools.TestCase):
             ssh_keys=[],
             netboot=False,
             wait=1800)
+        mock_log.basicConfig.assert_called_once_with(level=mock_log.WARNING,
+                                                     format=mock.ANY)
+        self.assertEqual(
+            mock.call('metalsmith').setLevel(mock_log.WARNING).call_list() +
+            mock.call(_cmd._URLLIB3_LOGGER).setLevel(
+                mock_log.CRITICAL).call_list(),
+            mock_log.getLogger.mock_calls)
 
     def test_args_dry_run(self, mock_os_conf, mock_pr):
         args = ['--dry-run', 'deploy', '--network', 'mynet',
@@ -64,7 +72,8 @@ class TestDeploy(testtools.TestCase):
             netboot=False,
             wait=1800)
 
-    def test_args_debug(self, mock_os_conf, mock_pr):
+    @mock.patch.object(_cmd, 'logging', autospec=True)
+    def test_args_debug(self, mock_log, mock_os_conf, mock_pr):
         args = ['--debug', 'deploy', '--network', 'mynet', '--image', 'myimg',
                 'compute']
         _cmd.main(args)
@@ -84,7 +93,16 @@ class TestDeploy(testtools.TestCase):
             netboot=False,
             wait=1800)
 
-    def test_args_quiet(self, mock_os_conf, mock_pr):
+        mock_log.basicConfig.assert_called_once_with(level=mock_log.DEBUG,
+                                                     format=mock.ANY)
+        self.assertEqual(
+            mock.call('metalsmith').setLevel(mock_log.DEBUG).call_list() +
+            mock.call(_cmd._URLLIB3_LOGGER).setLevel(
+                mock_log.INFO).call_list(),
+            mock_log.getLogger.mock_calls)
+
+    @mock.patch.object(_cmd, 'logging', autospec=True)
+    def test_args_quiet(self, mock_log, mock_os_conf, mock_pr):
         args = ['--quiet', 'deploy', '--network', 'mynet', '--image', 'myimg',
                 'compute']
         _cmd.main(args)
@@ -103,6 +121,101 @@ class TestDeploy(testtools.TestCase):
             ssh_keys=[],
             netboot=False,
             wait=1800)
+
+        mock_log.basicConfig.assert_called_once_with(level=mock_log.CRITICAL,
+                                                     format=mock.ANY)
+        self.assertEqual(
+            mock.call('metalsmith').setLevel(mock_log.CRITICAL).call_list() +
+            mock.call(_cmd._URLLIB3_LOGGER).setLevel(
+                mock_log.CRITICAL).call_list(),
+            mock_log.getLogger.mock_calls)
+
+    @mock.patch.object(_cmd, 'logging', autospec=True)
+    def test_args_verbose_1(self, mock_log, mock_os_conf, mock_pr):
+        args = ['-v', 'deploy', '--network', 'mynet', '--image', 'myimg',
+                'compute']
+        _cmd.main(args)
+        mock_pr.assert_called_once_with(
+            cloud_region=mock_os_conf.return_value.get_one.return_value,
+            dry_run=False)
+        mock_pr.return_value.reserve_node.assert_called_once_with(
+            resource_class='compute',
+            capabilities={}
+        )
+        mock_pr.return_value.provision_node.assert_called_once_with(
+            mock_pr.return_value.reserve_node.return_value,
+            image_ref='myimg',
+            nics=[{'network': 'mynet'}],
+            root_disk_size=None,
+            ssh_keys=[],
+            netboot=False,
+            wait=1800)
+
+        mock_log.basicConfig.assert_called_once_with(level=mock_log.WARNING,
+                                                     format=mock.ANY)
+        self.assertEqual(
+            mock.call('metalsmith').setLevel(mock_log.INFO).call_list() +
+            mock.call(_cmd._URLLIB3_LOGGER).setLevel(
+                mock_log.CRITICAL).call_list(),
+            mock_log.getLogger.mock_calls)
+
+    @mock.patch.object(_cmd, 'logging', autospec=True)
+    def test_args_verbose_2(self, mock_log, mock_os_conf, mock_pr):
+        args = ['-vv', 'deploy', '--network', 'mynet', '--image', 'myimg',
+                'compute']
+        _cmd.main(args)
+        mock_pr.assert_called_once_with(
+            cloud_region=mock_os_conf.return_value.get_one.return_value,
+            dry_run=False)
+        mock_pr.return_value.reserve_node.assert_called_once_with(
+            resource_class='compute',
+            capabilities={}
+        )
+        mock_pr.return_value.provision_node.assert_called_once_with(
+            mock_pr.return_value.reserve_node.return_value,
+            image_ref='myimg',
+            nics=[{'network': 'mynet'}],
+            root_disk_size=None,
+            ssh_keys=[],
+            netboot=False,
+            wait=1800)
+
+        mock_log.basicConfig.assert_called_once_with(level=mock_log.INFO,
+                                                     format=mock.ANY)
+        self.assertEqual(
+            mock.call('metalsmith').setLevel(mock_log.DEBUG).call_list() +
+            mock.call(_cmd._URLLIB3_LOGGER).setLevel(
+                mock_log.CRITICAL).call_list(),
+            mock_log.getLogger.mock_calls)
+
+    @mock.patch.object(_cmd, 'logging', autospec=True)
+    def test_args_verbose_3(self, mock_log, mock_os_conf, mock_pr):
+        args = ['-vvv', 'deploy', '--network', 'mynet', '--image', 'myimg',
+                'compute']
+        _cmd.main(args)
+        mock_pr.assert_called_once_with(
+            cloud_region=mock_os_conf.return_value.get_one.return_value,
+            dry_run=False)
+        mock_pr.return_value.reserve_node.assert_called_once_with(
+            resource_class='compute',
+            capabilities={}
+        )
+        mock_pr.return_value.provision_node.assert_called_once_with(
+            mock_pr.return_value.reserve_node.return_value,
+            image_ref='myimg',
+            nics=[{'network': 'mynet'}],
+            root_disk_size=None,
+            ssh_keys=[],
+            netboot=False,
+            wait=1800)
+
+        mock_log.basicConfig.assert_called_once_with(level=mock_log.DEBUG,
+                                                     format=mock.ANY)
+        self.assertEqual(
+            mock.call('metalsmith').setLevel(mock_log.DEBUG).call_list() +
+            mock.call(_cmd._URLLIB3_LOGGER).setLevel(
+                mock_log.INFO).call_list(),
+            mock_log.getLogger.mock_calls)
 
     @mock.patch.object(_cmd.LOG, 'critical', autospec=True)
     def test_reservation_failure(self, mock_log, mock_os_conf, mock_pr):

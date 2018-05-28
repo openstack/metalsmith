@@ -142,8 +142,10 @@ class Provisioner(object):
                                                resource_class, capabilities)]
         reserver = _scheduler.IronicReserver(self._api, resource_class,
                                              capabilities)
-        return _scheduler.schedule_node(nodes, filters, reserver,
+        node = _scheduler.schedule_node(nodes, filters, reserver,
                                         dry_run=self._dry_run)
+        LOG.debug('Reserved node: %s', node)
+        return node
 
     def _check_node_for_deploy(self, node):
         """Check that node is ready and reserve it if needed."""
@@ -246,15 +248,22 @@ class Provisioner(object):
                 if value:
                     updates['/instance_info/%s' % prop] = value
 
+            LOG.debug('Updating node %(node)s with %(updates)s',
+                      {'node': _utils.log_node(node), 'updates': updates})
             node = self._api.update_node(node, updates)
             self._api.validate_node(node, validate_deploy=True)
 
+            LOG.debug('Generating a configdrive for node %s',
+                      _utils.log_node(node))
             with _utils.config_drive_dir(node, ssh_keys) as cd:
                 self._api.node_action(node, 'active',
                                       configdrive=cd)
-            LOG.info('Provisioning started on node %s', _utils.log_node(node))
 
+            LOG.info('Provisioning started on node %s', _utils.log_node(node))
             if wait is not None:
+                LOG.debug('Waiting for node %(node)s to reach state active '
+                          'with timeout %(timeout)s',
+                          {'node': _utils.log_node(node), 'timeout': wait})
                 self._api.wait_for_node_state(node, 'active', timeout=wait)
 
             # Update the node to return it's latest state
@@ -266,6 +275,7 @@ class Provisioner(object):
                 LOG.error('Deploy attempt failed on node %s, cleaning up',
                           _utils.log_node(node))
                 self._delete_ports(node, created_ports, attached_ports)
+                LOG.debug('Releasing lock on node %s', _utils.log_node(node))
                 self._api.release_node(node)
             except Exception:
                 LOG.exception('Clean up failed')
@@ -336,13 +346,17 @@ class Provisioner(object):
             if nic_type == 'network':
                 port = self._api.create_port(network_id=nic.id)
                 created_ports.append(port.id)
-                LOG.debug('Created Neutron port %s', port)
+                LOG.info('Created port %(port)s for node %(node)s on '
+                         'network %(net)s',
+                         {'port': _utils.log_res(port),
+                          'node': _utils.log_node(node),
+                          'net': _utils.log_res(nic)})
             else:
                 port = nic
 
             self._api.attach_port_to_node(node.uuid, port.id)
             LOG.info('Attached port %(port)s to node %(node)s',
-                     {'port': port.id,
+                     {'port': _utils.log_res(port),
                       'node': _utils.log_node(node)})
             attached_ports.append(port.id)
 
@@ -367,16 +381,22 @@ class Provisioner(object):
             LOG.debug('Deleting port %s', port_id)
             try:
                 self._api.delete_port(port_id)
-            except Exception:
-                LOG.warning('Failed to delete neutron port %s', port_id)
+            except Exception as exc:
+                LOG.warning('Failed to delete neutron port %(port)s: %(exc)s',
+                            {'port': port_id, 'exc': exc})
+            else:
+                LOG.info('Deleted port %(port)s for node %(node)s',
+                         {'port': port_id, 'node': _utils.log_node(node)})
 
         update = {'/extra/%s' % item: _os_api.REMOVE
                   for item in (_CREATED_PORTS, _ATTACHED_PORTS)}
+        LOG.debug('Updating node %(node)s with %(updates)s',
+                  {'node': _utils.log_node(node), 'updates': update})
         try:
             self._api.update_node(node, update)
         except Exception as exc:
-            LOG.warning('Failed to clear node %(node)s extra: %(exc)s',
-                        {'node': _utils.log_node(node), 'exc': exc})
+            LOG.debug('Failed to clear node %(node)s extra: %(exc)s',
+                      {'node': _utils.log_node(node), 'exc': exc})
 
     def unprovision_node(self, node, wait=None):
         """Unprovision a previously provisioned node.
@@ -389,10 +409,11 @@ class Provisioner(object):
         """
         node = self._api.get_node(node)
         if self._dry_run:
-            LOG.debug("Dry run, not unprovisioning")
+            LOG.warning("Dry run, not unprovisioning")
             return
 
         self._delete_ports(node)
+        LOG.debug('Releasing lock on node %s', _utils.log_node(node))
         self._api.release_node(node)
         self._api.node_action(node, 'deleted')
 

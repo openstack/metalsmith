@@ -29,6 +29,13 @@ def log_node(node):
         return node.uuid
 
 
+def log_res(res):
+    if getattr(res, 'name', None):
+        return '%s (UUID %s)' % (res.name, res.id)
+    else:
+        return res.id
+
+
 def get_capabilities(node):
     caps = node.properties.get('capabilities') or {}
     if not isinstance(caps, dict):

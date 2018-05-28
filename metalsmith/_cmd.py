@@ -65,7 +65,11 @@ def _parse_args(args, config):
     verbosity.add_argument('-q', '--quiet', action='store_true',
                            help='output only errors')
     verbosity.add_argument('--debug', action='store_true',
-                           help='output more logging')
+                           help='output extensive logging')
+    verbosity.add_argument('-v', '--verbose', action='count', default=0,
+                           dest='verbosity',
+                           help='increase output verbosity, can be specified '
+                           'up to three times')
     parser.add_argument('--dry-run', action='store_true',
                         help='do not take any destructive actions')
 
@@ -107,21 +111,39 @@ def _parse_args(args, config):
     return parser.parse_args(args)
 
 
-def _configure_logging(args):
-    log_fmt = ('%(asctime)s %(levelname)s %(name)s: %(message)s' if args.debug
-               else '[%(asctime)s] %(message)s')
-    if args.quiet:
-        level = logging.ERROR
-    elif args.debug:
-        level = logging.DEBUG
-    else:
-        level = logging.INFO
+_URLLIB3_LOGGER = 'urllib3.connectionpool'
 
-    logging.basicConfig(level=level, format=log_fmt)
-    if args.debug:
-        logging.getLogger('urllib3.connectionpool').setLevel(logging.INFO)
-    else:
-        logging.getLogger('urllib3.connectionpool').setLevel(logging.CRITICAL)
+
+def _configure_logging(args):
+    log_fmt = ('%(asctime)s %(levelname)s %(name)s: %(message)s'
+               if args.debug or args.verbosity
+               else '[%(asctime)s] %(message)s')
+
+    # Verbosity:
+    # 0 (the default) - warnings and errors
+    # 1 - info from metalsmith, warnings and errors from everything else
+    # 2 - debug from metalsmith, info from everything else
+    # 3 - the same as --debug
+    base_level = logging.WARNING
+    metalsmith_level = base_level
+    urllib_level = logging.CRITICAL
+
+    if args.quiet:
+        base_level = logging.CRITICAL
+        metalsmith_level = base_level
+    elif args.debug or args.verbosity > 2:
+        base_level = logging.DEBUG
+        metalsmith_level = base_level
+        urllib_level = logging.INFO
+    elif args.verbosity == 2:
+        base_level = logging.INFO
+        metalsmith_level = logging.DEBUG
+    elif args.verbosity == 1:
+        metalsmith_level = logging.INFO
+
+    logging.basicConfig(level=base_level, format=log_fmt)
+    logging.getLogger('metalsmith').setLevel(metalsmith_level)
+    logging.getLogger(_URLLIB3_LOGGER).setLevel(urllib_level)
 
 
 def main(args=sys.argv[1:]):
