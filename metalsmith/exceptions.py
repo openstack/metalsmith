@@ -71,3 +71,14 @@ class UnknownRootDiskSize(Error):
 
 class InvalidNode(Error):
     """This node cannot be deployed onto."""
+
+
+class DeploymentFailure(Error):
+    """One or more nodes have failed the deployment.
+
+    :ivar nodes: List of failed nodes.
+    """
+
+    def __init__(self, message, nodes):
+        self.nodes = nodes
+        super(DeploymentFailure, self).__init__(message)

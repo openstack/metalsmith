@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import fixtures
 import mock
 import testtools
 
@@ -114,6 +115,10 @@ class TestProvisionNode(Base):
             ],
             '/instance_info/%s' % _os_api.HOSTNAME_FIELD: 'control-0'
         }
+        self.wait_fixture = self.useFixture(
+            fixtures.MockPatchObject(_provisioner.Provisioner,
+                                     '_wait_for_state', autospec=True))
+        self.wait_mock = self.wait_fixture.mock
 
     def test_ok(self):
         inst = self.pr.provision_node(self.node, 'image',
@@ -131,7 +136,7 @@ class TestProvisionNode(Base):
                                                        validate_deploy=True)
         self.api.node_action.assert_called_once_with(self.node, 'active',
                                                      configdrive=mock.ANY)
-        self.assertFalse(self.api.wait_for_node_state.called)
+        self.assertFalse(self.wait_mock.called)
         self.assertFalse(self.api.release_node.called)
         self.assertFalse(self.api.delete_port.called)
 
@@ -155,7 +160,7 @@ class TestProvisionNode(Base):
                                                        validate_deploy=True)
         self.api.node_action.assert_called_once_with(self.node, 'active',
                                                      configdrive=mock.ANY)
-        self.assertFalse(self.api.wait_for_node_state.called)
+        self.assertFalse(self.wait_mock.called)
         self.assertFalse(self.api.release_node.called)
         self.assertFalse(self.api.delete_port.called)
 
@@ -178,7 +183,7 @@ class TestProvisionNode(Base):
                                                        validate_deploy=True)
         self.api.node_action.assert_called_once_with(self.node, 'active',
                                                      configdrive=mock.ANY)
-        self.assertFalse(self.api.wait_for_node_state.called)
+        self.assertFalse(self.wait_mock.called)
         self.assertFalse(self.api.release_node.called)
         self.assertFalse(self.api.delete_port.called)
 
@@ -200,7 +205,7 @@ class TestProvisionNode(Base):
                                                        validate_deploy=True)
         self.api.node_action.assert_called_once_with(self.node, 'active',
                                                      configdrive=mock.ANY)
-        self.assertFalse(self.api.wait_for_node_state.called)
+        self.assertFalse(self.wait_mock.called)
         self.assertFalse(self.api.release_node.called)
         self.assertFalse(self.api.delete_port.called)
 
@@ -220,7 +225,7 @@ class TestProvisionNode(Base):
                                                        validate_deploy=True)
         self.api.node_action.assert_called_once_with(self.node, 'active',
                                                      configdrive=mock.ANY)
-        self.assertFalse(self.api.wait_for_node_state.called)
+        self.assertFalse(self.wait_mock.called)
         self.assertFalse(self.api.release_node.called)
         self.assertFalse(self.api.delete_port.called)
 
@@ -244,7 +249,7 @@ class TestProvisionNode(Base):
                                                        validate_deploy=True)
         self.api.node_action.assert_called_once_with(self.node, 'active',
                                                      configdrive=mock.ANY)
-        self.assertFalse(self.api.wait_for_node_state.called)
+        self.assertFalse(self.wait_mock.called)
         self.assertFalse(self.api.release_node.called)
         self.assertFalse(self.api.delete_port.called)
 
@@ -266,7 +271,7 @@ class TestProvisionNode(Base):
                                                        validate_deploy=True)
         self.api.node_action.assert_called_once_with(self.node, 'active',
                                                      configdrive=mock.ANY)
-        self.assertFalse(self.api.wait_for_node_state.called)
+        self.assertFalse(self.wait_mock.called)
         self.assertFalse(self.api.release_node.called)
         self.assertFalse(self.api.delete_port.called)
 
@@ -285,7 +290,7 @@ class TestProvisionNode(Base):
                                                        validate_deploy=True)
         self.api.node_action.assert_called_once_with(self.node, 'active',
                                                      configdrive=mock.ANY)
-        self.assertFalse(self.api.wait_for_node_state.called)
+        self.assertFalse(self.wait_mock.called)
         self.assertFalse(self.api.release_node.called)
         self.assertFalse(self.api.delete_port.called)
 
@@ -306,9 +311,11 @@ class TestProvisionNode(Base):
                                                        validate_deploy=True)
         self.api.node_action.assert_called_once_with(self.node, 'active',
                                                      configdrive=mock.ANY)
-        self.api.wait_for_node_state.assert_called_once_with(self.node,
-                                                             'active',
-                                                             timeout=3600)
+        self.wait_mock.assert_called_once_with(self.pr,
+                                               [self.node],
+                                               'active',
+                                               delay=15,
+                                               timeout=3600)
         self.assertFalse(self.api.release_node.called)
         self.assertFalse(self.api.delete_port.called)
 
@@ -320,7 +327,7 @@ class TestProvisionNode(Base):
         self.assertFalse(self.api.attach_port_to_node.called)
         self.assertFalse(self.api.update_node.called)
         self.assertFalse(self.api.node_action.called)
-        self.assertFalse(self.api.wait_for_node_state.called)
+        self.assertFalse(self.wait_mock.called)
         self.assertFalse(self.api.release_node.called)
         self.assertFalse(self.api.delete_port.called)
 
@@ -335,7 +342,7 @@ class TestProvisionNode(Base):
         self.assertFalse(self.api.attach_port_to_node.called)
         self.assertFalse(self.api.update_node.called)
         self.assertFalse(self.api.node_action.called)
-        self.assertFalse(self.api.wait_for_node_state.called)
+        self.assertFalse(self.wait_mock.called)
         self.assertFalse(self.api.release_node.called)
         self.assertFalse(self.api.delete_port.called)
 
@@ -347,7 +354,7 @@ class TestProvisionNode(Base):
                                wait=3600)
 
         self.api.update_node.assert_any_call(self.node, CLEAN_UP)
-        self.assertFalse(self.api.wait_for_node_state.called)
+        self.assertFalse(self.wait_mock.called)
         self.api.release_node.assert_called_once_with(self.node)
         self.api.delete_port.assert_called_once_with(
             self.api.create_port.return_value.id)
@@ -395,7 +402,7 @@ class TestProvisionNode(Base):
                                    'image', [{'network': 'network'}],
                                    wait=3600)
 
-            self.assertFalse(self.api.wait_for_node_state.called)
+            self.assertFalse(self.wait_mock.called)
             self.api.release_node.assert_called_once_with(self.node)
             self.api.delete_port.assert_called_once_with(
                 self.api.create_port.return_value.id)
@@ -412,7 +419,7 @@ class TestProvisionNode(Base):
                                'image', [{'network': 'network'}],
                                wait=3600)
 
-        self.assertFalse(self.api.wait_for_node_state.called)
+        self.assertFalse(self.wait_mock.called)
         self.api.release_node.assert_called_once_with(self.node)
         self.api.delete_port.assert_called_once_with(
             self.api.create_port.return_value.id)
@@ -420,7 +427,7 @@ class TestProvisionNode(Base):
             self.node, self.api.create_port.return_value.id)
 
     def test_wait_failure(self):
-        self.api.wait_for_node_state.side_effect = RuntimeError('boom')
+        self.wait_mock.side_effect = RuntimeError('boom')
         self.assertRaisesRegex(RuntimeError, 'boom',
                                self.pr.provision_node, self.node,
                                'image', [{'network': 'network'}], wait=3600)
@@ -579,6 +586,13 @@ class TestProvisionNode(Base):
 
 class TestUnprovisionNode(Base):
 
+    def setUp(self):
+        super(TestUnprovisionNode, self).setUp()
+        self.wait_fixture = self.useFixture(
+            fixtures.MockPatchObject(_provisioner.Provisioner,
+                                     '_wait_for_state', autospec=True))
+        self.wait_mock = self.wait_fixture.mock
+
     def test_ok(self):
         self.node.extra['metalsmith_created_ports'] = ['port1']
         result = self.pr.unprovision_node(self.node)
@@ -589,7 +603,7 @@ class TestUnprovisionNode(Base):
                                                                'port1')
         self.api.node_action.assert_called_once_with(self.node, 'deleted')
         self.api.release_node.assert_called_once_with(self.node)
-        self.assertFalse(self.api.wait_for_node_state.called)
+        self.assertFalse(self.wait_mock.called)
         self.api.update_node.assert_called_once_with(self.node, CLEAN_UP)
 
     def test_with_attached(self):
@@ -602,7 +616,7 @@ class TestUnprovisionNode(Base):
         self.api.detach_port_from_node.assert_has_calls(calls, any_order=True)
         self.api.node_action.assert_called_once_with(self.node, 'deleted')
         self.api.release_node.assert_called_once_with(self.node)
-        self.assertFalse(self.api.wait_for_node_state.called)
+        self.assertFalse(self.wait_mock.called)
         self.api.update_node.assert_called_once_with(self.node, CLEAN_UP)
 
     def test_with_wait(self):
@@ -615,9 +629,10 @@ class TestUnprovisionNode(Base):
                                                                'port1')
         self.api.node_action.assert_called_once_with(self.node, 'deleted')
         self.api.release_node.assert_called_once_with(self.node)
-        self.api.wait_for_node_state.assert_called_once_with(self.node,
-                                                             'available',
-                                                             timeout=3600)
+        self.wait_mock.assert_called_once_with(self.pr,
+                                               [self.node],
+                                               'available',
+                                               timeout=3600)
 
     def test_dry_run(self):
         self.pr._dry_run = True
@@ -628,7 +643,7 @@ class TestUnprovisionNode(Base):
         self.assertFalse(self.api.release_node.called)
         self.assertFalse(self.api.delete_port.called)
         self.assertFalse(self.api.detach_port_from_node.called)
-        self.assertFalse(self.api.wait_for_node_state.called)
+        self.assertFalse(self.wait_mock.called)
         self.assertFalse(self.api.update_node.called)
 
 
@@ -656,3 +671,94 @@ class TestShowInstance(Base):
         self.assertIs(result[0].node, self.node)
         self.assertIs(result[0].uuid, self.node.uuid)
         self.api.cache_node_list_for_lookup.assert_called_once_with()
+
+
+@mock.patch('time.sleep', autospec=True)
+class TestWaitForState(Base):
+    def test_invalid_timeout(self, mock_sleep):
+        for invalid in (0, -42):
+            self.assertRaisesRegex(ValueError,
+                                   'timeout argument must be a positive',
+                                   self.pr.wait_for_provisioning,
+                                   ['uuid1'], timeout=invalid)
+
+    def test_invalid_delay(self, mock_sleep):
+        self.assertRaisesRegex(ValueError,
+                               'delay argument must be a non-negative',
+                               self.pr.wait_for_provisioning,
+                               ['uuid1'], delay=-42)
+
+    def test_success_one_node(self, mock_sleep):
+        nodes = [
+            mock.Mock(spec=_os_api.NODE_FIELDS, provision_state=state)
+            for state in ('deploying', 'deploy wait', 'deploying', 'active')
+        ]
+        self.api.get_node.side_effect = nodes
+
+        result = self.pr.wait_for_provisioning(['uuid1'])
+        self.assertEqual(nodes[-1:], result)
+
+        mock_sleep.assert_called_with(15)
+        self.assertEqual(3, mock_sleep.call_count)
+
+    def test_success_several_nodes(self, mock_sleep):
+        nodes = [
+            mock.Mock(spec=_os_api.NODE_FIELDS, provision_state=state)
+            for state in ('deploying', 'deploy wait',  # iteration 1
+                          'deploying', 'active',       # iteration 2
+                          'active')                    # iteration 3
+        ]
+        self.api.get_node.side_effect = nodes
+
+        result = self.pr.wait_for_provisioning(['uuid1', 'uuid2'])
+        self.assertEqual(nodes[-2:], result)
+
+        mock_sleep.assert_called_with(15)
+        self.assertEqual(2, mock_sleep.call_count)
+
+    def test_one_node_failed(self, mock_sleep):
+        nodes = [
+            mock.Mock(spec=_os_api.NODE_FIELDS, provision_state=state)
+            for state in ('deploying', 'deploy wait',    # iteration 1
+                          'deploying', 'deploy failed',  # iteration 2
+                          'active')                      # iteration 3
+        ]
+        self.api.get_node.side_effect = nodes
+
+        exc = self.assertRaises(exceptions.DeploymentFailure,
+                                self.pr.wait_for_provisioning,
+                                ['uuid1', 'uuid2'])
+        # The exception contains the failed node
+        self.assertEqual(exc.nodes, [nodes[-2]])
+
+        mock_sleep.assert_called_with(15)
+        self.assertEqual(2, mock_sleep.call_count)
+
+    def test_timeout(self, mock_sleep):
+        def _fake_get(*args, **kwargs):
+            while True:
+                yield mock.Mock(spec=_os_api.NODE_FIELDS,
+                                provision_state='deploying')
+
+        self.api.get_node.side_effect = _fake_get()
+
+        exc = self.assertRaises(exceptions.DeploymentFailure,
+                                self.pr.wait_for_provisioning,
+                                ['uuid1', 'uuid2'],
+                                timeout=0.001)
+        self.assertEqual(2, len(exc.nodes))
+
+        mock_sleep.assert_called_with(15)
+
+    def test_custom_delay(self, mock_sleep):
+        nodes = [
+            mock.Mock(spec=_os_api.NODE_FIELDS, provision_state=state)
+            for state in ('deploying', 'deploy wait', 'deploying', 'active')
+        ]
+        self.api.get_node.side_effect = nodes
+
+        result = self.pr.wait_for_provisioning(['uuid1'], delay=1)
+        self.assertEqual(nodes[-1:], result)
+
+        mock_sleep.assert_called_with(1)
+        self.assertEqual(3, mock_sleep.call_count)

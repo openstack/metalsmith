@@ -16,6 +16,7 @@
 import logging
 import random
 import sys
+import time
 
 import six
 
@@ -237,9 +238,8 @@ class Provisioner(object):
             try:
                 LOG.error('Deploy attempt failed on node %s, cleaning up',
                           _utils.log_node(node))
-                self._delete_ports(node, created_ports, attached_ports)
-                LOG.debug('Releasing lock on node %s', _utils.log_node(node))
-                self._api.release_node(node)
+                self._clean_up(node, created_ports=created_ports,
+                               attached_ports=attached_ports)
             except Exception:
                 LOG.exception('Clean up failed')
 
@@ -251,11 +251,12 @@ class Provisioner(object):
             LOG.debug('Waiting for node %(node)s to reach state active '
                       'with timeout %(timeout)s',
                       {'node': _utils.log_node(node), 'timeout': wait})
-            self._api.wait_for_node_state(node, 'active', timeout=wait)
+            node = self.wait_for_provisioning([node], timeout=wait)[0]
             LOG.info('Deploy succeeded on node %s', _utils.log_node(node))
+        else:
+            # Update the node to return it's latest state
+            node = self._api.get_node(node, refresh=True)
 
-        # Update the node to return it's latest state
-        node = self._api.get_node(node, refresh=True)
         return _instance.Instance(self._api, node)
 
     def _get_nics(self, nics):
@@ -346,6 +347,87 @@ class Provisioner(object):
             LOG.debug('Failed to clear node %(node)s extra: %(exc)s',
                       {'node': _utils.log_node(node), 'exc': exc})
 
+    def wait_for_provisioning(self, nodes, timeout=None, delay=15):
+        """Wait for nodes to be provisioned.
+
+        Loops until all nodes finish provisioning.
+
+        :param nodes: List of nodes (UUID, name, `Node` object or
+            :py:class:`metalsmith.Instance`).
+        :param timeout: How much time (in seconds) to wait for all nodes
+            to finish provisioning. If ``None`` (the default), wait forever
+            (more precisely, until the operation times out on server side).
+        :param delay: Delay (in seconds) between two provision state checks.
+        :return: List of updated nodes if all succeeded.
+        :raises: :py:class:`metalsmith.exceptions.DeploymentFailure`
+            if the deployment failed or timed out for any nodes.
+        """
+        return self._wait_for_state(nodes, 'active',
+                                    timeout=timeout, delay=delay)
+
+    def _wait_for_state(self, nodes, state, timeout, delay=15):
+        if timeout is not None and timeout <= 0:
+            raise ValueError("The timeout argument must be a positive int")
+        if delay < 0:
+            raise ValueError("The delay argument must be a non-negative int")
+
+        failed_nodes = []
+        finished_nodes = []
+
+        deadline = time.time() + timeout if timeout is not None else None
+        while timeout is None or time.time() < deadline:
+            remaining_nodes = []
+            for node in nodes:
+                node = self._api.get_node(node, refresh=True,
+                                          accept_hostname=True)
+                if node.provision_state == state:
+                    LOG.debug('Node %(node)s reached state %(state)s',
+                              {'node': _utils.log_node(node), 'state': state})
+                    finished_nodes.append(node)
+                elif (node.provision_state == 'error' or
+                      node.provision_state.endswith(' failed')):
+                    LOG.error('Node %(node)s failed deployment: %(error)s',
+                              {'node': _utils.log_node(node),
+                               'error': node.last_error})
+                    failed_nodes.append(node)
+                else:
+                    remaining_nodes.append(node)
+
+            if remaining_nodes:
+                nodes = remaining_nodes
+            else:
+                nodes = []
+                break
+
+            LOG.debug('Still waiting for the following nodes to reach state '
+                      '%(state)s: %(nodes)s',
+                      {'state': state,
+                       'nodes': ', '.join(_utils.log_node(n) for n in nodes)})
+            time.sleep(delay)
+
+        messages = []
+        if failed_nodes:
+            messages.append('the following nodes failed deployment: %s' %
+                            ', '.join('%s (%s)' % (_utils.log_node(node),
+                                                   node.last_error)
+                                      for node in failed_nodes))
+        if nodes:
+            messages.append('deployment timed out for nodes %s' %
+                            ', '.join(_utils.log_node(node) for node in nodes))
+
+        if messages:
+            raise exceptions.DeploymentFailure(
+                'Deployment failed: %s' % '; '.join(messages),
+                failed_nodes + nodes)
+        else:
+            LOG.debug('All nodes reached state %s', state)
+            return finished_nodes
+
+    def _clean_up(self, node, created_ports=None, attached_ports=None):
+        self._delete_ports(node, created_ports, attached_ports)
+        LOG.debug('Releasing lock on node %s', _utils.log_node(node))
+        self._api.release_node(node)
+
     def unprovision_node(self, node, wait=None):
         """Unprovision a previously provisioned node.
 
@@ -360,15 +442,13 @@ class Provisioner(object):
             LOG.warning("Dry run, not unprovisioning")
             return
 
-        self._delete_ports(node)
-        LOG.debug('Releasing lock on node %s', _utils.log_node(node))
-        self._api.release_node(node)
+        self._clean_up(node)
         self._api.node_action(node, 'deleted')
 
         LOG.info('Deleting started for node %s', _utils.log_node(node))
 
         if wait is not None:
-            self._api.wait_for_node_state(node, 'available', timeout=wait)
+            self._wait_for_state([node], 'available', timeout=wait)
             LOG.info('Node %s undeployed successfully', _utils.log_node(node))
 
         return self._api.get_node(node, refresh=True)

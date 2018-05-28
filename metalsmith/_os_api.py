@@ -25,7 +25,8 @@ from metalsmith import _utils
 
 LOG = logging.getLogger(__name__)
 NODE_FIELDS = ['name', 'uuid', 'instance_info', 'instance_uuid', 'maintenance',
-               'maintenance_reason', 'properties', 'provision_state', 'extra']
+               'maintenance_reason', 'properties', 'provision_state', 'extra',
+               'last_error']
 HOSTNAME_FIELD = 'metalsmith_hostname'
 
 
@@ -194,11 +195,6 @@ class API(object):
             result = getattr(validation, iface)
             if not result['result']:
                 raise RuntimeError('%s: %s' % (iface, result['reason']))
-
-    def wait_for_node_state(self, node, state, timeout):
-        self.ironic.node.wait_for_provision_state(_node_id(node),
-                                                  state,
-                                                  timeout=timeout)
 
 
 def _node_id(node):
