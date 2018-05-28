@@ -8,6 +8,7 @@
     irrelevant-files:
       - ^.*\.rst$
       - ^doc/.*$
+      - ^lower-constraints.txt$
       - ^metalsmith/test/.*$
       - ^releasenotes/.*$
       - ^setup.cfg$
@@ -104,7 +105,9 @@
       - docs-on-readthedocs
     check:
       jobs:
+        - openstack-tox-lower-constraints
         - metalsmith-integration-glance
     gate:
       jobs:
+        - openstack-tox-lower-constraints
         - metalsmith-integration-glance
