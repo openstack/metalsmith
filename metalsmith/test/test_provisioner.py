@@ -359,6 +359,19 @@ class TestProvisionNode(Base):
         self.api.detach_port_from_node.assert_called_once_with(
             self.node, self.api.create_port.return_value.id)
 
+    def test_wait_failure(self):
+        self.api.wait_for_node_state.side_effect = RuntimeError('boom')
+        self.assertRaisesRegex(RuntimeError, 'boom',
+                               self.pr.provision_node, self.node,
+                               'image', [{'network': 'network'}], wait=3600)
+
+        self.api.update_node.assert_called_once_with(self.node, self.updates)
+        self.api.node_action.assert_called_once_with(self.node, 'active',
+                                                     configdrive=mock.ANY)
+        self.assertFalse(self.api.release_node.called)
+        self.assertFalse(self.api.delete_port.called)
+        self.assertFalse(self.api.detach_port_from_node.called)
+
     def test_missing_image(self):
         self.api.get_image_info.side_effect = RuntimeError('Not found')
         self.assertRaisesRegex(exceptions.InvalidImage, 'Not found',

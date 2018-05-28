@@ -258,16 +258,6 @@ class Provisioner(object):
             with _utils.config_drive_dir(node, ssh_keys) as cd:
                 self._api.node_action(node, 'active',
                                       configdrive=cd)
-
-            LOG.info('Provisioning started on node %s', _utils.log_node(node))
-            if wait is not None:
-                LOG.debug('Waiting for node %(node)s to reach state active '
-                          'with timeout %(timeout)s',
-                          {'node': _utils.log_node(node), 'timeout': wait})
-                self._api.wait_for_node_state(node, 'active', timeout=wait)
-
-            # Update the node to return it's latest state
-            node = self._api.get_node(node)
         except Exception:
             exc_info = sys.exc_info()
 
@@ -282,9 +272,18 @@ class Provisioner(object):
 
             six.reraise(*exc_info)
 
+        LOG.info('Provisioning started on node %s', _utils.log_node(node))
+
         if wait is not None:
+            LOG.debug('Waiting for node %(node)s to reach state active '
+                      'with timeout %(timeout)s',
+                      {'node': _utils.log_node(node), 'timeout': wait})
+            self._api.wait_for_node_state(node, 'active', timeout=wait)
             LOG.info('Deploy succeeded on node %s', _utils.log_node(node))
             self._log_ips(node, created_ports)
+
+        # Update the node to return it's latest state
+        node = self._api.get_node(node)
 
         return Instance(self._api, node)
 
