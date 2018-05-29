@@ -1,4 +1,4 @@
-# Copyright 2015-2017 Red Hat, Inc.
+# Copyright 2015-2018 Red Hat, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ import sys
 
 from openstack import config as os_config
 
+from metalsmith import _format
 from metalsmith import _provisioner
 
 
@@ -36,7 +37,7 @@ class NICAction(argparse.Action):
         setattr(namespace, self.dest, nics)
 
 
-def _do_deploy(api, args, wait=None):
+def _do_deploy(api, args, formatter, wait=None):
     capabilities = dict(item.split('=', 1) for item in args.capability)
     if args.ssh_public_key:
         with open(args.ssh_public_key) as fp:
@@ -45,17 +46,19 @@ def _do_deploy(api, args, wait=None):
         ssh_keys = []
 
     node = api.reserve_node(args.resource_class, capabilities=capabilities)
-    api.provision_node(node,
-                       image_ref=args.image,
-                       nics=args.nics,
-                       root_disk_size=args.root_disk_size,
-                       ssh_keys=ssh_keys,
-                       netboot=args.netboot,
-                       wait=wait)
+    instance = api.provision_node(node,
+                                  image_ref=args.image,
+                                  nics=args.nics,
+                                  root_disk_size=args.root_disk_size,
+                                  ssh_keys=ssh_keys,
+                                  netboot=args.netboot,
+                                  wait=wait)
+    formatter.deploy(instance)
 
 
-def _do_undeploy(api, args, wait=None):
-    api.unprovision_node(args.node, wait=wait)
+def _do_undeploy(api, args, formatter, wait=None):
+    node = api.unprovision_node(args.node, wait=wait)
+    formatter.undeploy(node)
 
 
 def _parse_args(args, config):
@@ -72,6 +75,9 @@ def _parse_args(args, config):
                            'up to three times')
     parser.add_argument('--dry-run', action='store_true',
                         help='do not take any destructive actions')
+    parser.add_argument('--format', choices=list(_format.FORMATS),
+                        default=_format.DEFAULT_FORMAT,
+                        help='output format')
 
     config.register_argparse_arguments(parser, sys.argv[1:])
 
@@ -154,12 +160,16 @@ def main(args=sys.argv[1:]):
         wait = None
     else:
         wait = args.wait
+    if args.quiet:
+        formatter = _format.NULL_FORMAT
+    else:
+        formatter = _format.FORMATS[args.format]
 
     region = config.get_one(argparse=args)
     api = _provisioner.Provisioner(cloud_region=region, dry_run=args.dry_run)
 
     try:
-        args.func(api, args, wait=wait)
+        args.func(api, args, formatter, wait=wait)
     except Exception as exc:
         LOG.critical('%s', exc, exc_info=args.debug)
         sys.exit(1)

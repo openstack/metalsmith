@@ -13,9 +13,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
 import tempfile
 
+import fixtures
 import mock
+import six
 import testtools
 
 from metalsmith import _cmd
@@ -25,10 +28,64 @@ from metalsmith import _provisioner
 @mock.patch.object(_provisioner, 'Provisioner', autospec=True)
 @mock.patch.object(_cmd.os_config, 'OpenStackConfig', autospec=True)
 class TestDeploy(testtools.TestCase):
+    def setUp(self):
+        super(TestDeploy, self).setUp()
+        self.print_fixture = self.useFixture(fixtures.MockPatch(
+            'metalsmith._format._print', autospec=True))
+        self.mock_print = self.print_fixture.mock
+
     @mock.patch.object(_cmd, 'logging', autospec=True)
     def test_args_ok(self, mock_log, mock_os_conf, mock_pr):
+        instance = mock_pr.return_value.provision_node.return_value
+        instance.create_autospec(_provisioner.Instance)
+        instance.node.name = None
+        instance.node.uuid = '123'
+        instance.state = 'active'
+
         args = ['deploy', '--network', 'mynet', '--image', 'myimg', 'compute']
         _cmd.main(args)
+
+        mock_pr.assert_called_once_with(
+            cloud_region=mock_os_conf.return_value.get_one.return_value,
+            dry_run=False)
+        mock_pr.return_value.reserve_node.assert_called_once_with(
+            resource_class='compute',
+            capabilities={}
+        )
+        mock_pr.return_value.provision_node.assert_called_once_with(
+            mock_pr.return_value.reserve_node.return_value,
+            image_ref='myimg',
+            nics=[{'network': 'mynet'}],
+            root_disk_size=None,
+            ssh_keys=[],
+            netboot=False,
+            wait=1800)
+        mock_log.basicConfig.assert_called_once_with(level=mock_log.WARNING,
+                                                     format=mock.ANY)
+        self.assertEqual(
+            mock.call('metalsmith').setLevel(mock_log.WARNING).call_list() +
+            mock.call(_cmd._URLLIB3_LOGGER).setLevel(
+                mock_log.CRITICAL).call_list(),
+            mock_log.getLogger.mock_calls)
+
+        self.mock_print.assert_called_once_with(mock.ANY,
+                                                node='123',
+                                                state='active')
+
+    @mock.patch.object(_cmd, 'logging', autospec=True)
+    def test_args_json_format(self, mock_log, mock_os_conf, mock_pr):
+        instance = mock_pr.return_value.provision_node.return_value
+        instance.create_autospec(_provisioner.Instance)
+        instance.to_dict.return_value = {'node': 'dict'}
+
+        args = ['--format', 'json', 'deploy', '--network', 'mynet',
+                '--image', 'myimg', 'compute']
+        fake_io = six.StringIO()
+        with mock.patch('sys.stdout', fake_io):
+            _cmd.main(args)
+            self.assertEqual(json.loads(fake_io.getvalue()),
+                             {'node': 'dict'})
+
         mock_pr.assert_called_once_with(
             cloud_region=mock_os_conf.return_value.get_one.return_value,
             dry_run=False)
@@ -129,6 +186,8 @@ class TestDeploy(testtools.TestCase):
             mock.call(_cmd._URLLIB3_LOGGER).setLevel(
                 mock_log.CRITICAL).call_list(),
             mock_log.getLogger.mock_calls)
+
+        self.assertFalse(self.mock_print.called)
 
     @mock.patch.object(_cmd, 'logging', autospec=True)
     def test_args_verbose_1(self, mock_log, mock_os_conf, mock_pr):
@@ -382,17 +441,37 @@ class TestDeploy(testtools.TestCase):
 @mock.patch.object(_provisioner, 'Provisioner', autospec=True)
 @mock.patch.object(_cmd.os_config, 'OpenStackConfig', autospec=True)
 class TestUndeploy(testtools.TestCase):
+    def setUp(self):
+        super(TestUndeploy, self).setUp()
+        self.print_fixture = self.useFixture(fixtures.MockPatch(
+            'metalsmith._format._print', autospec=True))
+        self.mock_print = self.print_fixture.mock
+
     def test_ok(self, mock_os_conf, mock_pr):
+        node = mock_pr.return_value.unprovision_node.return_value
+        node.uuid = '123'
+        node.name = None
+        node.provision_state = 'cleaning'
+
         args = ['undeploy', '123456']
         _cmd.main(args)
+
         mock_pr.assert_called_once_with(
             cloud_region=mock_os_conf.return_value.get_one.return_value,
             dry_run=False)
         mock_pr.return_value.unprovision_node.assert_called_once_with(
             '123456', wait=None
         )
+        self.mock_print.assert_called_once_with(
+            'Unprovisioning started for node %(node)s',
+            node='123')
 
     def test_custom_wait(self, mock_os_conf, mock_pr):
+        node = mock_pr.return_value.unprovision_node.return_value
+        node.uuid = '123'
+        node.name = None
+        node.provision_state = 'available'
+
         args = ['undeploy', '--wait', '1800', '123456']
         _cmd.main(args)
         mock_pr.assert_called_once_with(
@@ -401,6 +480,9 @@ class TestUndeploy(testtools.TestCase):
         mock_pr.return_value.unprovision_node.assert_called_once_with(
             '123456', wait=1800
         )
+        self.mock_print.assert_called_once_with(
+            'Successfully unprovisioned node %(node)s',
+            node='123')
 
     def test_dry_run(self, mock_os_conf, mock_pr):
         args = ['--dry-run', 'undeploy', '123456']
@@ -408,6 +490,36 @@ class TestUndeploy(testtools.TestCase):
         mock_pr.assert_called_once_with(
             cloud_region=mock_os_conf.return_value.get_one.return_value,
             dry_run=True)
+        mock_pr.return_value.unprovision_node.assert_called_once_with(
+            '123456', wait=None
+        )
+
+    def test_quiet(self, mock_os_conf, mock_pr):
+        args = ['--quiet', 'undeploy', '123456']
+        _cmd.main(args)
+
+        mock_pr.assert_called_once_with(
+            cloud_region=mock_os_conf.return_value.get_one.return_value,
+            dry_run=False)
+        mock_pr.return_value.unprovision_node.assert_called_once_with(
+            '123456', wait=None
+        )
+        self.assertFalse(self.mock_print.called)
+
+    def test_json(self, mock_os_conf, mock_pr):
+        node = mock_pr.return_value.unprovision_node.return_value
+        node.to_dict.return_value = {'node': 'dict'}
+
+        args = ['--format', 'json', 'undeploy', '123456']
+        fake_io = six.StringIO()
+        with mock.patch('sys.stdout', fake_io):
+            _cmd.main(args)
+            self.assertEqual(json.loads(fake_io.getvalue()),
+                             {'node': {'node': 'dict'}})
+
+        mock_pr.assert_called_once_with(
+            cloud_region=mock_os_conf.return_value.get_one.return_value,
+            dry_run=False)
         mock_pr.return_value.unprovision_node.assert_called_once_with(
             '123456', wait=None
         )
