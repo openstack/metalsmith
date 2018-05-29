@@ -96,12 +96,17 @@ class API(object):
         return self.connection.network.find_network(network_id,
                                                     ignore_missing=False)
 
-    def get_node(self, node):
+    def get_node(self, node, refresh=False):
         if isinstance(node, six.string_types):
             return self.ironic.node.get(node, fields=NODE_FIELDS)
         elif hasattr(node, 'node'):
             # Instance object
-            return node.node
+            node = node.node
+        else:
+            node = node
+
+        if refresh:
+            return self.ironic.node.get(node.uuid, fields=NODE_FIELDS)
         else:
             return node
 

@@ -27,7 +27,7 @@ class Base(testtools.TestCase):
         super(Base, self).setUp()
         self.pr = _provisioner.Provisioner(mock.Mock())
         self._reset_api_mock()
-        self.node = mock.Mock(spec=_os_api.NODE_FIELDS,
+        self.node = mock.Mock(spec=_os_api.NODE_FIELDS + ['to_dict'],
                               uuid='000', instance_uuid=None,
                               properties={'local_gb': 100},
                               maintenance=False, extra={})
@@ -35,7 +35,7 @@ class Base(testtools.TestCase):
 
     def _reset_api_mock(self):
         self.api = mock.Mock(spec=_os_api.API)
-        self.api.get_node.side_effect = lambda n: n
+        self.api.get_node.side_effect = lambda n, refresh=False: n
         self.api.update_node.side_effect = lambda n, _u: n
         self.api.list_node_ports.return_value = [
             mock.Mock(spec=['uuid', 'pxe_enabled'],
@@ -499,7 +499,8 @@ class TestUnprovisionNode(Base):
 
     def test_ok(self):
         self.node.extra['metalsmith_created_ports'] = ['port1']
-        self.pr.unprovision_node(self.node)
+        result = self.pr.unprovision_node(self.node)
+        self.assertIs(result, self.node)
 
         self.api.delete_port.assert_called_once_with('port1')
         self.api.detach_port_from_node.assert_called_once_with(self.node,
@@ -524,7 +525,8 @@ class TestUnprovisionNode(Base):
 
     def test_with_wait(self):
         self.node.extra['metalsmith_created_ports'] = ['port1']
-        self.pr.unprovision_node(self.node, wait=3600)
+        result = self.pr.unprovision_node(self.node, wait=3600)
+        self.assertIs(result, self.node)
 
         self.api.delete_port.assert_called_once_with('port1')
         self.api.detach_port_from_node.assert_called_once_with(self.node,
@@ -596,3 +598,11 @@ class TestInstance(Base):
         self.assertEqual('unknown', self.instance.state)
         self.assertFalse(self.instance.is_deployed)
         self.assertFalse(self.instance.is_healthy)
+
+    def test_to_dict(self):
+        self.node.provision_state = 'wait call-back'
+        self.node.to_dict.return_value = {'node': 'dict'}
+        self.assertEqual({'node': {'node': 'dict'},
+                          'state': 'deploying',
+                          'uuid': self.node.uuid},
+                         self.instance.to_dict())

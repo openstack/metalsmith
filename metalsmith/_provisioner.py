@@ -92,6 +92,14 @@ class Instance(object):
         else:
             return 'unknown'
 
+    def to_dict(self):
+        """Convert instance to a dict."""
+        return {
+            'node': self._node.to_dict(),
+            'state': self.state,
+            'uuid': self._uuid,
+        }
+
     @property
     def uuid(self):
         """Instance UUID (the same as `Node` UUID for metalsmith)."""
@@ -283,8 +291,7 @@ class Provisioner(object):
             self._log_ips(node, created_ports)
 
         # Update the node to return it's latest state
-        node = self._api.get_node(node)
-
+        node = self._api.get_node(node, refresh=True)
         return Instance(self._api, node)
 
     def _log_ips(self, node, created_ports):
@@ -404,7 +411,7 @@ class Provisioner(object):
             UUID or name.
         :param wait: How many seconds to wait for the process to finish,
             None to return immediately.
-        :return: nothing.
+        :return: the latest `Node` object.
         """
         node = self._api.get_node(node)
         if self._dry_run:
@@ -421,3 +428,5 @@ class Provisioner(object):
         if wait is not None:
             self._api.wait_for_node_state(node, 'available', timeout=wait)
             LOG.info('Node %s undeployed successfully', _utils.log_node(node))
+
+        return self._api.get_node(node, refresh=True)
