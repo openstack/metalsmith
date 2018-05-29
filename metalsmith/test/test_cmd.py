@@ -41,6 +41,8 @@ class TestDeploy(testtools.TestCase):
         instance.node.name = None
         instance.node.uuid = '123'
         instance.state = 'active'
+        instance.is_deployed = True
+        instance.ip_addresses.return_value = {'private': ['1.2.3.4']}
 
         args = ['deploy', '--network', 'mynet', '--image', 'myimg', 'compute']
         _cmd.main(args)
@@ -68,9 +70,10 @@ class TestDeploy(testtools.TestCase):
                 mock_log.CRITICAL).call_list(),
             mock_log.getLogger.mock_calls)
 
-        self.mock_print.assert_called_once_with(mock.ANY,
-                                                node='123',
-                                                state='active')
+        self.mock_print.assert_has_calls([
+            mock.call(mock.ANY, node='123', state='active'),
+            mock.call(mock.ANY, ips='private=1.2.3.4')
+        ])
 
     @mock.patch.object(_cmd, 'logging', autospec=True)
     def test_args_json_format(self, mock_log, mock_os_conf, mock_pr):
@@ -108,6 +111,47 @@ class TestDeploy(testtools.TestCase):
             mock.call(_cmd._URLLIB3_LOGGER).setLevel(
                 mock_log.CRITICAL).call_list(),
             mock_log.getLogger.mock_calls)
+
+    def test_no_ips(self, mock_os_conf, mock_pr):
+        instance = mock_pr.return_value.provision_node.return_value
+        instance.create_autospec(_provisioner.Instance)
+        instance.is_deployed = True
+        instance.ip_addresses.return_value = {}
+        instance.node.name = None
+        instance.node.uuid = '123'
+        instance.state = 'active'
+
+        args = ['deploy', '--network', 'mynet', '--image', 'myimg', 'compute']
+        _cmd.main(args)
+
+        self.mock_print.assert_called_once_with(mock.ANY, node='123',
+                                                state='active'),
+
+    def test_not_deployed_no_ips(self, mock_os_conf, mock_pr):
+        instance = mock_pr.return_value.provision_node.return_value
+        instance.create_autospec(_provisioner.Instance)
+        instance.is_deployed = False
+        instance.node.name = None
+        instance.node.uuid = '123'
+        instance.state = 'deploying'
+
+        args = ['deploy', '--network', 'mynet', '--image', 'myimg', 'compute']
+        _cmd.main(args)
+
+        self.mock_print.assert_called_once_with(mock.ANY, node='123',
+                                                state='deploying'),
+
+    @mock.patch.object(_cmd.LOG, 'info', autospec=True)
+    def test_no_logs_not_deployed(self, mock_log, mock_os_conf, mock_pr):
+        instance = mock_pr.return_value.provision_node.return_value
+        instance.create_autospec(_provisioner.Instance)
+        instance.is_deployed = False
+
+        args = ['deploy', '--network', 'mynet', '--image', 'myimg', 'compute']
+        _cmd.main(args)
+
+        self.assertFalse(mock_log.called)
+        self.assertFalse(instance.ip_addresses.called)
 
     def test_args_dry_run(self, mock_os_conf, mock_pr):
         args = ['--dry-run', 'deploy', '--network', 'mynet',

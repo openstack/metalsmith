@@ -48,6 +48,20 @@ class Instance(object):
         self._uuid = node.uuid
         self._node = node
 
+    def ip_addresses(self):
+        """Returns IP addresses for this instance.
+
+        :return: dict mapping network name or ID to a list of IP addresses.
+        """
+        result = {}
+        for nic in self.nics():
+            net = getattr(nic.network, 'name', None) or nic.network.id
+            result.setdefault(net, []).extend(
+                ip['ip_address'] for ip in nic.fixed_ips
+                if ip.get('ip_address')
+            )
+        return result
+
     @property
     def is_deployed(self):
         """Whether the node is deployed."""
@@ -57,6 +71,20 @@ class Instance(object):
     def is_healthy(self):
         """Whether the node is not at fault or maintenance."""
         return self.state in _HEALTHY_STATES and not self._node.maintenance
+
+    def nics(self):
+        """List NICs for this instance.
+
+        :return: List of `Port` objects with additional ``network`` fields
+            with full representations of their networks.
+        """
+        result = []
+        vifs = self._api.list_node_attached_ports(self.node)
+        for vif in vifs:
+            port = self._api.get_port(vif.id)
+            port.network = self._api.get_network(port.network_id)
+            result.append(port)
+        return result
 
     @property
     def node(self):
@@ -95,6 +123,7 @@ class Instance(object):
     def to_dict(self):
         """Convert instance to a dict."""
         return {
+            'ip_addresses': self.ip_addresses(),
             'node': self._node.to_dict(),
             'state': self.state,
             'uuid': self._uuid,
@@ -288,26 +317,10 @@ class Provisioner(object):
                       {'node': _utils.log_node(node), 'timeout': wait})
             self._api.wait_for_node_state(node, 'active', timeout=wait)
             LOG.info('Deploy succeeded on node %s', _utils.log_node(node))
-            self._log_ips(node, created_ports)
 
         # Update the node to return it's latest state
         node = self._api.get_node(node, refresh=True)
         return Instance(self._api, node)
-
-    def _log_ips(self, node, created_ports):
-        ips = []
-        for port in created_ports:
-            # Refresh the port to get its IP(s)
-            port = self._api.get_port(port)
-            for ip in port.fixed_ips:
-                if ip.get('ip_address'):
-                    ips.append(ip['ip_address'])
-        if ips:
-            LOG.info('IPs for %(node)s: %(ips)s',
-                     {'node': _utils.log_node(node),
-                      'ips': ', '.join(ips)})
-        else:
-            LOG.warning('No IPs for node %s', _utils.log_node(node))
 
     def _get_nics(self, nics):
         """Validate and get the NICs."""
