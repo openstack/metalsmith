@@ -37,7 +37,9 @@ class NICAction(argparse.Action):
         setattr(namespace, self.dest, nics)
 
 
-def _do_deploy(api, args, formatter, wait=None):
+def _do_deploy(api, args, formatter):
+    wait = None if args.no_wait else args.wait
+
     capabilities = dict(item.split('=', 1) for item in args.capability)
     if args.ssh_public_key:
         with open(args.ssh_public_key) as fp:
@@ -56,8 +58,8 @@ def _do_deploy(api, args, formatter, wait=None):
     formatter.deploy(instance)
 
 
-def _do_undeploy(api, args, formatter, wait=None):
-    node = api.unprovision_node(args.node, wait=wait)
+def _do_undeploy(api, args, formatter):
+    node = api.unprovision_node(args.node, wait=args.wait)
     formatter.undeploy(node)
 
 
@@ -110,10 +112,9 @@ def _parse_args(args, config):
     undeploy = subparsers.add_parser('undeploy')
     undeploy.set_defaults(func=_do_undeploy)
     undeploy.add_argument('node', help='node UUID')
-    wait = undeploy.add_mutually_exclusive_group()
-    wait.add_argument('--wait', type=int,
-                      help='time (in seconds) to wait for node to become '
-                      'available for deployment again')
+    undeploy.add_argument('--wait', type=int,
+                          help='time (in seconds) to wait for node to become '
+                          'available for deployment again')
     return parser.parse_args(args)
 
 
@@ -156,10 +157,6 @@ def main(args=sys.argv[1:]):
     config = os_config.OpenStackConfig()
     args = _parse_args(args, config)
     _configure_logging(args)
-    if getattr(args, 'no_wait', None):
-        wait = None
-    else:
-        wait = args.wait
     if args.quiet:
         formatter = _format.NULL_FORMAT
     else:
@@ -169,7 +166,7 @@ def main(args=sys.argv[1:]):
     api = _provisioner.Provisioner(cloud_region=region, dry_run=args.dry_run)
 
     try:
-        args.func(api, args, formatter, wait=wait)
+        args.func(api, args, formatter)
     except Exception as exc:
         LOG.critical('%s', exc, exc_info=args.debug)
         sys.exit(1)
