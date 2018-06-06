@@ -19,30 +19,27 @@
       --image {{ image }}
       --ssh-public-key {{ ssh_key_file }}
       --root-disk-size 9
+      --hostname test
       {{ extra_args }}
       baremetal
 
-- name: Find the deployed node
-  command: openstack baremetal node list --provision-state active -f value -c UUID
-  register: active_node_result
+- name: Get instance info via CLI
+  command: metalsmith --format=json show test
+  register: instance_info
 
-- name: Check that the deployed node was found
-  fail:
-    msg: The deployed node cannot be found
-  when: active_node_result.stdout == ""
-
-- name: Set active node fact
+- name: Register instance information
   set_fact:
-    active_node: "{{ active_node_result.stdout }}"
+    instance: "{{ (instance_info.stdout | from_json).test }}"
+  failed_when: instance.state != 'active' or instance.node.provision_state != 'active'
 
 - name: Show active node information
-  command: openstack baremetal node show {{ active_node }}
+  command: openstack baremetal node show {{ instance.node.uuid }}
 
 - name: Undeploy a node
-  command: metalsmith --debug undeploy --wait 900 {{ active_node }}
+  command: metalsmith --debug undeploy --wait 900 test
 
 - name: Get the current status of the deployed node
-  command: openstack baremetal node show {{ active_node }} -f json
+  command: openstack baremetal node show {{ instance.node.uuid }} -f json
   register: undeployed_node_result
 
 - name: Parse node state
@@ -60,7 +57,7 @@
   when: undeployed_node.extra != {}
 
 - name: Get attached VIFs for the node
-  command: openstack baremetal node vif list {{ active_node }} -f value -c ID
+  command: openstack baremetal node vif list {{ instance.node.uuid }} -f value -c ID
   register: vif_list_output
 
 - name: Check that no VIFs are still attached

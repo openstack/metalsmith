@@ -486,3 +486,26 @@ class Provisioner(object):
             LOG.info('Node %s undeployed successfully', _utils.log_node(node))
 
         return self._api.get_node(node, refresh=True)
+
+    def show_instance(self, instance_id):
+        """Show information about instance.
+
+        :param instance_id: hostname, UUID or node name.
+        :return: :py:class:`metalsmith.Instance` object.
+        """
+        return self.show_instances([instance_id])[0]
+
+    def show_instances(self, instances):
+        """Show information about instance.
+
+        More efficient than calling :meth:`show_instance` in a loop, because
+        it caches the node list.
+
+        :param instances: list of hostnames, UUIDs or node names.
+        :return: list of :py:class:`metalsmith.Instance` objects in the same
+            order as ``instances``.
+        """
+        with self._api.cache_node_list_for_lookup():
+            return [Instance(self._api,
+                             self._api.get_node(inst, accept_hostname=True))
+                    for inst in instances]

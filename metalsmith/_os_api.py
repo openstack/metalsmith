@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import contextlib
 import logging
 
 from ironicclient import client as ir_client
@@ -57,6 +58,8 @@ class API(object):
     IRONIC_VERSION = '1'
     IRONIC_MICRO_VERSION = '1.28'
 
+    _node_list = None
+
     def __init__(self, session=None, cloud_region=None):
         if cloud_region is None:
             if session is None:
@@ -76,8 +79,21 @@ class API(object):
             self.IRONIC_VERSION, session=self.session,
             os_ironic_api_version=self.IRONIC_MICRO_VERSION)
 
+    def _nodes_for_lookup(self):
+        return self.list_nodes(maintenance=None,
+                               associated=None,
+                               provision_state=None,
+                               fields=['uuid', 'name', 'instance_info'])
+
     def attach_port_to_node(self, node, port_id):
         self.ironic.node.vif_attach(_node_id(node), port_id)
+
+    @contextlib.contextmanager
+    def cache_node_list_for_lookup(self):
+        if self._node_list is None:
+            self._node_list = self._nodes_for_lookup()
+        yield self._node_list
+        self._node_list = None
 
     def create_port(self, network_id, **kwargs):
         return self.connection.network.create_port(network_id=network_id,
@@ -92,9 +108,7 @@ class API(object):
         self.ironic.node.vif_detach(_node_id(node), port_id)
 
     def find_node_by_hostname(self, hostname):
-        nodes = self.list_nodes(maintenance=None, associated=None,
-                                provision_state=None,
-                                fields=['uuid', 'name', 'instance_info'])
+        nodes = self._node_list or self._nodes_for_lookup()
         existing = [n for n in nodes
                     if n.instance_info.get(HOSTNAME_FIELD) == hostname]
         if len(existing) > 1:

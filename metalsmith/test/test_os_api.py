@@ -120,6 +120,21 @@ class TestNodes(testtools.TestCase):
                                                   fields=_os_api.NODE_FIELDS)
         self.assertIs(res, self.cli.node.get.return_value)
 
+    def test_find_node_by_hostname_cached(self):
+        self.cli.node.list.return_value = [
+            mock.Mock(uuid='uuid0', instance_info={}),
+            mock.Mock(uuid='uuid1',
+                      instance_info={'metalsmith_hostname': 'host1'}),
+        ]
+        with self.api.cache_node_list_for_lookup():
+            res = self.api.find_node_by_hostname('host1')
+            self.assertIs(res, self.cli.node.get.return_value)
+            self.assertIsNone(self.api.find_node_by_hostname('host2'))
+        self.assertEqual(1, self.cli.node.list.call_count)
+        # This call is no longer cached
+        self.assertIsNone(self.api.find_node_by_hostname('host2'))
+        self.assertEqual(2, self.cli.node.list.call_count)
+
     def test_find_node_by_hostname_not_found(self):
         self.cli.node.list.return_value = [
             mock.Mock(uuid='uuid0', instance_info={}),

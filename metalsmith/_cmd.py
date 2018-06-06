@@ -68,6 +68,11 @@ def _do_undeploy(api, args, formatter):
     formatter.undeploy(node)
 
 
+def _do_show(api, args, formatter):
+    instances = api.show_instances(args.instance)
+    formatter.show(instances)
+
+
 def _parse_args(args, config):
     parser = argparse.ArgumentParser(
         description='Deployment and Scheduling tool for Bare Metal')
@@ -122,6 +127,11 @@ def _parse_args(args, config):
     undeploy.add_argument('--wait', type=int,
                           help='time (in seconds) to wait for node to become '
                           'available for deployment again')
+
+    show = subparsers.add_parser('show')
+    show.set_defaults(func=_do_show)
+    show.add_argument('instance', nargs='+', help='instance UUID(s)')
+
     return parser.parse_args(args)
 
 

@@ -45,6 +45,7 @@ class Base(testtools.TestCase):
             for (uuid, pxe) in [('000', True), ('111', False)]
         ]
         self.api.find_node_by_hostname.return_value = None
+        self.api.cache_node_list_for_lookup = mock.MagicMock()
         self.pr._api = self.api
 
 
@@ -603,6 +604,32 @@ class TestUnprovisionNode(Base):
         self.assertFalse(self.api.detach_port_from_node.called)
         self.assertFalse(self.api.wait_for_node_state.called)
         self.assertFalse(self.api.update_node.called)
+
+
+class TestShowInstance(Base):
+    def test_show_instance(self):
+        self.api.get_node.side_effect = lambda n, *a, **kw: self.node
+        inst = self.pr.show_instance('uuid1')
+        self.api.get_node.assert_called_once_with('uuid1',
+                                                  accept_hostname=True)
+        self.assertIsInstance(inst, _provisioner.Instance)
+        self.assertIs(inst.node, self.node)
+        self.assertIs(inst.uuid, self.node.uuid)
+        self.api.cache_node_list_for_lookup.assert_called_once_with()
+
+    def test_show_instances(self):
+        self.api.get_node.side_effect = [self.node, mock.Mock()]
+        result = self.pr.show_instances(['1', '2'])
+        self.api.get_node.assert_has_calls([
+            mock.call('1', accept_hostname=True),
+            mock.call('2', accept_hostname=True)
+        ])
+        self.assertIsInstance(result, list)
+        for inst in result:
+            self.assertIsInstance(inst, _provisioner.Instance)
+        self.assertIs(result[0].node, self.node)
+        self.assertIs(result[0].uuid, self.node.uuid)
+        self.api.cache_node_list_for_lookup.assert_called_once_with()
 
 
 class TestInstanceStates(Base):

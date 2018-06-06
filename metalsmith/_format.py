@@ -43,15 +43,7 @@ class DefaultFormat(object):
 
     def deploy(self, instance):
         """Output result of the deploy."""
-        _print("Node %(node)s, current state is %(state)s",
-               node=_utils.log_node(instance.node), state=instance.state)
-
-        if instance.is_deployed:
-            ips = instance.ip_addresses()
-            if ips:
-                ips = '; '.join('%s=%s' % (net, ','.join(ips))
-                                for net, ips in ips.items())
-                _print('IP addresses: %(ips)s', ips=ips)
+        self.show([instance])
 
     def undeploy(self, node):
         """Output result of undeploy."""
@@ -61,6 +53,18 @@ class DefaultFormat(object):
             message = "Unprovisioning started for node %(node)s"
 
         _print(message, node=_utils.log_node(node))
+
+    def show(self, instances):
+        for instance in instances:
+            _print("Node %(node)s, current state is %(state)s",
+                   node=_utils.log_node(instance.node), state=instance.state)
+
+            if instance.is_deployed:
+                ips = instance.ip_addresses()
+                if ips:
+                    ips = '; '.join('%s=%s' % (net, ','.join(ips))
+                                    for net, ips in ips.items())
+                    _print('* IP addresses: %(ips)s', ips=ips)
 
 
 class JsonFormat(object):
@@ -76,6 +80,11 @@ class JsonFormat(object):
             'node': node.to_dict()
         }
         json.dump(result, sys.stdout)
+
+    def show(self, instances):
+        """Output instance statuses."""
+        json.dump({instance.hostname: instance.to_dict()
+                   for instance in instances}, sys.stdout)
 
 
 FORMATS = {

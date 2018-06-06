@@ -608,3 +608,47 @@ class TestUndeploy(testtools.TestCase):
         mock_pr.return_value.unprovision_node.assert_called_once_with(
             '123456', wait=None
         )
+
+
+@mock.patch.object(_provisioner, 'Provisioner', autospec=True)
+@mock.patch.object(_cmd.os_config, 'OpenStackConfig', autospec=True)
+class TestShow(testtools.TestCase):
+    def setUp(self):
+        super(TestShow, self).setUp()
+        self.print_fixture = self.useFixture(fixtures.MockPatch(
+            'metalsmith._format._print', autospec=True))
+        self.mock_print = self.print_fixture.mock
+        self.instances = [
+            mock.Mock(spec=_provisioner.Instance, hostname=hostname,
+                      uuid=hostname[-1], is_deployed=(hostname[-1] == '1'),
+                      state=('active' if hostname[-1] == '1' else 'deploying'),
+                      **{'ip_addresses.return_value': {'private':
+                                                       ['1.2.3.4']}})
+            for hostname in ['hostname1', 'hostname2']
+        ]
+        for inst in self.instances:
+            inst.node.uuid = inst.uuid
+            inst.node.name = 'name-%s' % inst.uuid
+            inst.to_dict.return_value = {inst.node.uuid: inst.node.name}
+
+    def test_show(self, mock_os_conf, mock_pr):
+        mock_pr.return_value.show_instances.return_value = self.instances
+        args = ['show', 'uuid1', 'hostname2']
+        _cmd.main(args)
+
+        self.mock_print.assert_has_calls([
+            mock.call(mock.ANY, node='name-1 (UUID 1)', state='active'),
+            mock.call(mock.ANY, ips='private=1.2.3.4'),
+            mock.call(mock.ANY, node='name-2 (UUID 2)', state='deploying'),
+        ])
+
+    def test_show_json(self, mock_os_conf, mock_pr):
+        mock_pr.return_value.show_instances.return_value = self.instances
+        args = ['--format', 'json', 'show', 'uuid1', 'hostname2']
+
+        fake_io = six.StringIO()
+        with mock.patch('sys.stdout', fake_io):
+            _cmd.main(args)
+            self.assertEqual(json.loads(fake_io.getvalue()),
+                             {'hostname1': {'1': 'name-1'},
+                              'hostname2': {'2': 'name-2'}})
