@@ -21,6 +21,7 @@ from openstack import config as os_config
 
 from metalsmith import _format
 from metalsmith import _provisioner
+from metalsmith import _utils
 
 
 LOG = logging.getLogger(__name__)
@@ -47,12 +48,16 @@ def _do_deploy(api, args, formatter):
     else:
         ssh_keys = []
 
+    if args.hostname and not _utils.is_hostname_safe(args.hostname):
+        raise RuntimeError("%s cannot be used as a hostname" % args.hostname)
+
     node = api.reserve_node(args.resource_class, capabilities=capabilities)
     instance = api.provision_node(node,
                                   image_ref=args.image,
                                   nics=args.nics,
                                   root_disk_size=args.root_disk_size,
                                   ssh_keys=ssh_keys,
+                                  hostname=args.hostname,
                                   netboot=args.netboot,
                                   wait=wait)
     formatter.deploy(instance)
@@ -107,6 +112,8 @@ def _parse_args(args, config):
     deploy.add_argument('--capability', action='append', metavar='NAME=VALUE',
                         default=[], help='capabilities the nodes should have')
     deploy.add_argument('--ssh-public-key', help='SSH public key to load')
+    deploy.add_argument('--hostname', help='Host name to use, defaults to '
+                        'Node\'s name or UUID')
     deploy.add_argument('resource_class', help='node resource class to deploy')
 
     undeploy = subparsers.add_parser('undeploy')

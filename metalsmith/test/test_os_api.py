@@ -58,6 +58,30 @@ class TestNodes(testtools.TestCase):
                                                   fields=_os_api.NODE_FIELDS)
         self.assertIs(res, self.cli.node.get.return_value)
 
+    def test_get_node_by_hostname(self):
+        self.cli.node.list.return_value = [
+            mock.Mock(uuid='uuid0', instance_info={}),
+            mock.Mock(uuid='uuid1',
+                      instance_info={'metalsmith_hostname': 'host1'}),
+        ]
+        res = self.api.get_node('host1', accept_hostname=True)
+        # Loading details
+        self.cli.node.get.assert_called_once_with('uuid1',
+                                                  fields=_os_api.NODE_FIELDS)
+        self.assertIs(res, self.cli.node.get.return_value)
+
+    def test_get_node_by_hostname_not_found(self):
+        self.cli.node.list.return_value = [
+            mock.Mock(uuid='uuid0', instance_info={}),
+            mock.Mock(uuid='uuid1',
+                      instance_info={'metalsmith_hostname': 'host0'}),
+        ]
+        res = self.api.get_node('host1', accept_hostname=True)
+        # Loading details
+        self.cli.node.get.assert_called_once_with('host1',
+                                                  fields=_os_api.NODE_FIELDS)
+        self.assertIs(res, self.cli.node.get.return_value)
+
     def test_get_node_by_node(self):
         res = self.api.get_node(mock.sentinel.node)
         self.assertIs(res, mock.sentinel.node)
@@ -83,3 +107,35 @@ class TestNodes(testtools.TestCase):
         self.cli.node.get.assert_called_once_with('uuid1',
                                                   fields=_os_api.NODE_FIELDS)
         self.assertIs(res, self.cli.node.get.return_value)
+
+    def test_find_node_by_hostname(self):
+        self.cli.node.list.return_value = [
+            mock.Mock(uuid='uuid0', instance_info={}),
+            mock.Mock(uuid='uuid1',
+                      instance_info={'metalsmith_hostname': 'host1'}),
+        ]
+        res = self.api.find_node_by_hostname('host1')
+        # Loading details
+        self.cli.node.get.assert_called_once_with('uuid1',
+                                                  fields=_os_api.NODE_FIELDS)
+        self.assertIs(res, self.cli.node.get.return_value)
+
+    def test_find_node_by_hostname_not_found(self):
+        self.cli.node.list.return_value = [
+            mock.Mock(uuid='uuid0', instance_info={}),
+            mock.Mock(uuid='uuid1',
+                      instance_info={'metalsmith_hostname': 'host1'}),
+        ]
+        self.assertIsNone(self.api.find_node_by_hostname('host0'))
+        self.assertFalse(self.cli.node.get.called)
+
+    def test_find_node_by_hostname_duplicate(self):
+        self.cli.node.list.return_value = [
+            mock.Mock(uuid='uuid0',
+                      instance_info={'metalsmith_hostname': 'host1'}),
+            mock.Mock(uuid='uuid1',
+                      instance_info={'metalsmith_hostname': 'host1'}),
+        ]
+        self.assertRaisesRegex(RuntimeError, 'More than one node',
+                               self.api.find_node_by_hostname, 'host1')
+        self.assertFalse(self.cli.node.get.called)

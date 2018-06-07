@@ -16,8 +16,11 @@
 import contextlib
 import json
 import os
+import re
 import shutil
 import tempfile
+
+import six
 
 from metalsmith import exceptions
 
@@ -44,13 +47,13 @@ def get_capabilities(node):
 
 
 @contextlib.contextmanager
-def config_drive_dir(node, ssh_keys):
+def config_drive_dir(node, ssh_keys, hostname):
     d = tempfile.mkdtemp()
     try:
         metadata = {'public_keys': ssh_keys,
                     'uuid': node.uuid,
                     'name': node.name,
-                    'hostname': node.name or node.uuid,
+                    'hostname': hostname,
                     'launch_index': 0,
                     'availability_zone': '',
                     'files': [],
@@ -95,3 +98,26 @@ def get_root_disk(root_disk_size, node):
         root_disk_size = int(node.properties['local_gb']) - 1
 
     return root_disk_size
+
+
+_HOSTNAME_RE = re.compile(r"""^
+[a-z0-9][a-z0-9\-]{0,61}[a-z0-9]      # host
+(\.[a-z0-9][a-z0-9\-]{0,61}[a-z0-9])* # domain
+$""", re.IGNORECASE | re.VERBOSE)
+
+
+def is_hostname_safe(hostname):
+    """Check for valid host name.
+
+    Nominally, checks that the supplied hostname conforms to:
+        * http://en.wikipedia.org/wiki/Hostname
+        * http://tools.ietf.org/html/rfc952
+        * http://tools.ietf.org/html/rfc1123
+
+    :param hostname: The hostname to be validated.
+    :returns: True if valid. False if not.
+    """
+    if not isinstance(hostname, six.string_types) or len(hostname) > 255:
+        return False
+
+    return _HOSTNAME_RE.match(hostname) is not None

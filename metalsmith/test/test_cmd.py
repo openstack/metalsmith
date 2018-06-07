@@ -60,6 +60,7 @@ class TestDeploy(testtools.TestCase):
             nics=[{'network': 'mynet'}],
             root_disk_size=None,
             ssh_keys=[],
+            hostname=None,
             netboot=False,
             wait=1800)
         mock_log.basicConfig.assert_called_once_with(level=mock_log.WARNING,
@@ -102,6 +103,7 @@ class TestDeploy(testtools.TestCase):
             nics=[{'network': 'mynet'}],
             root_disk_size=None,
             ssh_keys=[],
+            hostname=None,
             netboot=False,
             wait=1800)
         mock_log.basicConfig.assert_called_once_with(level=mock_log.WARNING,
@@ -170,6 +172,7 @@ class TestDeploy(testtools.TestCase):
             nics=[{'network': 'mynet'}],
             root_disk_size=None,
             ssh_keys=[],
+            hostname=None,
             netboot=False,
             wait=1800)
 
@@ -191,6 +194,7 @@ class TestDeploy(testtools.TestCase):
             nics=[{'network': 'mynet'}],
             root_disk_size=None,
             ssh_keys=[],
+            hostname=None,
             netboot=False,
             wait=1800)
 
@@ -220,6 +224,7 @@ class TestDeploy(testtools.TestCase):
             nics=[{'network': 'mynet'}],
             root_disk_size=None,
             ssh_keys=[],
+            hostname=None,
             netboot=False,
             wait=1800)
 
@@ -251,6 +256,7 @@ class TestDeploy(testtools.TestCase):
             nics=[{'network': 'mynet'}],
             root_disk_size=None,
             ssh_keys=[],
+            hostname=None,
             netboot=False,
             wait=1800)
 
@@ -280,6 +286,7 @@ class TestDeploy(testtools.TestCase):
             nics=[{'network': 'mynet'}],
             root_disk_size=None,
             ssh_keys=[],
+            hostname=None,
             netboot=False,
             wait=1800)
 
@@ -309,6 +316,7 @@ class TestDeploy(testtools.TestCase):
             nics=[{'network': 'mynet'}],
             root_disk_size=None,
             ssh_keys=[],
+            hostname=None,
             netboot=False,
             wait=1800)
 
@@ -336,6 +344,12 @@ class TestDeploy(testtools.TestCase):
         self.assertRaises(SystemExit, _cmd.main, args)
         mock_log.assert_called_once_with('%s', failure, exc_info=False)
 
+    @mock.patch.object(_cmd.LOG, 'critical', autospec=True)
+    def test_invalid_hostname(self, mock_log, mock_os_conf, mock_pr):
+        args = ['deploy', '--hostname', 'n_1', '--image', 'myimg', 'compute']
+        self.assertRaises(SystemExit, _cmd.main, args)
+        self.assertTrue(mock_log.called)
+
     def test_args_capabilities(self, mock_os_conf, mock_pr):
         args = ['deploy', '--network', 'mynet', '--image', 'myimg',
                 '--capability', 'foo=bar', '--capability', 'answer=42',
@@ -354,6 +368,7 @@ class TestDeploy(testtools.TestCase):
             nics=[{'network': 'mynet'}],
             root_disk_size=None,
             ssh_keys=[],
+            hostname=None,
             netboot=False,
             wait=1800)
 
@@ -378,6 +393,7 @@ class TestDeploy(testtools.TestCase):
                 nics=[{'network': 'mynet'}],
                 root_disk_size=None,
                 ssh_keys=['foo'],
+                hostname=None,
                 netboot=False,
                 wait=1800)
 
@@ -397,6 +413,7 @@ class TestDeploy(testtools.TestCase):
             nics=[{'port': 'myport'}],
             root_disk_size=None,
             ssh_keys=[],
+            hostname=None,
             netboot=False,
             wait=1800)
 
@@ -416,6 +433,7 @@ class TestDeploy(testtools.TestCase):
             nics=None,
             root_disk_size=None,
             ssh_keys=[],
+            hostname=None,
             netboot=False,
             wait=1800)
 
@@ -438,6 +456,27 @@ class TestDeploy(testtools.TestCase):
                   {'port': 'port2'}, {'network': 'net2'}],
             root_disk_size=None,
             ssh_keys=[],
+            hostname=None,
+            netboot=False,
+            wait=1800)
+
+    def test_args_hostname(self, mock_os_conf, mock_pr):
+        args = ['deploy', '--hostname', 'host', '--image', 'myimg', 'compute']
+        _cmd.main(args)
+        mock_pr.assert_called_once_with(
+            cloud_region=mock_os_conf.return_value.get_one.return_value,
+            dry_run=False)
+        mock_pr.return_value.reserve_node.assert_called_once_with(
+            resource_class='compute',
+            capabilities={}
+        )
+        mock_pr.return_value.provision_node.assert_called_once_with(
+            mock_pr.return_value.reserve_node.return_value,
+            image_ref='myimg',
+            nics=None,
+            root_disk_size=None,
+            ssh_keys=[],
+            hostname='host',
             netboot=False,
             wait=1800)
 
@@ -458,6 +497,7 @@ class TestDeploy(testtools.TestCase):
             nics=[{'network': 'mynet'}],
             root_disk_size=None,
             ssh_keys=[],
+            hostname=None,
             netboot=False,
             wait=3600)
 
@@ -478,6 +518,7 @@ class TestDeploy(testtools.TestCase):
             nics=[{'network': 'mynet'}],
             root_disk_size=None,
             ssh_keys=[],
+            hostname=None,
             netboot=False,
             wait=None)
 

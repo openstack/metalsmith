@@ -48,6 +48,11 @@ class Instance(object):
         self._uuid = node.uuid
         self._node = node
 
+    @property
+    def hostname(self):
+        """Node's hostname."""
+        return self._node.instance_info.get(_os_api.HOSTNAME_FIELD)
+
     def ip_addresses(self):
         """Returns IP addresses for this instance.
 
@@ -123,6 +128,7 @@ class Instance(object):
     def to_dict(self):
         """Convert instance to a dict."""
         return {
+            'hostname': self.hostname,
             'ip_addresses': self.ip_addresses(),
             'node': self._node.to_dict(),
             'state': self.state,
@@ -185,7 +191,13 @@ class Provisioner(object):
         return node
 
     def _check_node_for_deploy(self, node):
-        """Check that node is ready and reserve it if needed."""
+        """Check that node is ready and reserve it if needed.
+
+        These checks are done outside of the try..except block in
+        ``provision_node``, so that we don't touch nodes that fail it at all.
+        Particularly, we don't want to try clean up nodes that were not
+        reserved by us or are in maintenance mode.
+        """
         try:
             node = self._api.get_node(node)
         except Exception as exc:
@@ -213,8 +225,35 @@ class Provisioner(object):
 
         return node
 
+    def _check_hostname(self, node, hostname):
+        """Check the provided host name.
+
+        If the ``hostname`` is not provided, use either the name or the UUID,
+        whichever is appropriate for a host name.
+
+        :return: appropriate hostname
+        :raises: ValueError on inappropriate value of ``hostname``
+        """
+        if hostname is None:
+            if node.name and _utils.is_hostname_safe(node.name):
+                return node.name
+            else:
+                return node.uuid
+
+        if not _utils.is_hostname_safe(hostname):
+            raise ValueError("%s cannot be used as a hostname" % hostname)
+
+        existing = self._api.find_node_by_hostname(hostname)
+        if existing is not None and existing.uuid != node.uuid:
+            raise ValueError("The following node already uses hostname "
+                             "%(host)s: %(node)s" %
+                             {'host': hostname,
+                              'node': _utils.log_node(existing)})
+
+        return hostname
+
     def provision_node(self, node, image_ref, nics=None, root_disk_size=None,
-                       ssh_keys=None, netboot=False, wait=None):
+                       ssh_keys=None, hostname=None, netboot=False, wait=None):
         """Provision the node with the given image.
 
         Example::
@@ -237,6 +276,8 @@ class Provisioner(object):
             the value of the local_gb property is used.
         :param ssh_keys: list of public parts of the SSH keys to upload
             to the nodes.
+        :param hostname: Hostname to assign to the instance. Defaults to the
+            node's name or UUID.
         :param netboot: Whether to use networking boot for final instances.
         :param wait: How many seconds to wait for the deployment to finish,
             None to return immediately.
@@ -250,7 +291,7 @@ class Provisioner(object):
         attached_ports = []
 
         try:
-
+            hostname = self._check_hostname(node, hostname)
             root_disk_size = _utils.get_root_disk(root_disk_size, node)
 
             try:
@@ -278,7 +319,8 @@ class Provisioner(object):
                        '/instance_info/root_gb': root_disk_size,
                        '/instance_info/capabilities': target_caps,
                        '/extra/%s' % _CREATED_PORTS: created_ports,
-                       '/extra/%s' % _ATTACHED_PORTS: attached_ports}
+                       '/extra/%s' % _ATTACHED_PORTS: attached_ports,
+                       '/instance_info/%s' % _os_api.HOSTNAME_FIELD: hostname}
 
             for prop in ('kernel', 'ramdisk'):
                 value = getattr(image, '%s_id' % prop, None)
@@ -292,7 +334,7 @@ class Provisioner(object):
 
             LOG.debug('Generating a configdrive for node %s',
                       _utils.log_node(node))
-            with _utils.config_drive_dir(node, ssh_keys) as cd:
+            with _utils.config_drive_dir(node, ssh_keys, hostname) as cd:
                 self._api.node_action(node, 'active',
                                       configdrive=cd)
         except Exception:
@@ -409,6 +451,7 @@ class Provisioner(object):
 
         update = {'/extra/%s' % item: _os_api.REMOVE
                   for item in (_CREATED_PORTS, _ATTACHED_PORTS)}
+        update['/instance_info/%s' % _os_api.HOSTNAME_FIELD] = _os_api.REMOVE
         LOG.debug('Updating node %(node)s with %(updates)s',
                   {'node': _utils.log_node(node), 'updates': update})
         try:
@@ -421,12 +464,12 @@ class Provisioner(object):
         """Unprovision a previously provisioned node.
 
         :param node: `Node` object, :py:class:`metalsmith.Instance`,
-            UUID or name.
+            hostname, UUID or node name.
         :param wait: How many seconds to wait for the process to finish,
             None to return immediately.
         :return: the latest `Node` object.
         """
-        node = self._api.get_node(node)
+        node = self._api.get_node(node, accept_hostname=True)
         if self._dry_run:
             LOG.warning("Dry run, not unprovisioning")
             return

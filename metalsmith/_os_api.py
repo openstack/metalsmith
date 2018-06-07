@@ -19,10 +19,13 @@ from ironicclient import client as ir_client
 from openstack import connection
 import six
 
+from metalsmith import _utils
+
 
 LOG = logging.getLogger(__name__)
-NODE_FIELDS = ['name', 'uuid', 'instance_uuid', 'maintenance',
+NODE_FIELDS = ['name', 'uuid', 'instance_info', 'instance_uuid', 'maintenance',
                'maintenance_reason', 'properties', 'provision_state', 'extra']
+HOSTNAME_FIELD = 'metalsmith_hostname'
 
 
 class _Remove(object):
@@ -88,6 +91,24 @@ class API(object):
     def detach_port_from_node(self, node, port_id):
         self.ironic.node.vif_detach(_node_id(node), port_id)
 
+    def find_node_by_hostname(self, hostname):
+        nodes = self.list_nodes(maintenance=None, associated=None,
+                                provision_state=None,
+                                fields=['uuid', 'name', 'instance_info'])
+        existing = [n for n in nodes
+                    if n.instance_info.get(HOSTNAME_FIELD) == hostname]
+        if len(existing) > 1:
+            raise RuntimeError("More than one node found with hostname "
+                               "%(host)s: %(nodes)s" %
+                               {'host': hostname,
+                                'nodes': ', '.join(_utils.log_node(n)
+                                                   for n in existing)})
+        elif not existing:
+            return None
+        else:
+            # Fetch the complete node record
+            return self.get_node(existing[0].uuid, accept_hostname=False)
+
     def get_image_info(self, image_id):
         return self.connection.image.find_image(image_id,
                                                 ignore_missing=False)
@@ -96,8 +117,13 @@ class API(object):
         return self.connection.network.find_network(network_id,
                                                     ignore_missing=False)
 
-    def get_node(self, node, refresh=False):
+    def get_node(self, node, refresh=False, accept_hostname=False):
         if isinstance(node, six.string_types):
+            if accept_hostname and _utils.is_hostname_safe(node):
+                by_hostname = self.find_node_by_hostname(node)
+                if by_hostname is not None:
+                    return by_hostname
+
             return self.ironic.node.get(node, fields=NODE_FIELDS)
         elif hasattr(node, 'node'):
             # Instance object
@@ -121,12 +147,13 @@ class API(object):
         return self.ironic.node.list_ports(_node_id(node), limit=0)
 
     def list_nodes(self, resource_class=None, maintenance=False,
-                   associated=False, provision_state='available'):
+                   associated=False, provision_state='available',
+                   fields=None):
         return self.ironic.node.list(limit=0, resource_class=resource_class,
                                      maintenance=maintenance,
                                      associated=associated,
                                      provision_state=provision_state,
-                                     fields=NODE_FIELDS)
+                                     fields=fields or NODE_FIELDS)
 
     def node_action(self, node, action, **kwargs):
         self.ironic.node.set_provision_state(_node_id(node), action, **kwargs)

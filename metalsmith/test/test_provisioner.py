@@ -35,13 +35,16 @@ class Base(testtools.TestCase):
 
     def _reset_api_mock(self):
         self.api = mock.Mock(spec=_os_api.API)
-        self.api.get_node.side_effect = lambda n, refresh=False: n
+        self.api.get_node.side_effect = (
+            lambda n, refresh=False, accept_hostname=False: n
+        )
         self.api.update_node.side_effect = lambda n, _u: n
         self.api.list_node_ports.return_value = [
             mock.Mock(spec=['uuid', 'pxe_enabled'],
                       uuid=uuid, pxe_enabled=pxe)
             for (uuid, pxe) in [('000', True), ('111', False)]
         ]
+        self.api.find_node_by_hostname.return_value = None
         self.pr._api = self.api
 
 
@@ -83,7 +86,8 @@ class TestReserveNode(Base):
 
 CLEAN_UP = {
     '/extra/metalsmith_created_ports': _os_api.REMOVE,
-    '/extra/metalsmith_attached_ports': _os_api.REMOVE
+    '/extra/metalsmith_attached_ports': _os_api.REMOVE,
+    '/instance_info/%s' % _os_api.HOSTNAME_FIELD: _os_api.REMOVE
 }
 
 
@@ -104,12 +108,58 @@ class TestProvisionNode(Base):
             ],
             '/extra/metalsmith_attached_ports': [
                 self.api.create_port.return_value.id
-            ]
+            ],
+            '/instance_info/%s' % _os_api.HOSTNAME_FIELD: 'control-0'
         }
 
     def test_ok(self):
         inst = self.pr.provision_node(self.node, 'image',
                                       [{'network': 'network'}])
+
+        self.assertEqual(inst.uuid, self.node.uuid)
+        self.assertEqual(inst.node, self.node)
+
+        self.api.create_port.assert_called_once_with(
+            network_id=self.api.get_network.return_value.id)
+        self.api.attach_port_to_node.assert_called_once_with(
+            self.node.uuid, self.api.create_port.return_value.id)
+        self.api.update_node.assert_called_once_with(self.node, self.updates)
+        self.api.validate_node.assert_called_once_with(self.node,
+                                                       validate_deploy=True)
+        self.api.node_action.assert_called_once_with(self.node, 'active',
+                                                     configdrive=mock.ANY)
+        self.assertFalse(self.api.wait_for_node_state.called)
+        self.assertFalse(self.api.release_node.called)
+        self.assertFalse(self.api.delete_port.called)
+
+    def test_with_hostname(self):
+        hostname = 'control-0.example.com'
+        inst = self.pr.provision_node(self.node, 'image',
+                                      [{'network': 'network'}],
+                                      hostname=hostname)
+        self.updates['/instance_info/%s' % _os_api.HOSTNAME_FIELD] = hostname
+
+        self.assertEqual(inst.uuid, self.node.uuid)
+        self.assertEqual(inst.node, self.node)
+
+        self.api.create_port.assert_called_once_with(
+            network_id=self.api.get_network.return_value.id)
+        self.api.attach_port_to_node.assert_called_once_with(
+            self.node.uuid, self.api.create_port.return_value.id)
+        self.api.update_node.assert_called_once_with(self.node, self.updates)
+        self.api.validate_node.assert_called_once_with(self.node,
+                                                       validate_deploy=True)
+        self.api.node_action.assert_called_once_with(self.node, 'active',
+                                                     configdrive=mock.ANY)
+        self.assertFalse(self.api.wait_for_node_state.called)
+        self.assertFalse(self.api.release_node.called)
+        self.assertFalse(self.api.delete_port.called)
+
+    def test_name_not_valid_hostname(self):
+        self.node.name = 'node_1'
+        inst = self.pr.provision_node(self.node, 'image',
+                                      [{'network': 'network'}])
+        self.updates['/instance_info/%s' % _os_api.HOSTNAME_FIELD] = '000'
 
         self.assertEqual(inst.uuid, self.node.uuid)
         self.assertEqual(inst.node, self.node)
@@ -444,6 +494,28 @@ class TestProvisionNode(Base):
         self.assertFalse(self.api.node_action.called)
         self.api.release_node.assert_called_once_with(self.node)
 
+    def test_invalid_hostname(self):
+        self.assertRaisesRegex(ValueError, 'n_1 cannot be used as a hostname',
+                               self.pr.provision_node,
+                               self.node, 'image', [{'port': 'port1'}],
+                               hostname='n_1')
+        self.api.update_node.assert_called_once_with(self.node, CLEAN_UP)
+        self.assertFalse(self.api.create_port.called)
+        self.assertFalse(self.api.node_action.called)
+        self.api.release_node.assert_called_once_with(self.node)
+
+    def test_duplicate_hostname(self):
+        self.api.find_node_by_hostname.return_value = mock.Mock(spec=['uuid',
+                                                                      'name'])
+        self.assertRaisesRegex(ValueError, 'already uses hostname host',
+                               self.pr.provision_node,
+                               self.node, 'image', [{'port': 'port1'}],
+                               hostname='host')
+        self.api.update_node.assert_called_once_with(self.node, CLEAN_UP)
+        self.assertFalse(self.api.create_port.called)
+        self.assertFalse(self.api.node_action.called)
+        self.api.release_node.assert_called_once_with(self.node)
+
     def test_node_not_found(self):
         self.api.get_node.side_effect = RuntimeError('not found')
         self.assertRaisesRegex(exceptions.InvalidNode, 'not found',
@@ -586,9 +658,11 @@ class TestInstanceStates(Base):
     def test_to_dict(self, mock_ips):
         self.node.provision_state = 'wait call-back'
         self.node.to_dict.return_value = {'node': 'dict'}
+        self.node.instance_info = {'metalsmith_hostname': 'host'}
         mock_ips.return_value = {'private': ['1.2.3.4']}
 
-        self.assertEqual({'ip_addresses': {'private': ['1.2.3.4']},
+        self.assertEqual({'hostname': 'host',
+                          'ip_addresses': {'private': ['1.2.3.4']},
                           'node': {'node': 'dict'},
                           'state': 'deploying',
                           'uuid': self.node.uuid},
