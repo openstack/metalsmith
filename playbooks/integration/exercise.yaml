@@ -4,24 +4,29 @@
 
 - name: Set port argument
   set_fact:
-    nic: --port test-port
+    nic:
+      port: test-port
   when: precreate_port
 
 - name: Set network argument
   set_fact:
-    nic: --network private
+    nic:
+      network: private
   when: not precreate_port
 
 - name: Deploy a node
-  command: >
-    metalsmith --debug deploy
-      {{ nic }}
-      --image {{ image }}
-      --ssh-public-key {{ ssh_key_file }}
-      --root-disk-size 9
-      --hostname test
-      {{ extra_args }}
-      baremetal
+  include_role:
+    name: metalsmith_deployment
+  vars:
+    metalsmith_resource_class: baremetal
+    metalsmith_instances:
+      - hostname: test
+        image: "{{ image }}"
+        nics:
+          - "{{ nic }}"
+        root_size: 9
+        ssh_public_keys:
+          - "{{ ssh_key_file }}"
 
 - name: Get instance info via CLI
   command: metalsmith --format=json show test

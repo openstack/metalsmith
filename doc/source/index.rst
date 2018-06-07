@@ -15,6 +15,14 @@ The main entry point to the API is :py:class:`metalsmith.Provisioner`.
 
    api/modules
 
+Ansible Role
+------------
+
+.. toctree::
+   :maxdepth: 2
+
+   user/ansible
+
 Indexes
 -------
 
