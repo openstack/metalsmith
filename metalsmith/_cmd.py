@@ -78,6 +78,12 @@ def _do_show(api, args, formatter):
     formatter.show(instances)
 
 
+def _do_wait(api, args, formatter):
+    instances = api.wait_for_provisioning(args.instance,
+                                          timeout=args.timeout)
+    formatter.show(instances)
+
+
 def _parse_args(args, config):
     parser = argparse.ArgumentParser(
         description='Deployment and Scheduling tool for Bare Metal')
@@ -102,12 +108,12 @@ def _parse_args(args, config):
 
     deploy = subparsers.add_parser('deploy')
     deploy.set_defaults(func=_do_deploy)
-    wait = deploy.add_mutually_exclusive_group()
-    wait.add_argument('--wait', type=int, default=1800,
-                      help='time (in seconds) to wait for node to become '
-                      'active')
-    wait.add_argument('--no-wait', action='store_true',
-                      help='disable waiting for deploy to finish')
+    wait_grp = deploy.add_mutually_exclusive_group()
+    wait_grp.add_argument('--wait', type=int, default=1800,
+                          help='time (in seconds) to wait for node to become '
+                          'active')
+    wait_grp.add_argument('--no-wait', action='store_true',
+                          help='disable waiting for deploy to finish')
     deploy.add_argument('--image', help='image to use (name or UUID)',
                         required=True)
     deploy.add_argument('--network', help='network to use (name or UUID)',
@@ -140,6 +146,12 @@ def _parse_args(args, config):
     show = subparsers.add_parser('show')
     show.set_defaults(func=_do_show)
     show.add_argument('instance', nargs='+', help='instance UUID(s)')
+
+    wait = subparsers.add_parser('wait')
+    wait.set_defaults(func=_do_wait)
+    wait.add_argument('instance', nargs='+', help='instance UUID(s)')
+    wait.add_argument('--timeout', type=int,
+                      help='time (in seconds) to wait for provisioning.')
 
     return parser.parse_args(args)
 

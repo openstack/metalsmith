@@ -1,8 +1,8 @@
 ---
 
-- name: Provision instances
+- name: Start provisioning of instances
   command: >
-    metalsmith {{ extra_args }} deploy
+    metalsmith {{ extra_args }} deploy --no-wait
     {% for cap_name, cap_value in capabilities.items() %}
       --capability {{ cap_name }}={{ cap_value }}
     {% endfor %}
@@ -42,3 +42,15 @@
   loop_control:
     label: "{{ instance.hostname or instance }}"
     loop_var: instance
+
+- name: Wait for provisioning of instances
+  command: >
+    metalsmith {{ metalsmith_extra_args }} wait
+    {% if metalsmith_provisioning_timeout %}
+    --timeout {{ metalsmith_provisioning_timeout }}
+    {% endif %}
+    {% for instance in metalsmith_instances %}
+      {% if (instance.state | default('present')) == 'present' %}
+        {{ instance.hostname }}
+      {% endif %}
+    {% endfor %}

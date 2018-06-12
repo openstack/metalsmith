@@ -18,6 +18,7 @@
   include_role:
     name: metalsmith_deployment
   vars:
+    metalsmith_extra_args: -vv
     metalsmith_resource_class: baremetal
     metalsmith_instances:
       - hostname: test
@@ -28,7 +29,6 @@
         root_size: 9
         ssh_public_keys:
           - "{{ ssh_key_file }}"
-        extra_args: -vv
 
 - name: Get instance info via CLI
   command: metalsmith --format=json show test

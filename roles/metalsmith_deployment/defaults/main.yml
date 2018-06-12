@@ -6,3 +6,6 @@ metalsmith_nics: []
 metalsmith_root_size:
 metalsmith_ssh_public_keys: []
 metalsmith_user_name: metalsmith
+
+# Wait parameters
+metalsmith_provisioning_timeout:
