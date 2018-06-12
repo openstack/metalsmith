@@ -22,11 +22,13 @@
     metalsmith_instances:
       - hostname: test
         image: "{{ image }}"
+        netboot: "{{ netboot }}"
         nics:
           - "{{ nic }}"
         root_size: 9
         ssh_public_keys:
           - "{{ ssh_key_file }}"
+        extra_args: -vv
 
 - name: Get instance info via CLI
   command: metalsmith --format=json show test

@@ -19,6 +19,8 @@ The following optional variables provide the defaults for Instance_ attributes:
     the default for ``image``.
 ``metalsmith_capabilities``
     the default for ``capabilities``.
+``metalsmith_netboot``
+    the default for ``netboot``
 ``metalsmith_nics``
     the default for ``nics``.
 ``metalsmith_resource_class``
@@ -39,6 +41,9 @@ Each instances has the following attributes:
     UUID or name of the image to use for deployment. Mandatory.
 ``capabilities`` (defaults to ``metalsmith_capabilities``)
     node capabilities to request when scheduling.
+``netboot``
+    whether to boot the deployed instance from network (PXE, iPXE, etc).
+    The default is to use local boot (requires a bootloader on the image).
 ``nics`` (defaults to ``metalsmith_nics``)
     list of virtual NICs to attach to node's physical NICs. Each is an object
     with exactly one attribute:

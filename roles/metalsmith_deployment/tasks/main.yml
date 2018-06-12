@@ -2,7 +2,7 @@
 
 - name: Provision instances
   command: >
-    metalsmith -vv deploy
+    metalsmith {{ extra_args }} deploy
     {% for cap_name, cap_value in capabilities.items() %}
       --capability {{ cap_name }}={{ cap_value }}
     {% endfor %}
@@ -19,13 +19,16 @@
     {% endfor %}
     --image {{ image }}
     --hostname {{ instance.hostname }}
-    {{ extra_args }}
+    {% if netboot %}
+    --netboot
+    {% endif %}
     {{ resource_class }}
   when: state == 'present'
   vars:
     extra_args: "{{ instance.extra_args | default(metalsmith_extra_args) }}"
     image: "{{ instance.image | default(metalsmith_image) }}"
     capabilities: "{{ instance.capabilities | default(metalsmith_capabilities) }}"
+    netboot: "{{ instance.netboot | default(metalsmith_netboot) }}"
     nics: "{{ instance.nics | default(metalsmith_nics) }}"
     resource_class: "{{ instance.resource_class | default(metalsmith_resource_class) }}"
     root_size: "{{ instance.root_size | default(metalsmith_root_size) }}"

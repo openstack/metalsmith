@@ -39,18 +39,18 @@
       vars:
         image: test-centos-partition
         precreate_port: false
-        extra_args: --netboot
+        netboot: true
 
     - name: Test whole-disk image with local boot
       include: exercise.yaml
       vars:
         image: test-centos-wholedisk
         precreate_port: false
-        extra_args: ''
+        netboot: false
 
     - name: Test partition image with local boot and port
       include: exercise.yaml
       vars:
         image: test-centos-partition
         precreate_port: true
-        extra_args: ''
+        netboot: false
