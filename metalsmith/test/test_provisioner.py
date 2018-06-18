@@ -16,6 +16,7 @@
 import mock
 import testtools
 
+from metalsmith import _instance
 from metalsmith import _os_api
 from metalsmith import _provisioner
 from metalsmith import exceptions
@@ -612,7 +613,7 @@ class TestShowInstance(Base):
         inst = self.pr.show_instance('uuid1')
         self.api.get_node.assert_called_once_with('uuid1',
                                                   accept_hostname=True)
-        self.assertIsInstance(inst, _provisioner.Instance)
+        self.assertIsInstance(inst, _instance.Instance)
         self.assertIs(inst.node, self.node)
         self.assertIs(inst.uuid, self.node.uuid)
         self.api.cache_node_list_for_lookup.assert_called_once_with()
@@ -626,104 +627,7 @@ class TestShowInstance(Base):
         ])
         self.assertIsInstance(result, list)
         for inst in result:
-            self.assertIsInstance(inst, _provisioner.Instance)
+            self.assertIsInstance(inst, _instance.Instance)
         self.assertIs(result[0].node, self.node)
         self.assertIs(result[0].uuid, self.node.uuid)
         self.api.cache_node_list_for_lookup.assert_called_once_with()
-
-
-class TestInstanceStates(Base):
-    def setUp(self):
-        super(TestInstanceStates, self).setUp()
-        self.instance = _provisioner.Instance(self.api, self.node)
-
-    def test_state_deploying(self):
-        self.node.provision_state = 'wait call-back'
-        self.assertEqual('deploying', self.instance.state)
-        self.assertFalse(self.instance.is_deployed)
-        self.assertTrue(self.instance.is_healthy)
-
-    def test_state_deploying_when_available(self):
-        self.node.provision_state = 'available'
-        self.assertEqual('deploying', self.instance.state)
-        self.assertFalse(self.instance.is_deployed)
-        self.assertTrue(self.instance.is_healthy)
-
-    def test_state_deploying_maintenance(self):
-        self.node.maintenance = True
-        self.node.provision_state = 'wait call-back'
-        self.assertEqual('deploying', self.instance.state)
-        self.assertFalse(self.instance.is_deployed)
-        self.assertFalse(self.instance.is_healthy)
-
-    def test_state_active(self):
-        self.node.provision_state = 'active'
-        self.assertEqual('active', self.instance.state)
-        self.assertTrue(self.instance.is_deployed)
-        self.assertTrue(self.instance.is_healthy)
-
-    def test_state_maintenance(self):
-        self.node.maintenance = True
-        self.node.provision_state = 'active'
-        self.assertEqual('maintenance', self.instance.state)
-        self.assertTrue(self.instance.is_deployed)
-        self.assertFalse(self.instance.is_healthy)
-
-    def test_state_error(self):
-        self.node.provision_state = 'deploy failed'
-        self.assertEqual('error', self.instance.state)
-        self.assertFalse(self.instance.is_deployed)
-        self.assertFalse(self.instance.is_healthy)
-
-    def test_state_unknown(self):
-        self.node.provision_state = 'enroll'
-        self.assertEqual('unknown', self.instance.state)
-        self.assertFalse(self.instance.is_deployed)
-        self.assertFalse(self.instance.is_healthy)
-
-    @mock.patch.object(_provisioner.Instance, 'ip_addresses', autospec=True)
-    def test_to_dict(self, mock_ips):
-        self.node.provision_state = 'wait call-back'
-        self.node.to_dict.return_value = {'node': 'dict'}
-        self.node.instance_info = {'metalsmith_hostname': 'host'}
-        mock_ips.return_value = {'private': ['1.2.3.4']}
-
-        self.assertEqual({'hostname': 'host',
-                          'ip_addresses': {'private': ['1.2.3.4']},
-                          'node': {'node': 'dict'},
-                          'state': 'deploying',
-                          'uuid': self.node.uuid},
-                         self.instance.to_dict())
-
-
-class TestInstanceIPAddresses(Base):
-    def setUp(self):
-        super(TestInstanceIPAddresses, self).setUp()
-        self.instance = _provisioner.Instance(self.api, self.node)
-        self.api.list_node_attached_ports.return_value = [
-            mock.Mock(spec=['id'], id=i) for i in ('111', '222')
-        ]
-        self.ports = [
-            mock.Mock(spec=['network_id', 'fixed_ips', 'network'],
-                      network_id=n, fixed_ips=[{'ip_address': ip}])
-            for n, ip in [('0', '192.168.0.1'), ('1', '10.0.0.2')]
-        ]
-        self.api.get_port.side_effect = self.ports
-        self.nets = [
-            mock.Mock(spec=['id', 'name'], id=str(i)) for i in range(2)
-        ]
-        for n in self.nets:
-            n.name = 'name-%s' % n.id
-        self.api.get_network.side_effect = self.nets
-
-    def test_ip_addresses(self):
-        ips = self.instance.ip_addresses()
-        self.assertEqual({'name-0': ['192.168.0.1'],
-                          'name-1': ['10.0.0.2']},
-                         ips)
-
-    def test_missing_ip(self):
-        self.ports[0].fixed_ips = {}
-        ips = self.instance.ip_addresses()
-        self.assertEqual({'name-0': [],
-                          'name-1': ['10.0.0.2']}, ips)
