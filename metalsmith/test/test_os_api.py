@@ -17,8 +17,8 @@ import fixtures
 import mock
 import testtools
 
+from metalsmith import _instance
 from metalsmith import _os_api
-from metalsmith import _provisioner
 
 
 class TestInit(testtools.TestCase):
@@ -95,14 +95,14 @@ class TestNodes(testtools.TestCase):
         self.assertIs(res, self.cli.node.get.return_value)
 
     def test_get_node_by_instance(self):
-        inst = _provisioner.Instance(mock.Mock(), mock.Mock())
+        inst = _instance.Instance(mock.Mock(), mock.Mock())
         res = self.api.get_node(inst)
         self.assertIs(res, inst.node)
         self.assertFalse(self.cli.node.get.called)
 
     def test_get_node_by_instance_with_refresh(self):
-        inst = _provisioner.Instance(mock.Mock(),
-                                     mock.Mock(spec=['uuid'], uuid='uuid1'))
+        inst = _instance.Instance(mock.Mock(),
+                                  mock.Mock(spec=['uuid'], uuid='uuid1'))
         res = self.api.get_node(inst, refresh=True)
         self.cli.node.get.assert_called_once_with('uuid1',
                                                   fields=_os_api.NODE_FIELDS)

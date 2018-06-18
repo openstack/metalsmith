@@ -22,6 +22,7 @@ import six
 import testtools
 
 from metalsmith import _cmd
+from metalsmith import _instance
 from metalsmith import _provisioner
 
 
@@ -37,7 +38,7 @@ class TestDeploy(testtools.TestCase):
     @mock.patch.object(_cmd, 'logging', autospec=True)
     def test_args_ok(self, mock_log, mock_os_conf, mock_pr):
         instance = mock_pr.return_value.provision_node.return_value
-        instance.create_autospec(_provisioner.Instance)
+        instance.create_autospec(_instance.Instance)
         instance.node.name = None
         instance.node.uuid = '123'
         instance.state = 'active'
@@ -79,7 +80,7 @@ class TestDeploy(testtools.TestCase):
     @mock.patch.object(_cmd, 'logging', autospec=True)
     def test_args_json_format(self, mock_log, mock_os_conf, mock_pr):
         instance = mock_pr.return_value.provision_node.return_value
-        instance.create_autospec(_provisioner.Instance)
+        instance.create_autospec(_instance.Instance)
         instance.to_dict.return_value = {'node': 'dict'}
 
         args = ['--format', 'json', 'deploy', '--network', 'mynet',
@@ -116,7 +117,7 @@ class TestDeploy(testtools.TestCase):
 
     def test_no_ips(self, mock_os_conf, mock_pr):
         instance = mock_pr.return_value.provision_node.return_value
-        instance.create_autospec(_provisioner.Instance)
+        instance.create_autospec(_instance.Instance)
         instance.is_deployed = True
         instance.ip_addresses.return_value = {}
         instance.node.name = None
@@ -131,7 +132,7 @@ class TestDeploy(testtools.TestCase):
 
     def test_not_deployed_no_ips(self, mock_os_conf, mock_pr):
         instance = mock_pr.return_value.provision_node.return_value
-        instance.create_autospec(_provisioner.Instance)
+        instance.create_autospec(_instance.Instance)
         instance.is_deployed = False
         instance.node.name = None
         instance.node.uuid = '123'
@@ -146,7 +147,7 @@ class TestDeploy(testtools.TestCase):
     @mock.patch.object(_cmd.LOG, 'info', autospec=True)
     def test_no_logs_not_deployed(self, mock_log, mock_os_conf, mock_pr):
         instance = mock_pr.return_value.provision_node.return_value
-        instance.create_autospec(_provisioner.Instance)
+        instance.create_autospec(_instance.Instance)
         instance.is_deployed = False
 
         args = ['deploy', '--network', 'mynet', '--image', 'myimg', 'compute']
@@ -619,7 +620,7 @@ class TestShow(testtools.TestCase):
             'metalsmith._format._print', autospec=True))
         self.mock_print = self.print_fixture.mock
         self.instances = [
-            mock.Mock(spec=_provisioner.Instance, hostname=hostname,
+            mock.Mock(spec=_instance.Instance, hostname=hostname,
                       uuid=hostname[-1], is_deployed=(hostname[-1] == '1'),
                       state=('active' if hostname[-1] == '1' else 'deploying'),
                       **{'ip_addresses.return_value': {'private':
