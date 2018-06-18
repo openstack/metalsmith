@@ -44,7 +44,8 @@ class TestDeploy(testtools.TestCase):
         instance.is_deployed = True
         instance.ip_addresses.return_value = {'private': ['1.2.3.4']}
 
-        args = ['deploy', '--network', 'mynet', '--image', 'myimg', 'compute']
+        args = ['deploy', '--network', 'mynet', '--image', 'myimg',
+                '--resource-class', 'compute']
         _cmd.main(args)
 
         mock_pr.assert_called_once_with(
@@ -83,7 +84,7 @@ class TestDeploy(testtools.TestCase):
         instance.to_dict.return_value = {'node': 'dict'}
 
         args = ['--format', 'json', 'deploy', '--network', 'mynet',
-                '--image', 'myimg', 'compute']
+                '--image', 'myimg', '--resource-class', 'compute']
         fake_io = six.StringIO()
         with mock.patch('sys.stdout', fake_io):
             _cmd.main(args)
@@ -123,7 +124,8 @@ class TestDeploy(testtools.TestCase):
         instance.node.uuid = '123'
         instance.state = 'active'
 
-        args = ['deploy', '--network', 'mynet', '--image', 'myimg', 'compute']
+        args = ['deploy', '--network', 'mynet', '--image', 'myimg',
+                '--resource-class', 'compute']
         _cmd.main(args)
 
         self.mock_print.assert_called_once_with(mock.ANY, node='123',
@@ -137,7 +139,8 @@ class TestDeploy(testtools.TestCase):
         instance.node.uuid = '123'
         instance.state = 'deploying'
 
-        args = ['deploy', '--network', 'mynet', '--image', 'myimg', 'compute']
+        args = ['deploy', '--network', 'mynet', '--image', 'myimg',
+                '--resource-class', 'compute']
         _cmd.main(args)
 
         self.mock_print.assert_called_once_with(mock.ANY, node='123',
@@ -149,7 +152,8 @@ class TestDeploy(testtools.TestCase):
         instance.create_autospec(_provisioner.Instance)
         instance.is_deployed = False
 
-        args = ['deploy', '--network', 'mynet', '--image', 'myimg', 'compute']
+        args = ['deploy', '--network', 'mynet', '--image', 'myimg',
+                '--resource-class', 'compute']
         _cmd.main(args)
 
         self.assertFalse(mock_log.called)
@@ -157,7 +161,7 @@ class TestDeploy(testtools.TestCase):
 
     def test_args_dry_run(self, mock_os_conf, mock_pr):
         args = ['--dry-run', 'deploy', '--network', 'mynet',
-                '--image', 'myimg', 'compute']
+                '--image', 'myimg', '--resource-class', 'compute']
         _cmd.main(args)
         mock_pr.assert_called_once_with(
             cloud_region=mock_os_conf.return_value.get_one.return_value,
@@ -179,7 +183,7 @@ class TestDeploy(testtools.TestCase):
     @mock.patch.object(_cmd, 'logging', autospec=True)
     def test_args_debug(self, mock_log, mock_os_conf, mock_pr):
         args = ['--debug', 'deploy', '--network', 'mynet', '--image', 'myimg',
-                'compute']
+                '--resource-class', 'compute']
         _cmd.main(args)
         mock_pr.assert_called_once_with(
             cloud_region=mock_os_conf.return_value.get_one.return_value,
@@ -209,7 +213,7 @@ class TestDeploy(testtools.TestCase):
     @mock.patch.object(_cmd, 'logging', autospec=True)
     def test_args_quiet(self, mock_log, mock_os_conf, mock_pr):
         args = ['--quiet', 'deploy', '--network', 'mynet', '--image', 'myimg',
-                'compute']
+                '--resource-class', 'compute']
         _cmd.main(args)
         mock_pr.assert_called_once_with(
             cloud_region=mock_os_conf.return_value.get_one.return_value,
@@ -241,7 +245,7 @@ class TestDeploy(testtools.TestCase):
     @mock.patch.object(_cmd, 'logging', autospec=True)
     def test_args_verbose_1(self, mock_log, mock_os_conf, mock_pr):
         args = ['-v', 'deploy', '--network', 'mynet', '--image', 'myimg',
-                'compute']
+                '--resource-class', 'compute']
         _cmd.main(args)
         mock_pr.assert_called_once_with(
             cloud_region=mock_os_conf.return_value.get_one.return_value,
@@ -271,7 +275,7 @@ class TestDeploy(testtools.TestCase):
     @mock.patch.object(_cmd, 'logging', autospec=True)
     def test_args_verbose_2(self, mock_log, mock_os_conf, mock_pr):
         args = ['-vv', 'deploy', '--network', 'mynet', '--image', 'myimg',
-                'compute']
+                '--resource-class', 'compute']
         _cmd.main(args)
         mock_pr.assert_called_once_with(
             cloud_region=mock_os_conf.return_value.get_one.return_value,
@@ -301,7 +305,7 @@ class TestDeploy(testtools.TestCase):
     @mock.patch.object(_cmd, 'logging', autospec=True)
     def test_args_verbose_3(self, mock_log, mock_os_conf, mock_pr):
         args = ['-vvv', 'deploy', '--network', 'mynet', '--image', 'myimg',
-                'compute']
+                '--resource-class', 'compute']
         _cmd.main(args)
         mock_pr.assert_called_once_with(
             cloud_region=mock_os_conf.return_value.get_one.return_value,
@@ -330,7 +334,8 @@ class TestDeploy(testtools.TestCase):
 
     @mock.patch.object(_cmd.LOG, 'critical', autospec=True)
     def test_reservation_failure(self, mock_log, mock_os_conf, mock_pr):
-        args = ['deploy', '--network', 'mynet', '--image', 'myimg', 'compute']
+        args = ['deploy', '--network', 'mynet', '--image', 'myimg',
+                '--resource-class', 'compute']
         failure = RuntimeError('boom')
         mock_pr.return_value.reserve_node.side_effect = failure
         self.assertRaises(SystemExit, _cmd.main, args)
@@ -338,7 +343,8 @@ class TestDeploy(testtools.TestCase):
 
     @mock.patch.object(_cmd.LOG, 'critical', autospec=True)
     def test_deploy_failure(self, mock_log, mock_os_conf, mock_pr):
-        args = ['deploy', '--network', 'mynet', '--image', 'myimg', 'compute']
+        args = ['deploy', '--network', 'mynet', '--image', 'myimg',
+                '--resource-class', 'compute']
         failure = RuntimeError('boom')
         mock_pr.return_value.provision_node.side_effect = failure
         self.assertRaises(SystemExit, _cmd.main, args)
@@ -346,14 +352,15 @@ class TestDeploy(testtools.TestCase):
 
     @mock.patch.object(_cmd.LOG, 'critical', autospec=True)
     def test_invalid_hostname(self, mock_log, mock_os_conf, mock_pr):
-        args = ['deploy', '--hostname', 'n_1', '--image', 'myimg', 'compute']
+        args = ['deploy', '--hostname', 'n_1', '--image', 'myimg',
+                '--resource-class', 'compute']
         self.assertRaises(SystemExit, _cmd.main, args)
         self.assertTrue(mock_log.called)
 
     def test_args_capabilities(self, mock_os_conf, mock_pr):
         args = ['deploy', '--network', 'mynet', '--image', 'myimg',
                 '--capability', 'foo=bar', '--capability', 'answer=42',
-                'compute']
+                '--resource-class', 'compute']
         _cmd.main(args)
         mock_pr.assert_called_once_with(
             cloud_region=mock_os_conf.return_value.get_one.return_value,
@@ -378,7 +385,7 @@ class TestDeploy(testtools.TestCase):
             fp.flush()
 
             args = ['deploy', '--network', 'mynet', '--image', 'myimg',
-                    '--ssh-public-key', fp.name, 'compute']
+                    '--ssh-public-key', fp.name, '--resource-class', 'compute']
             _cmd.main(args)
             mock_pr.assert_called_once_with(
                 cloud_region=mock_os_conf.return_value.get_one.return_value,
@@ -398,7 +405,8 @@ class TestDeploy(testtools.TestCase):
                 wait=1800)
 
     def test_args_port(self, mock_os_conf, mock_pr):
-        args = ['deploy', '--port', 'myport', '--image', 'myimg', 'compute']
+        args = ['deploy', '--port', 'myport', '--image', 'myimg',
+                '--resource-class', 'compute']
         _cmd.main(args)
         mock_pr.assert_called_once_with(
             cloud_region=mock_os_conf.return_value.get_one.return_value,
@@ -418,7 +426,7 @@ class TestDeploy(testtools.TestCase):
             wait=1800)
 
     def test_args_no_nics(self, mock_os_conf, mock_pr):
-        args = ['deploy', '--image', 'myimg', 'compute']
+        args = ['deploy', '--image', 'myimg', '--resource-class', 'compute']
         _cmd.main(args)
         mock_pr.assert_called_once_with(
             cloud_region=mock_os_conf.return_value.get_one.return_value,
@@ -440,7 +448,7 @@ class TestDeploy(testtools.TestCase):
     def test_args_networks_and_ports(self, mock_os_conf, mock_pr):
         args = ['deploy', '--network', 'net1', '--port', 'port1',
                 '--port', 'port2', '--network', 'net2',
-                '--image', 'myimg', 'compute']
+                '--image', 'myimg', '--resource-class', 'compute']
         _cmd.main(args)
         mock_pr.assert_called_once_with(
             cloud_region=mock_os_conf.return_value.get_one.return_value,
@@ -461,7 +469,8 @@ class TestDeploy(testtools.TestCase):
             wait=1800)
 
     def test_args_hostname(self, mock_os_conf, mock_pr):
-        args = ['deploy', '--hostname', 'host', '--image', 'myimg', 'compute']
+        args = ['deploy', '--hostname', 'host', '--image', 'myimg',
+                '--resource-class', 'compute']
         _cmd.main(args)
         mock_pr.assert_called_once_with(
             cloud_region=mock_os_conf.return_value.get_one.return_value,
@@ -482,7 +491,7 @@ class TestDeploy(testtools.TestCase):
 
     def test_args_custom_wait(self, mock_os_conf, mock_pr):
         args = ['deploy', '--network', 'mynet', '--image', 'myimg',
-                '--wait', '3600', 'compute']
+                '--wait', '3600', '--resource-class', 'compute']
         _cmd.main(args)
         mock_pr.assert_called_once_with(
             cloud_region=mock_os_conf.return_value.get_one.return_value,
@@ -503,7 +512,7 @@ class TestDeploy(testtools.TestCase):
 
     def test_args_no_wait(self, mock_os_conf, mock_pr):
         args = ['deploy', '--network', 'mynet', '--image', 'myimg',
-                '--no-wait', 'compute']
+                '--no-wait', '--resource-class', 'compute']
         _cmd.main(args)
         mock_pr.assert_called_once_with(
             cloud_region=mock_os_conf.return_value.get_one.return_value,

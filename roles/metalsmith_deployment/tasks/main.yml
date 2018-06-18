@@ -22,7 +22,7 @@
     {% if netboot %}
     --netboot
     {% endif %}
-    {{ resource_class }}
+    --resource-class {{ resource_class }}
   when: state == 'present'
   vars:
     extra_args: "{{ instance.extra_args | default(metalsmith_extra_args) }}"
