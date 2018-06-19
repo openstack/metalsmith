@@ -488,7 +488,7 @@ class TestProvisionNode(Base):
         self.api.release_node.assert_called_with(self.node)
 
     def test_invalid_nic_type(self):
-        self.assertRaisesRegex(ValueError, 'Unexpected NIC type foo',
+        self.assertRaisesRegex(ValueError, r'Unexpected NIC type\(s\) foo',
                                self.pr.provision_node,
                                self.node, 'image', [{'foo': 'bar'}])
         self.assertFalse(self.api.create_port.called)

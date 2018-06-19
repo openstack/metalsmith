@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import collections
 import logging
 import random
 import sys
@@ -258,15 +257,10 @@ class Provisioner(object):
 
     def _get_nics(self, nics):
         """Validate and get the NICs."""
+        _utils.validate_nics(nics)
+
         result = []
-        if not isinstance(nics, collections.Sequence):
-            raise TypeError("NICs must be a list of dicts")
-
         for nic in nics:
-            if not isinstance(nic, collections.Mapping) or len(nic) != 1:
-                raise TypeError("Each NIC must be a dict with one item, "
-                                "got %s" % nic)
-
             nic_type, nic_id = next(iter(nic.items()))
             if nic_type == 'network':
                 try:
@@ -277,7 +271,7 @@ class Provisioner(object):
                         {'net': nic_id, 'error': exc})
                 else:
                     result.append((nic_type, network))
-            elif nic_type == 'port':
+            else:
                 try:
                     port = self._api.get_port(nic_id)
                 except Exception as exc:
@@ -286,9 +280,6 @@ class Provisioner(object):
                         {'port': nic_id, 'error': exc})
                 else:
                     result.append((nic_type, port))
-            else:
-                raise ValueError("Unexpected NIC type %s, supported values: "
-                                 "'port', 'network'" % nic_type)
 
         return result
 
