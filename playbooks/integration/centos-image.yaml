@@ -64,6 +64,37 @@
   environment:
     LIBGUESTFS_DEBUG: 1
 
+- name: Extract /etc/fstab and /etc/selinux/config
+  command: >
+      tar -f {{ temp_dir.path }}/root.tar
+      -C {{ temp_dir.path }} --extract {{ item }}
+  with_items:
+    - ./etc/fstab
+    - ./etc/selinux/config
+
+- name: Remove /etc/fstab and /etc/selinux/config from the archive
+  command: tar -f {{ temp_dir.path }}/root.tar --delete {{ item }}
+  with_items:
+    - ./etc/fstab
+    - ./etc/selinux/config
+
+- name: Edit /etc/fstab to replace UUID with LABEL
+  command: sed -i 's/UUID=[^ ]* /\/dev\/vda2 /' {{ temp_dir.path}}/etc/fstab
+
+- name: Rewrite /etc/selinux/config to disable selinux
+  copy:
+    dest: "{{ temp_dir.path }}/etc/selinux/config"
+    content: "SELINUX=disabled"
+
+- name: Add edited /etc/fstab and /etc/selinux/config back
+  command: >
+      tar -f {{ temp_dir.path }}/root.tar
+      -C {{ temp_dir.path }}
+      --append {{ item }} --owner root --group root
+  with_items:
+    - ./etc/fstab
+    - ./etc/selinux/config
+
 - name: Pack the root file system into a partition image
   command: virt-make-fs {{ temp_dir.path }}/root.tar {{ centos_partition_file }}
   environment:

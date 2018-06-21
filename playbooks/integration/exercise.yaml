@@ -42,6 +42,20 @@
 - name: Show active node information
   command: openstack baremetal node show {{ instance.node.uuid }}
 
+- name: Get IP address
+  set_fact:
+    instance_ip: "{{ instance.ip_addresses.values() | list | first | first }}"
+  failed_when: not instance_ip
+
+- name: SSH into the instance
+  command: >
+    ssh -v -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10
+    metalsmith@{{ instance_ip }} "cat /etc/hostname"
+  register: ssh_result
+  until: ssh_result | succeeded
+  retries: 30
+  delay: 20
+
 - name: Undeploy a node
   command: metalsmith --debug undeploy --wait 900 test
 
