@@ -58,7 +58,7 @@ class TestDeploy(testtools.TestCase):
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
             mock_pr.return_value.reserve_node.return_value,
-            image_ref='myimg',
+            image='myimg',
             nics=[{'network': 'mynet'}],
             root_disk_size=None,
             ssh_keys=[],
@@ -101,7 +101,7 @@ class TestDeploy(testtools.TestCase):
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
             mock_pr.return_value.reserve_node.return_value,
-            image_ref='myimg',
+            image='myimg',
             nics=[{'network': 'mynet'}],
             root_disk_size=None,
             ssh_keys=[],
@@ -173,7 +173,7 @@ class TestDeploy(testtools.TestCase):
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
             mock_pr.return_value.reserve_node.return_value,
-            image_ref='myimg',
+            image='myimg',
             nics=[{'network': 'mynet'}],
             root_disk_size=None,
             ssh_keys=[],
@@ -195,7 +195,7 @@ class TestDeploy(testtools.TestCase):
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
             mock_pr.return_value.reserve_node.return_value,
-            image_ref='myimg',
+            image='myimg',
             nics=[{'network': 'mynet'}],
             root_disk_size=None,
             ssh_keys=[],
@@ -225,7 +225,7 @@ class TestDeploy(testtools.TestCase):
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
             mock_pr.return_value.reserve_node.return_value,
-            image_ref='myimg',
+            image='myimg',
             nics=[{'network': 'mynet'}],
             root_disk_size=None,
             ssh_keys=[],
@@ -257,7 +257,7 @@ class TestDeploy(testtools.TestCase):
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
             mock_pr.return_value.reserve_node.return_value,
-            image_ref='myimg',
+            image='myimg',
             nics=[{'network': 'mynet'}],
             root_disk_size=None,
             ssh_keys=[],
@@ -287,7 +287,7 @@ class TestDeploy(testtools.TestCase):
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
             mock_pr.return_value.reserve_node.return_value,
-            image_ref='myimg',
+            image='myimg',
             nics=[{'network': 'mynet'}],
             root_disk_size=None,
             ssh_keys=[],
@@ -317,7 +317,7 @@ class TestDeploy(testtools.TestCase):
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
             mock_pr.return_value.reserve_node.return_value,
-            image_ref='myimg',
+            image='myimg',
             nics=[{'network': 'mynet'}],
             root_disk_size=None,
             ssh_keys=[],
@@ -372,7 +372,7 @@ class TestDeploy(testtools.TestCase):
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
             mock_pr.return_value.reserve_node.return_value,
-            image_ref='myimg',
+            image='myimg',
             nics=[{'network': 'mynet'}],
             root_disk_size=None,
             ssh_keys=[],
@@ -397,7 +397,7 @@ class TestDeploy(testtools.TestCase):
             )
             mock_pr.return_value.provision_node.assert_called_once_with(
                 mock_pr.return_value.reserve_node.return_value,
-                image_ref='myimg',
+                image='myimg',
                 nics=[{'network': 'mynet'}],
                 root_disk_size=None,
                 ssh_keys=['foo'],
@@ -418,7 +418,7 @@ class TestDeploy(testtools.TestCase):
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
             mock_pr.return_value.reserve_node.return_value,
-            image_ref='myimg',
+            image='myimg',
             nics=[{'port': 'myport'}],
             root_disk_size=None,
             ssh_keys=[],
@@ -438,7 +438,7 @@ class TestDeploy(testtools.TestCase):
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
             mock_pr.return_value.reserve_node.return_value,
-            image_ref='myimg',
+            image='myimg',
             nics=None,
             root_disk_size=None,
             ssh_keys=[],
@@ -460,7 +460,7 @@ class TestDeploy(testtools.TestCase):
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
             mock_pr.return_value.reserve_node.return_value,
-            image_ref='myimg',
+            image='myimg',
             nics=[{'network': 'net1'}, {'port': 'port1'},
                   {'port': 'port2'}, {'network': 'net2'}],
             root_disk_size=None,
@@ -482,7 +482,7 @@ class TestDeploy(testtools.TestCase):
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
             mock_pr.return_value.reserve_node.return_value,
-            image_ref='myimg',
+            image='myimg',
             nics=None,
             root_disk_size=None,
             ssh_keys=[],
@@ -503,7 +503,7 @@ class TestDeploy(testtools.TestCase):
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
             mock_pr.return_value.reserve_node.return_value,
-            image_ref='myimg',
+            image='myimg',
             nics=[{'network': 'mynet'}],
             root_disk_size=None,
             ssh_keys=[],
@@ -524,7 +524,7 @@ class TestDeploy(testtools.TestCase):
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
             mock_pr.return_value.reserve_node.return_value,
-            image_ref='myimg',
+            image='myimg',
             nics=[{'network': 'mynet'}],
             root_disk_size=None,
             ssh_keys=[],

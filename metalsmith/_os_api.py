@@ -123,7 +123,7 @@ class API(object):
             # Fetch the complete node record
             return self.get_node(existing[0].uuid, accept_hostname=False)
 
-    def get_image_info(self, image_id):
+    def get_image(self, image_id):
         return self.connection.image.find_image(image_id,
                                                 ignore_missing=False)
 

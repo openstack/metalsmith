@@ -53,7 +53,7 @@ def _do_deploy(api, args, formatter):
 
     node = api.reserve_node(args.resource_class, capabilities=capabilities)
     instance = api.provision_node(node,
-                                  image_ref=args.image,
+                                  image=args.image,
                                   nics=args.nics,
                                   root_disk_size=args.root_disk_size,
                                   ssh_keys=ssh_keys,

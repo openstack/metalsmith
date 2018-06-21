@@ -143,7 +143,7 @@ class Provisioner(object):
 
         return hostname
 
-    def provision_node(self, node, image_ref, nics=None, root_disk_size=None,
+    def provision_node(self, node, image, nics=None, root_disk_size=None,
                        ssh_keys=None, hostname=None, netboot=False, wait=None):
         """Provision the node with the given image.
 
@@ -158,7 +158,7 @@ class Provisioner(object):
         :param node: Node object, UUID or name. Will be reserved first, if
             not reserved already. Must be in the "available" state with
             maintenance mode off.
-        :param image_ref: Image name or UUID to provision.
+        :param image: Image name or UUID to provision.
         :param nics: List of virtual NICs to attach to physical ports.
             Each item is a dict with a key describing the type of the NIC:
             either a port (``{"port": "<port name or ID>"}``) or a network
@@ -186,11 +186,11 @@ class Provisioner(object):
             root_disk_size = _utils.get_root_disk(root_disk_size, node)
 
             try:
-                image = self._api.get_image_info(image_ref)
+                image = self._api.get_image(image)
             except Exception as exc:
                 raise exceptions.InvalidImage(
                     'Cannot find image %(image)s: %(error)s' %
-                    {'image': image_ref, 'error': exc})
+                    {'image': image, 'error': exc})
 
             LOG.debug('Image: %s', image)
 

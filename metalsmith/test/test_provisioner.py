@@ -97,7 +97,7 @@ class TestProvisionNode(Base):
 
     def setUp(self):
         super(TestProvisionNode, self).setUp()
-        image = self.api.get_image_info.return_value
+        image = self.api.get_image.return_value
         self.node.instance_uuid = self.node.uuid
         self.updates = {
             '/instance_info/ramdisk': image.ramdisk_id,
@@ -224,7 +224,7 @@ class TestProvisionNode(Base):
         self.assertFalse(self.api.delete_port.called)
 
     def test_whole_disk(self):
-        image = self.api.get_image_info.return_value
+        image = self.api.get_image.return_value
         image.kernel_id = None
         image.ramdisk_id = None
         del self.updates['/instance_info/kernel']
@@ -408,7 +408,7 @@ class TestProvisionNode(Base):
         self.assertFalse(self.api.detach_port_from_node.called)
 
     def test_missing_image(self):
-        self.api.get_image_info.side_effect = RuntimeError('Not found')
+        self.api.get_image.side_effect = RuntimeError('Not found')
         self.assertRaisesRegex(exceptions.InvalidImage, 'Not found',
                                self.pr.provision_node,
                                self.node, 'image', [{'network': 'network'}])
