@@ -19,6 +19,7 @@ import sys
 
 import six
 
+from metalsmith import _config
 from metalsmith import _instance
 from metalsmith import _os_api
 from metalsmith import _scheduler
@@ -144,7 +145,7 @@ class Provisioner(object):
         return hostname
 
     def provision_node(self, node, image, nics=None, root_disk_size=None,
-                       ssh_keys=None, hostname=None, netboot=False, wait=None):
+                       config=None, hostname=None, netboot=False, wait=None):
         """Provision the node with the given image.
 
         Example::
@@ -165,8 +166,8 @@ class Provisioner(object):
             to create a port on (``{"network": "<network name or ID>"}``).
         :param root_disk_size: The size of the root partition. By default
             the value of the local_gb property is used.
-        :param ssh_keys: list of public parts of the SSH keys to upload
-            to the nodes.
+        :param config: :py:class:`metalsmith.InstanceConfig` object with
+            the configuration to pass to the instance.
         :param hostname: Hostname to assign to the instance. Defaults to the
             node's name or UUID.
         :param netboot: Whether to use networking boot for final instances.
@@ -177,6 +178,8 @@ class Provisioner(object):
             is already finished.
         :raises: :py:class:`metalsmith.exceptions.Error`
         """
+        if config is None:
+            config = _config.InstanceConfig()
         node = self._check_node_for_deploy(node)
         created_ports = []
         attached_ports = []
@@ -225,7 +228,7 @@ class Provisioner(object):
 
             LOG.debug('Generating a configdrive for node %s',
                       _utils.log_node(node))
-            with _utils.config_drive_dir(node, ssh_keys, hostname) as cd:
+            with config.build_configdrive_directory(node, hostname) as cd:
                 self._api.node_action(node, 'active',
                                       configdrive=cd)
         except Exception:

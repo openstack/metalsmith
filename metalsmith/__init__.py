@@ -13,7 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from metalsmith._config import InstanceConfig
 from metalsmith._instance import Instance
 from metalsmith._provisioner import Provisioner
 
-__all__ = ['Instance', 'Provisioner']
+__all__ = ['Instance', 'InstanceConfig', 'Provisioner']

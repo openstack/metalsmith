@@ -19,6 +19,7 @@ import sys
 
 from openstack import config as os_config
 
+from metalsmith import _config
 from metalsmith import _format
 from metalsmith import _provisioner
 from metalsmith import _utils
@@ -51,12 +52,14 @@ def _do_deploy(api, args, formatter):
     if args.hostname and not _utils.is_hostname_safe(args.hostname):
         raise RuntimeError("%s cannot be used as a hostname" % args.hostname)
 
+    config = _config.InstanceConfig(ssh_keys=ssh_keys)
+
     node = api.reserve_node(args.resource_class, capabilities=capabilities)
     instance = api.provision_node(node,
                                   image=args.image,
                                   nics=args.nics,
                                   root_disk_size=args.root_disk_size,
-                                  ssh_keys=ssh_keys,
+                                  config=config,
                                   hostname=args.hostname,
                                   netboot=args.netboot,
                                   wait=wait)

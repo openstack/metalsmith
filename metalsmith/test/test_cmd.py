@@ -61,10 +61,12 @@ class TestDeploy(testtools.TestCase):
             image='myimg',
             nics=[{'network': 'mynet'}],
             root_disk_size=None,
-            ssh_keys=[],
+            config=mock.ANY,
             hostname=None,
             netboot=False,
             wait=1800)
+        config = mock_pr.return_value.provision_node.call_args[1]['config']
+        self.assertEqual([], config.ssh_keys)
         mock_log.basicConfig.assert_called_once_with(level=mock_log.WARNING,
                                                      format=mock.ANY)
         self.assertEqual(
@@ -104,7 +106,7 @@ class TestDeploy(testtools.TestCase):
             image='myimg',
             nics=[{'network': 'mynet'}],
             root_disk_size=None,
-            ssh_keys=[],
+            config=mock.ANY,
             hostname=None,
             netboot=False,
             wait=1800)
@@ -176,7 +178,7 @@ class TestDeploy(testtools.TestCase):
             image='myimg',
             nics=[{'network': 'mynet'}],
             root_disk_size=None,
-            ssh_keys=[],
+            config=mock.ANY,
             hostname=None,
             netboot=False,
             wait=1800)
@@ -198,7 +200,7 @@ class TestDeploy(testtools.TestCase):
             image='myimg',
             nics=[{'network': 'mynet'}],
             root_disk_size=None,
-            ssh_keys=[],
+            config=mock.ANY,
             hostname=None,
             netboot=False,
             wait=1800)
@@ -228,7 +230,7 @@ class TestDeploy(testtools.TestCase):
             image='myimg',
             nics=[{'network': 'mynet'}],
             root_disk_size=None,
-            ssh_keys=[],
+            config=mock.ANY,
             hostname=None,
             netboot=False,
             wait=1800)
@@ -260,7 +262,7 @@ class TestDeploy(testtools.TestCase):
             image='myimg',
             nics=[{'network': 'mynet'}],
             root_disk_size=None,
-            ssh_keys=[],
+            config=mock.ANY,
             hostname=None,
             netboot=False,
             wait=1800)
@@ -290,7 +292,7 @@ class TestDeploy(testtools.TestCase):
             image='myimg',
             nics=[{'network': 'mynet'}],
             root_disk_size=None,
-            ssh_keys=[],
+            config=mock.ANY,
             hostname=None,
             netboot=False,
             wait=1800)
@@ -320,7 +322,7 @@ class TestDeploy(testtools.TestCase):
             image='myimg',
             nics=[{'network': 'mynet'}],
             root_disk_size=None,
-            ssh_keys=[],
+            config=mock.ANY,
             hostname=None,
             netboot=False,
             wait=1800)
@@ -375,7 +377,7 @@ class TestDeploy(testtools.TestCase):
             image='myimg',
             nics=[{'network': 'mynet'}],
             root_disk_size=None,
-            ssh_keys=[],
+            config=mock.ANY,
             hostname=None,
             netboot=False,
             wait=1800)
@@ -400,10 +402,12 @@ class TestDeploy(testtools.TestCase):
                 image='myimg',
                 nics=[{'network': 'mynet'}],
                 root_disk_size=None,
-                ssh_keys=['foo'],
+                config=mock.ANY,
                 hostname=None,
                 netboot=False,
                 wait=1800)
+        config = mock_pr.return_value.provision_node.call_args[1]['config']
+        self.assertEqual(['foo'], config.ssh_keys)
 
     def test_args_port(self, mock_os_conf, mock_pr):
         args = ['deploy', '--port', 'myport', '--image', 'myimg',
@@ -421,7 +425,7 @@ class TestDeploy(testtools.TestCase):
             image='myimg',
             nics=[{'port': 'myport'}],
             root_disk_size=None,
-            ssh_keys=[],
+            config=mock.ANY,
             hostname=None,
             netboot=False,
             wait=1800)
@@ -441,7 +445,7 @@ class TestDeploy(testtools.TestCase):
             image='myimg',
             nics=None,
             root_disk_size=None,
-            ssh_keys=[],
+            config=mock.ANY,
             hostname=None,
             netboot=False,
             wait=1800)
@@ -464,7 +468,7 @@ class TestDeploy(testtools.TestCase):
             nics=[{'network': 'net1'}, {'port': 'port1'},
                   {'port': 'port2'}, {'network': 'net2'}],
             root_disk_size=None,
-            ssh_keys=[],
+            config=mock.ANY,
             hostname=None,
             netboot=False,
             wait=1800)
@@ -485,7 +489,7 @@ class TestDeploy(testtools.TestCase):
             image='myimg',
             nics=None,
             root_disk_size=None,
-            ssh_keys=[],
+            config=mock.ANY,
             hostname='host',
             netboot=False,
             wait=1800)
@@ -506,7 +510,7 @@ class TestDeploy(testtools.TestCase):
             image='myimg',
             nics=[{'network': 'mynet'}],
             root_disk_size=None,
-            ssh_keys=[],
+            config=mock.ANY,
             hostname=None,
             netboot=False,
             wait=3600)
@@ -527,7 +531,7 @@ class TestDeploy(testtools.TestCase):
             image='myimg',
             nics=[{'network': 'mynet'}],
             root_disk_size=None,
-            ssh_keys=[],
+            config=mock.ANY,
             hostname=None,
             netboot=False,
             wait=None)

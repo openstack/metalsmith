@@ -14,12 +14,7 @@
 # limitations under the License.
 
 import collections
-import contextlib
-import json
-import os
 import re
-import shutil
-import tempfile
 
 import six
 
@@ -45,31 +40,6 @@ def get_capabilities(node):
     if not isinstance(caps, dict):
         caps = dict(x.split(':', 1) for x in caps.split(',') if x)
     return caps
-
-
-@contextlib.contextmanager
-def config_drive_dir(node, ssh_keys, hostname):
-    d = tempfile.mkdtemp()
-    try:
-        metadata = {'public_keys': ssh_keys,
-                    'uuid': node.uuid,
-                    'name': node.name,
-                    'hostname': hostname,
-                    'launch_index': 0,
-                    'availability_zone': '',
-                    'files': [],
-                    'meta': {}}
-        for version in ('2012-08-10', 'latest'):
-            subdir = os.path.join(d, 'openstack', version)
-            if not os.path.exists(subdir):
-                os.makedirs(subdir)
-
-            with open(os.path.join(subdir, 'meta_data.json'), 'w') as fp:
-                json.dump(metadata, fp)
-
-        yield d
-    finally:
-        shutil.rmtree(d)
 
 
 def get_root_disk(root_disk_size, node):
