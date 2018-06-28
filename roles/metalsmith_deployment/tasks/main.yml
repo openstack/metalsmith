@@ -22,6 +22,9 @@
     {% if netboot %}
     --netboot
     {% endif %}
+    {% if user_name %}
+    --user-name {{ user_name }}
+    {% endif %}
     --resource-class {{ resource_class }}
   when: state == 'present'
   vars:
@@ -34,6 +37,7 @@
     root_size: "{{ instance.root_size | default(metalsmith_root_size) }}"
     ssh_public_keys: "{{ instance.ssh_public_keys | default(metalsmith_ssh_public_keys) }}"
     state: "{{ instance.state | default('present') }}"
+    user_name: "{{ instance.user_name | default(metalsmith_user_name) }}"
   with_items: "{{ metalsmith_instances }}"
   loop_control:
     label: "{{ instance.hostname or instance }}"

@@ -22,6 +22,7 @@ import six
 import testtools
 
 from metalsmith import _cmd
+from metalsmith import _config
 from metalsmith import _instance
 from metalsmith import _provisioner
 
@@ -408,6 +409,58 @@ class TestDeploy(testtools.TestCase):
                 wait=1800)
         config = mock_pr.return_value.provision_node.call_args[1]['config']
         self.assertEqual(['foo'], config.ssh_keys)
+
+    @mock.patch.object(_config.InstanceConfig, 'add_user', autospec=True)
+    def test_args_user_name(self, mock_add_user, mock_os_conf, mock_pr):
+        args = ['deploy', '--network', 'mynet', '--image', 'myimg',
+                '--user-name', 'banana', '--resource-class', 'compute']
+        _cmd.main(args)
+        mock_pr.assert_called_once_with(
+            cloud_region=mock_os_conf.return_value.get_one.return_value,
+            dry_run=False)
+        mock_pr.return_value.reserve_node.assert_called_once_with(
+            resource_class='compute',
+            capabilities={}
+        )
+        mock_pr.return_value.provision_node.assert_called_once_with(
+            mock_pr.return_value.reserve_node.return_value,
+            image='myimg',
+            nics=[{'network': 'mynet'}],
+            root_disk_size=None,
+            config=mock.ANY,
+            hostname=None,
+            netboot=False,
+            wait=1800)
+        config = mock_pr.return_value.provision_node.call_args[1]['config']
+        self.assertEqual([], config.ssh_keys)
+        mock_add_user.assert_called_once_with(config, 'banana', sudo=False)
+
+    @mock.patch.object(_config.InstanceConfig, 'add_user', autospec=True)
+    def test_args_user_name_with_sudo(self, mock_add_user, mock_os_conf,
+                                      mock_pr):
+        args = ['deploy', '--network', 'mynet', '--image', 'myimg',
+                '--user-name', 'banana', '--resource-class', 'compute',
+                '--passwordless-sudo']
+        _cmd.main(args)
+        mock_pr.assert_called_once_with(
+            cloud_region=mock_os_conf.return_value.get_one.return_value,
+            dry_run=False)
+        mock_pr.return_value.reserve_node.assert_called_once_with(
+            resource_class='compute',
+            capabilities={}
+        )
+        mock_pr.return_value.provision_node.assert_called_once_with(
+            mock_pr.return_value.reserve_node.return_value,
+            image='myimg',
+            nics=[{'network': 'mynet'}],
+            root_disk_size=None,
+            config=mock.ANY,
+            hostname=None,
+            netboot=False,
+            wait=1800)
+        config = mock_pr.return_value.provision_node.call_args[1]['config']
+        self.assertEqual([], config.ssh_keys)
+        mock_add_user.assert_called_once_with(config, 'banana', sudo=True)
 
     def test_args_port(self, mock_os_conf, mock_pr):
         args = ['deploy', '--port', 'myport', '--image', 'myimg',

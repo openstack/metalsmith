@@ -53,6 +53,8 @@ def _do_deploy(api, args, formatter):
         raise RuntimeError("%s cannot be used as a hostname" % args.hostname)
 
     config = _config.InstanceConfig(ssh_keys=ssh_keys)
+    if args.user_name:
+        config.add_user(args.user_name, sudo=args.passwordless_sudo)
 
     node = api.reserve_node(args.resource_class, capabilities=capabilities)
     instance = api.provision_node(node,
@@ -124,6 +126,9 @@ def _parse_args(args, config):
                         'Node\'s name or UUID')
     deploy.add_argument('--resource-class', required=True,
                         help='node resource class to deploy')
+    deploy.add_argument('--user-name', help='Name of the admin user to create')
+    deploy.add_argument('--passwordless-sudo', action='store_true',
+                        help='allow password-less sudo for the user')
 
     undeploy = subparsers.add_parser('undeploy')
     undeploy.set_defaults(func=_do_undeploy)
