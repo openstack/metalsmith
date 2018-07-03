@@ -119,6 +119,7 @@ class TestProvisionNode(Base):
             fixtures.MockPatchObject(_provisioner.Provisioner,
                                      '_wait_for_state', autospec=True))
         self.wait_mock = self.wait_fixture.mock
+        self.wait_mock.side_effect = lambda self, nodes, *a, **kw: nodes
 
     def test_ok(self):
         inst = self.pr.provision_node(self.node, 'image',
@@ -696,7 +697,8 @@ class TestWaitForState(Base):
         self.api.get_node.side_effect = nodes
 
         result = self.pr.wait_for_provisioning(['uuid1'])
-        self.assertEqual(nodes[-1:], result)
+        self.assertEqual(nodes[-1:], [inst.node for inst in result])
+        self.assertIsInstance(result[0], _instance.Instance)
 
         mock_sleep.assert_called_with(15)
         self.assertEqual(3, mock_sleep.call_count)
@@ -711,7 +713,9 @@ class TestWaitForState(Base):
         self.api.get_node.side_effect = nodes
 
         result = self.pr.wait_for_provisioning(['uuid1', 'uuid2'])
-        self.assertEqual(nodes[-2:], result)
+        self.assertEqual(nodes[-2:], [inst.node for inst in result])
+        for inst in result:
+            self.assertIsInstance(inst, _instance.Instance)
 
         mock_sleep.assert_called_with(15)
         self.assertEqual(2, mock_sleep.call_count)
@@ -758,7 +762,8 @@ class TestWaitForState(Base):
         self.api.get_node.side_effect = nodes
 
         result = self.pr.wait_for_provisioning(['uuid1'], delay=1)
-        self.assertEqual(nodes[-1:], result)
+        self.assertEqual(nodes[-1:], [inst.node for inst in result])
+        self.assertIsInstance(result[0], _instance.Instance)
 
         mock_sleep.assert_called_with(1)
         self.assertEqual(3, mock_sleep.call_count)

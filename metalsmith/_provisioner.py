@@ -251,13 +251,14 @@ class Provisioner(object):
             LOG.debug('Waiting for node %(node)s to reach state active '
                       'with timeout %(timeout)s',
                       {'node': _utils.log_node(node), 'timeout': wait})
-            node = self.wait_for_provisioning([node], timeout=wait)[0]
+            instance = self.wait_for_provisioning([node], timeout=wait)[0]
             LOG.info('Deploy succeeded on node %s', _utils.log_node(node))
         else:
             # Update the node to return it's latest state
             node = self._api.get_node(node, refresh=True)
+            instance = _instance.Instance(self._api, node)
 
-        return _instance.Instance(self._api, node)
+        return instance
 
     def _get_nics(self, nics):
         """Validate and get the NICs."""
@@ -358,12 +359,14 @@ class Provisioner(object):
             to finish provisioning. If ``None`` (the default), wait forever
             (more precisely, until the operation times out on server side).
         :param delay: Delay (in seconds) between two provision state checks.
-        :return: List of updated nodes if all succeeded.
+        :return: List of updated :py:class:`metalsmith.Instance` objects if
+            all succeeded.
         :raises: :py:class:`metalsmith.exceptions.DeploymentFailure`
             if the deployment failed or timed out for any nodes.
         """
-        return self._wait_for_state(nodes, 'active',
-                                    timeout=timeout, delay=delay)
+        nodes = self._wait_for_state(nodes, 'active',
+                                     timeout=timeout, delay=delay)
+        return [_instance.Instance(self._api, node) for node in nodes]
 
     def _wait_for_state(self, nodes, state, timeout, delay=15):
         if timeout is not None and timeout <= 0:
