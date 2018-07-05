@@ -80,6 +80,10 @@ class Provisioner(object):
                                              capabilities)
         node = _scheduler.schedule_node(nodes, filters, reserver,
                                         dry_run=self._dry_run)
+        if capabilities:
+            node = self._api.update_node(
+                node, {'/instance_info/capabilities': capabilities})
+
         LOG.debug('Reserved node: %s', node)
         return node
 
@@ -146,7 +150,8 @@ class Provisioner(object):
         return hostname
 
     def provision_node(self, node, image, nics=None, root_disk_size=None,
-                       config=None, hostname=None, netboot=False, wait=None):
+                       config=None, hostname=None, netboot=False,
+                       capabilities=None, wait=None):
         """Provision the node with the given image.
 
         Example::
@@ -172,6 +177,10 @@ class Provisioner(object):
         :param hostname: Hostname to assign to the instance. Defaults to the
             node's name or UUID.
         :param netboot: Whether to use networking boot for final instances.
+        :param capabilities: Requested capabilities of the node. If present,
+            overwrites the capabilities set by :meth:`reserve_node`.
+            Note that the capabilities are not checked against the ones
+            provided by the node - use :meth:`reserve_node` for that.
         :param wait: How many seconds to wait for the deployment to finish,
             None to return immediately.
         :return: :py:class:`metalsmith.Instance` object with the current
@@ -200,6 +209,9 @@ class Provisioner(object):
 
             nics = self._get_nics(nics or [])
 
+            if capabilities is None:
+                capabilities = node.instance_info.get('capabilities') or {}
+
             if self._dry_run:
                 LOG.warning('Dry run, not provisioning node %s',
                             _utils.log_node(node))
@@ -208,11 +220,11 @@ class Provisioner(object):
             self._create_and_attach_ports(node, nics,
                                           created_ports, attached_ports)
 
-            target_caps = {'boot_option': 'netboot' if netboot else 'local'}
+            capabilities['boot_option'] = 'netboot' if netboot else 'local'
 
             updates = {'/instance_info/image_source': image.id,
                        '/instance_info/root_gb': root_disk_size,
-                       '/instance_info/capabilities': target_caps,
+                       '/instance_info/capabilities': capabilities,
                        '/extra/%s' % _CREATED_PORTS: created_ports,
                        '/extra/%s' % _ATTACHED_PORTS: attached_ports,
                        '/instance_info/%s' % _os_api.HOSTNAME_FIELD: hostname}

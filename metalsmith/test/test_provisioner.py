@@ -33,6 +33,7 @@ class Base(testtools.TestCase):
         self.node = mock.Mock(spec=_os_api.NODE_FIELDS + ['to_dict'],
                               uuid='000', instance_uuid=None,
                               properties={'local_gb': 100},
+                              instance_info={},
                               maintenance=False, extra={})
         self.node.name = 'control-0'
 
@@ -72,6 +73,7 @@ class TestReserveNode(Base):
         node = self.pr.reserve_node('control')
 
         self.assertIn(node, nodes)
+        self.assertFalse(self.api.update_node.called)
 
     def test_with_capabilities(self):
         nodes = [
@@ -86,6 +88,8 @@ class TestReserveNode(Base):
         node = self.pr.reserve_node('control', {'answer': '42'})
 
         self.assertIs(node, expected)
+        self.api.update_node.assert_called_once_with(
+            node, {'/instance_info/capabilities': {'answer': '42'}})
 
 
 CLEAN_UP = {
@@ -281,6 +285,77 @@ class TestProvisionNode(Base):
 
         self.pr.provision_node(self.node, 'image', [{'network': 'network'}],
                                root_disk_size=50)
+
+        self.api.create_port.assert_called_once_with(
+            network_id=self.api.get_network.return_value.id)
+        self.api.attach_port_to_node.assert_called_once_with(
+            self.node.uuid, self.api.create_port.return_value.id)
+        self.api.update_node.assert_called_once_with(self.node, self.updates)
+        self.api.validate_node.assert_called_once_with(self.node,
+                                                       validate_deploy=True)
+        self.api.node_action.assert_called_once_with(self.node, 'active',
+                                                     configdrive=mock.ANY)
+        self.assertFalse(self.wait_mock.called)
+        self.assertFalse(self.api.release_node.called)
+        self.assertFalse(self.api.delete_port.called)
+
+    def test_with_capabilities(self):
+        inst = self.pr.provision_node(self.node, 'image',
+                                      [{'network': 'network'}],
+                                      capabilities={'answer': '42'})
+        self.updates['/instance_info/capabilities'] = {'boot_option': 'local',
+                                                       'answer': '42'}
+
+        self.assertEqual(inst.uuid, self.node.uuid)
+        self.assertEqual(inst.node, self.node)
+
+        self.api.create_port.assert_called_once_with(
+            network_id=self.api.get_network.return_value.id)
+        self.api.attach_port_to_node.assert_called_once_with(
+            self.node.uuid, self.api.create_port.return_value.id)
+        self.api.update_node.assert_called_once_with(self.node, self.updates)
+        self.api.validate_node.assert_called_once_with(self.node,
+                                                       validate_deploy=True)
+        self.api.node_action.assert_called_once_with(self.node, 'active',
+                                                     configdrive=mock.ANY)
+        self.assertFalse(self.wait_mock.called)
+        self.assertFalse(self.api.release_node.called)
+        self.assertFalse(self.api.delete_port.called)
+
+    def test_with_existing_capabilities(self):
+        self.node.instance_info['capabilities'] = {'answer': '42'}
+        inst = self.pr.provision_node(self.node, 'image',
+                                      [{'network': 'network'}])
+        self.updates['/instance_info/capabilities'] = {'boot_option': 'local',
+                                                       'answer': '42'}
+
+        self.assertEqual(inst.uuid, self.node.uuid)
+        self.assertEqual(inst.node, self.node)
+
+        self.api.create_port.assert_called_once_with(
+            network_id=self.api.get_network.return_value.id)
+        self.api.attach_port_to_node.assert_called_once_with(
+            self.node.uuid, self.api.create_port.return_value.id)
+        self.api.update_node.assert_called_once_with(self.node, self.updates)
+        self.api.validate_node.assert_called_once_with(self.node,
+                                                       validate_deploy=True)
+        self.api.node_action.assert_called_once_with(self.node, 'active',
+                                                     configdrive=mock.ANY)
+        self.assertFalse(self.wait_mock.called)
+        self.assertFalse(self.api.release_node.called)
+        self.assertFalse(self.api.delete_port.called)
+
+    def test_override_existing_capabilities(self):
+        self.node.instance_info['capabilities'] = {'answer': '1',
+                                                   'cat': 'meow'}
+        inst = self.pr.provision_node(self.node, 'image',
+                                      [{'network': 'network'}],
+                                      capabilities={'answer': '42'})
+        self.updates['/instance_info/capabilities'] = {'boot_option': 'local',
+                                                       'answer': '42'}
+
+        self.assertEqual(inst.uuid, self.node.uuid)
+        self.assertEqual(inst.node, self.node)
 
         self.api.create_port.assert_called_once_with(
             network_id=self.api.get_network.return_value.id)
