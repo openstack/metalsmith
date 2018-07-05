@@ -31,6 +31,8 @@ The following optional variables provide the defaults for Instance_ attributes:
     the default for ``root_size``.
 ``metalsmith_ssh_public_keys``
     the default for ``ssh_public_keys``.
+``metalsmith_user_name``
+    the default for ``user_name``, the default value is ``metalsmith``.
 
 Instance
 --------
@@ -80,6 +82,11 @@ Each instances has the following attributes:
 
 ``ssh_public_keys`` (defaults to ``metalsmith_ssh_public_keys``)
     list of file names with SSH public keys to put to the node.
+``user_name`` (defaults to ``metalsmith_user_name``)
+    name of the user to create on the instance via configdrive. Requires
+    cloud-init_ on the image.
+
+.. _cloud-init: https://cloudinit.readthedocs.io/
 
 Example
 -------
@@ -108,6 +115,12 @@ Example
                 root_size: 100
                 capabilities:
                   boot_mode: uefi
+                user_name: heat-admin
+              - hostname: compute-2
+                resource_class: compute
+                candidates:
+                  - e63650f2-4e7d-40b2-8932-f5b0e54698c7
+                  - f19d00dd-60e1-46c8-b83c-782b4d291d9e
               - hostname: control-0
                 resource_class: control
                 capabilities:
