@@ -55,7 +55,8 @@ class TestDeploy(testtools.TestCase):
             dry_run=False)
         mock_pr.return_value.reserve_node.assert_called_once_with(
             resource_class='compute',
-            capabilities={}
+            capabilities={},
+            candidates=None
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
             mock_pr.return_value.reserve_node.return_value,
@@ -100,7 +101,8 @@ class TestDeploy(testtools.TestCase):
             dry_run=False)
         mock_pr.return_value.reserve_node.assert_called_once_with(
             resource_class='compute',
-            capabilities={}
+            capabilities={},
+            candidates=None
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
             mock_pr.return_value.reserve_node.return_value,
@@ -172,7 +174,8 @@ class TestDeploy(testtools.TestCase):
             dry_run=True)
         mock_pr.return_value.reserve_node.assert_called_once_with(
             resource_class='compute',
-            capabilities={}
+            capabilities={},
+            candidates=None
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
             mock_pr.return_value.reserve_node.return_value,
@@ -194,7 +197,8 @@ class TestDeploy(testtools.TestCase):
             dry_run=False)
         mock_pr.return_value.reserve_node.assert_called_once_with(
             resource_class='compute',
-            capabilities={}
+            capabilities={},
+            candidates=None
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
             mock_pr.return_value.reserve_node.return_value,
@@ -224,7 +228,8 @@ class TestDeploy(testtools.TestCase):
             dry_run=False)
         mock_pr.return_value.reserve_node.assert_called_once_with(
             resource_class='compute',
-            capabilities={}
+            capabilities={},
+            candidates=None
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
             mock_pr.return_value.reserve_node.return_value,
@@ -256,7 +261,8 @@ class TestDeploy(testtools.TestCase):
             dry_run=False)
         mock_pr.return_value.reserve_node.assert_called_once_with(
             resource_class='compute',
-            capabilities={}
+            capabilities={},
+            candidates=None
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
             mock_pr.return_value.reserve_node.return_value,
@@ -286,7 +292,8 @@ class TestDeploy(testtools.TestCase):
             dry_run=False)
         mock_pr.return_value.reserve_node.assert_called_once_with(
             resource_class='compute',
-            capabilities={}
+            capabilities={},
+            candidates=None
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
             mock_pr.return_value.reserve_node.return_value,
@@ -316,7 +323,8 @@ class TestDeploy(testtools.TestCase):
             dry_run=False)
         mock_pr.return_value.reserve_node.assert_called_once_with(
             resource_class='compute',
-            capabilities={}
+            capabilities={},
+            candidates=None
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
             mock_pr.return_value.reserve_node.return_value,
@@ -371,7 +379,8 @@ class TestDeploy(testtools.TestCase):
             dry_run=False)
         mock_pr.return_value.reserve_node.assert_called_once_with(
             resource_class='compute',
-            capabilities={'foo': 'bar', 'answer': '42'}
+            capabilities={'foo': 'bar', 'answer': '42'},
+            candidates=None
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
             mock_pr.return_value.reserve_node.return_value,
@@ -396,7 +405,8 @@ class TestDeploy(testtools.TestCase):
                 dry_run=False)
             mock_pr.return_value.reserve_node.assert_called_once_with(
                 resource_class='compute',
-                capabilities={}
+                capabilities={},
+                candidates=None
             )
             mock_pr.return_value.provision_node.assert_called_once_with(
                 mock_pr.return_value.reserve_node.return_value,
@@ -420,7 +430,8 @@ class TestDeploy(testtools.TestCase):
             dry_run=False)
         mock_pr.return_value.reserve_node.assert_called_once_with(
             resource_class='compute',
-            capabilities={}
+            capabilities={},
+            candidates=None
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
             mock_pr.return_value.reserve_node.return_value,
@@ -447,7 +458,8 @@ class TestDeploy(testtools.TestCase):
             dry_run=False)
         mock_pr.return_value.reserve_node.assert_called_once_with(
             resource_class='compute',
-            capabilities={}
+            capabilities={},
+            candidates=None
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
             mock_pr.return_value.reserve_node.return_value,
@@ -471,7 +483,8 @@ class TestDeploy(testtools.TestCase):
             dry_run=False)
         mock_pr.return_value.reserve_node.assert_called_once_with(
             resource_class='compute',
-            capabilities={}
+            capabilities={},
+            candidates=None
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
             mock_pr.return_value.reserve_node.return_value,
@@ -491,7 +504,8 @@ class TestDeploy(testtools.TestCase):
             dry_run=False)
         mock_pr.return_value.reserve_node.assert_called_once_with(
             resource_class='compute',
-            capabilities={}
+            capabilities={},
+            candidates=None
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
             mock_pr.return_value.reserve_node.return_value,
@@ -513,7 +527,8 @@ class TestDeploy(testtools.TestCase):
             dry_run=False)
         mock_pr.return_value.reserve_node.assert_called_once_with(
             resource_class='compute',
-            capabilities={}
+            capabilities={},
+            candidates=None
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
             mock_pr.return_value.reserve_node.return_value,
@@ -535,7 +550,30 @@ class TestDeploy(testtools.TestCase):
             dry_run=False)
         mock_pr.return_value.reserve_node.assert_called_once_with(
             resource_class='compute',
-            capabilities={}
+            capabilities={},
+            candidates=None
+        )
+        mock_pr.return_value.provision_node.assert_called_once_with(
+            mock_pr.return_value.reserve_node.return_value,
+            image='myimg',
+            nics=None,
+            root_disk_size=None,
+            config=mock.ANY,
+            hostname='host',
+            netboot=False,
+            wait=1800)
+
+    def test_args_with_candidates(self, mock_os_conf, mock_pr):
+        args = ['deploy', '--hostname', 'host', '--image', 'myimg',
+                '--candidate', 'node1', '--candidate', 'node2']
+        _cmd.main(args)
+        mock_pr.assert_called_once_with(
+            cloud_region=mock_os_conf.return_value.get_one.return_value,
+            dry_run=False)
+        mock_pr.return_value.reserve_node.assert_called_once_with(
+            resource_class=None,
+            capabilities={},
+            candidates=['node1', 'node2']
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
             mock_pr.return_value.reserve_node.return_value,
@@ -556,7 +594,8 @@ class TestDeploy(testtools.TestCase):
             dry_run=False)
         mock_pr.return_value.reserve_node.assert_called_once_with(
             resource_class='compute',
-            capabilities={}
+            capabilities={},
+            candidates=None
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
             mock_pr.return_value.reserve_node.return_value,
@@ -577,7 +616,8 @@ class TestDeploy(testtools.TestCase):
             dry_run=False)
         mock_pr.return_value.reserve_node.assert_called_once_with(
             resource_class='compute',
-            capabilities={}
+            capabilities={},
+            candidates=None
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
             mock_pr.return_value.reserve_node.return_value,

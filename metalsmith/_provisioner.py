@@ -49,7 +49,8 @@ class Provisioner(object):
         self._api = _os_api.API(session=session, cloud_region=cloud_region)
         self._dry_run = dry_run
 
-    def reserve_node(self, resource_class, capabilities=None):
+    def reserve_node(self, resource_class=None, capabilities=None,
+                     candidates=None):
         """Find and reserve a suitable node.
 
         Example::
@@ -57,20 +58,32 @@ class Provisioner(object):
          node = provisioner.reserve_node("compute",
                                          capabilities={"boot_mode": "uefi"})
 
-        :param resource_class: Requested resource class.
+        :param resource_class: Requested resource class. If ``None``, a node
+            with any resource class can be chosen.
         :param capabilities: Requested capabilities as a dict.
+        :param candidates: List of nodes (UUIDs, names or `Node` objects)
+            to pick from. The filters (for resource class and capabilities)
+            are still applied to the provided list. The order in which
+            the nodes are considered is retained.
         :return: reserved `Node` object.
         :raises: :py:class:`metalsmith.exceptions.ReservationFailed`
         """
         capabilities = capabilities or {}
 
-        nodes = self._api.list_nodes(resource_class=resource_class)
+        if candidates:
+            nodes = [self._api.get_node(node) for node in candidates]
+            if resource_class:
+                nodes = [node for node in nodes
+                         if node.resource_class == resource_class]
+        else:
+            nodes = self._api.list_nodes(resource_class=resource_class)
+            # Ensure parallel executions don't try nodes in the same sequence
+            random.shuffle(nodes)
+
         if not nodes:
             raise exceptions.ResourceClassNotFound(resource_class,
                                                    capabilities)
 
-        # Make sure parallel executions don't try nodes in the same sequence
-        random.shuffle(nodes)
         LOG.debug('Ironic nodes: %s', nodes)
 
         filters = [_scheduler.CapabilitiesFilter(resource_class, capabilities),

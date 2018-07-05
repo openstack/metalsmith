@@ -75,6 +75,19 @@ class TestReserveNode(Base):
         self.assertIn(node, nodes)
         self.assertFalse(self.api.update_node.called)
 
+    def test_any_resource_class(self):
+        nodes = [
+            mock.Mock(spec=['uuid', 'name', 'properties'],
+                      properties={'local_gb': 100})
+        ]
+        self.api.list_nodes.return_value = nodes
+        self.api.reserve_node.side_effect = lambda n, instance_uuid: n
+
+        node = self.pr.reserve_node()
+
+        self.assertIn(node, nodes)
+        self.assertFalse(self.api.update_node.called)
+
     def test_with_capabilities(self):
         nodes = [
             mock.Mock(spec=['uuid', 'name', 'properties'],
@@ -90,6 +103,54 @@ class TestReserveNode(Base):
         self.assertIs(node, expected)
         self.api.update_node.assert_called_once_with(
             node, {'/instance_info/capabilities': {'answer': '42'}})
+
+    def test_provided_node(self):
+        nodes = [
+            mock.Mock(spec=['uuid', 'name', 'properties'],
+                      properties={'local_gb': 100})
+        ]
+        self.api.reserve_node.side_effect = lambda n, instance_uuid: n
+
+        node = self.pr.reserve_node(candidates=nodes)
+
+        self.assertEqual(node, nodes[0])
+        self.assertFalse(self.api.list_nodes.called)
+        self.assertFalse(self.api.update_node.called)
+
+    def test_provided_nodes(self):
+        nodes = [
+            mock.Mock(spec=['uuid', 'name', 'properties'],
+                      properties={'local_gb': 100}),
+            mock.Mock(spec=['uuid', 'name', 'properties'],
+                      properties={'local_gb': 100})
+        ]
+        self.api.reserve_node.side_effect = lambda n, instance_uuid: n
+
+        node = self.pr.reserve_node(candidates=nodes)
+
+        self.assertEqual(node, nodes[0])
+        self.assertFalse(self.api.list_nodes.called)
+        self.assertFalse(self.api.update_node.called)
+
+    def test_nodes_filtered(self):
+        nodes = [
+            mock.Mock(spec=['uuid', 'name', 'properties', 'resource_class'],
+                      properties={'local_gb': 100}, resource_class='banana'),
+            mock.Mock(spec=['uuid', 'name', 'properties', 'resource_class'],
+                      properties={'local_gb': 100}, resource_class='compute'),
+            mock.Mock(spec=['uuid', 'name', 'properties', 'resource_class'],
+                      properties={'local_gb': 100, 'capabilities': 'cat:meow'},
+                      resource_class='compute'),
+        ]
+        self.api.reserve_node.side_effect = lambda n, instance_uuid: n
+
+        node = self.pr.reserve_node('compute', candidates=nodes,
+                                    capabilities={'cat': 'meow'})
+
+        self.assertEqual(node, nodes[2])
+        self.assertFalse(self.api.list_nodes.called)
+        self.api.update_node.assert_called_once_with(
+            node, {'/instance_info/capabilities': {'cat': 'meow'}})
 
 
 CLEAN_UP = {

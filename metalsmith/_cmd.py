@@ -56,7 +56,8 @@ def _do_deploy(api, args, formatter):
     if args.user_name:
         config.add_user(args.user_name, sudo=args.passwordless_sudo)
 
-    node = api.reserve_node(args.resource_class, capabilities=capabilities)
+    node = api.reserve_node(args.resource_class, capabilities=capabilities,
+                            candidates=args.candidate)
     instance = api.provision_node(node,
                                   image=args.image,
                                   nics=args.nics,
@@ -130,8 +131,11 @@ def _parse_args(args, config):
     deploy.add_argument('--ssh-public-key', help='SSH public key to load')
     deploy.add_argument('--hostname', help='Host name to use, defaults to '
                         'Node\'s name or UUID')
-    deploy.add_argument('--resource-class', required=True,
+    deploy.add_argument('--resource-class',
                         help='node resource class to deploy')
+    deploy.add_argument('--candidate', action='append',
+                        help='A candidate node to use for scheduling (can be '
+                        'specified several times)')
     deploy.add_argument('--user-name', help='Name of the admin user to create')
     deploy.add_argument('--passwordless-sudo', action='store_true',
                         help='allow password-less sudo for the user')

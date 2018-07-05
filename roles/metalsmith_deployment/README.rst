@@ -13,12 +13,14 @@ The only required variable is:
 
 The following optional variables provide the defaults for Instance_ attributes:
 
+``metalsmith_candidates``
+    the default for ``candidates``.
+``metalsmith_capabilities``
+    the default for ``capabilities``.
 ``metalsmith_extra_args``
     the default for ``extra_args``.
 ``metalsmith_image``
     the default for ``image``.
-``metalsmith_capabilities``
-    the default for ``capabilities``.
 ``metalsmith_netboot``
     the default for ``netboot``
 ``metalsmith_nics``
@@ -35,12 +37,14 @@ Instance
 
 Each instances has the following attributes:
 
+``candidates`` (defaults to ``metalsmith_candidates``)
+    list of nodes (UUIDs or names) to be considered for deployment.
+``capabilities`` (defaults to ``metalsmith_capabilities``)
+    node capabilities to request when scheduling.
 ``extra_args`` (defaults to ``metalsmith_extra_args``)
     additional arguments to pass to the ``metalsmith`` CLI on all calls.
 ``image`` (defaults to ``metalsmith_image``)
     UUID or name of the image to use for deployment. Mandatory.
-``capabilities`` (defaults to ``metalsmith_capabilities``)
-    node capabilities to request when scheduling.
 ``netboot``
     whether to boot the deployed instance from network (PXE, iPXE, etc).
     The default is to use local boot (requires a bootloader on the image).
@@ -66,7 +70,7 @@ Each instances has the following attributes:
               - port: b2254316-7867-4615-9fb7-911b3f38ca2a
 
 ``resource_class`` (defaults to ``metalsmith_resource_class``)
-    requested node's resource class. Mandatory.
+    requested node's resource class.
 ``root_size`` (defaults to ``metalsmith_root_size``)
     size of the root partition, if partition images are used.
 
