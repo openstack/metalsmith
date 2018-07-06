@@ -1,0 +1,18 @@
+- name: Find Cirros UEC image
+  shell: |
+    openstack image list -f value -c ID -c Name \
+      | awk '/cirros.*uec/ { print $1; exit 0; }'
+  register: cirros_uec_image_result
+  failed_when: cirros_uec_image_result.stdout == ""
+
+- name: Find Cirros disk image
+  shell: |
+    openstack image list -f value -c ID -c Name \
+      | awk '/cirros.*disk/ { print $1; exit 0; }'
+  register: cirros_disk_image_result
+  failed_when: cirros_disk_image_result.stdout == ""
+
+- name: Set image facts
+  set_fact:
+    metalsmith_whole_disk_image: "{{ cirros_disk_image_result.stdout }}"
+    metalsmith_partition_image: "{{ cirros_uec_image_result.stdout }}"

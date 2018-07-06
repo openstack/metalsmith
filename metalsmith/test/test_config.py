@@ -29,7 +29,7 @@ class TestInstanceConfig(testtools.TestCase):
         self.node.name = 'node name'
 
     def _check(self, config, expected_metadata, expected_userdata=None):
-        expected_m = {'public_keys': [],
+        expected_m = {'public_keys': {},
                       'uuid': '1234',
                       'name': 'node name',
                       'hostname': 'example.com',
@@ -64,7 +64,11 @@ class TestInstanceConfig(testtools.TestCase):
 
     def test_ssh_keys(self):
         config = _config.InstanceConfig(ssh_keys=['abc', 'def'])
-        self._check(config, {'public_keys': ['abc', 'def']})
+        self._check(config, {'public_keys': {'0': 'abc', '1': 'def'}})
+
+    def test_ssh_keys_as_dict(self):
+        config = _config.InstanceConfig(ssh_keys={'default': 'abc'})
+        self._check(config, {'public_keys': {'default': 'abc'}})
 
     def test_add_user(self):
         config = _config.InstanceConfig()
@@ -98,7 +102,7 @@ class TestInstanceConfig(testtools.TestCase):
     def test_add_user_with_keys(self):
         config = _config.InstanceConfig(ssh_keys=['abc', 'def'])
         config.add_user('admin')
-        self._check(config, {'public_keys': ['abc', 'def']},
+        self._check(config, {'public_keys': {'0': 'abc', '1': 'def'}},
                     {'users': [{'name': 'admin',
                                 'groups': ['wheel'],
                                 'ssh_authorized_keys': ['abc', 'def']}]})

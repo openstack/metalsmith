@@ -64,9 +64,15 @@ class InstanceConfig(object):
         :param hostname: instance hostname.
         :return: a context manager yielding a directory with files
         """
+        # NOTE(dtantsur): CirrOS does not understand lists
+        if isinstance(self.ssh_keys, list):
+            ssh_keys = {str(i): v for i, v in enumerate(self.ssh_keys)}
+        else:
+            ssh_keys = self.ssh_keys
+
         d = tempfile.mkdtemp()
         try:
-            metadata = {'public_keys': self.ssh_keys,
+            metadata = {'public_keys': ssh_keys,
                         'uuid': node.uuid,
                         'name': node.name,
                         'hostname': hostname,

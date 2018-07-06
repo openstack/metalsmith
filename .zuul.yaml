@@ -5,6 +5,7 @@
     parent: devstack-minimal
     pre-run: playbooks/integration/pre.yaml
     post-run: playbooks/integration/post.yaml
+    run: playbooks/integration/run.yaml
     irrelevant-files:
       - ^.*\.rst$
       - ^doc/.*$
@@ -93,25 +94,37 @@
         IRONIC_VM_SPECS_CPU: 2
         IRONIC_VM_SPECS_DISK: 10
         IRONIC_VM_SPECS_RAM: 1024
-
-- job:
-    name: metalsmith-integration-glance
-    description: |
-        Integration job using Glance as image source.
-    parent: metalsmith-integration-base
-    pre-run: playbooks/integration/centos-image.yaml
-    run: playbooks/integration/run.yaml
-    vars:
+      centos_glance_initramds_image: test-centos-initramfs
+      centos_glance_kernel_image: test-centos-kernel
+      centos_glance_root_image: test-centos-partition
+      centos_glance_whole_disk_image: test-centos-wholedisk
+      centos_image_file: ~/CentOS-7-x86_64-GenericCloud.qcow2
       centos_image_name: CentOS-7-x86_64-GenericCloud
       centos_image_url: https://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud.qcow2.xz
-      centos_image_file: ~/CentOS-7-x86_64-GenericCloud.qcow2
-      centos_kernel_file: ~/CentOS-7-x86_64-GenericCloud.kernel
       centos_initramfs_file: ~/CentOS-7-x86_64-GenericCloud.initramfs
+      centos_kernel_file: ~/CentOS-7-x86_64-GenericCloud.kernel
       centos_partition_file: ~/CentOS-7-x86_64-GenericCloud-root.qcow2
-      centos_glance_whole_disk_image: test-centos-wholedisk
-      centos_glance_kernel_image: test-centos-kernel
-      centos_glance_initramds_image: test-centos-initramfs
-      centos_glance_root_image: test-centos-partition
+      metalsmith_root_size: 9
+
+- job:
+    name: metalsmith-integration-glance-localboot-centos7
+    description: |
+        Integration job using Glance as image source and CentOS7 with local boot.
+    parent: metalsmith-integration-base
+    pre-run: playbooks/integration/centos-image.yaml
+    vars:
+      configure_instance_user: metalsmith
+      metalsmith_netboot: false
+      metalsmith_partition_image: test-centos-partition
+      metalsmith_whole_disk_image: test-centos-wholedisk
+
+- job:
+    name: metalsmith-integration-glance-netboot-cirros
+    description: |
+        Integration job using Glance as image source and CirrOS with netboot.
+    parent: metalsmith-integration-base
+    vars:
+      metalsmith_netboot: true
 
 - project:
     templates:
@@ -121,8 +134,10 @@
     check:
       jobs:
         - openstack-tox-lower-constraints
-        - metalsmith-integration-glance
+        - metalsmith-integration-glance-localboot-centos7
+        - metalsmith-integration-glance-netboot-cirros
     gate:
       jobs:
         - openstack-tox-lower-constraints
-        - metalsmith-integration-glance
+        - metalsmith-integration-glance-localboot-centos7
+        - metalsmith-integration-glance-netboot-cirros

@@ -5,23 +5,17 @@
   tasks:
     - include: ssh-key.yaml
 
-    - name: Test partition image with netboot
-      include: exercise.yaml
-      vars:
-        image: "{{ centos_glance_root_image }}"
-        precreate_port: false
-        netboot: true
+    - include: cirros-image.yaml
+      when: metalsmith_whole_disk_image is not defined
 
-    - name: Test whole-disk image with local boot
+    - name: Test a partition image
       include: exercise.yaml
       vars:
-        image: "{{ centos_glance_whole_disk_image }}"
+        image: "{{ metalsmith_partition_image }}"
         precreate_port: false
-        netboot: false
 
-    - name: Test partition image with local boot and port
+    - name: Test a whole-disk image
       include: exercise.yaml
       vars:
-        image: "{{ centos_glance_root_image }}"
-        precreate_port: true
-        netboot: false
+        image: "{{ metalsmith_whole_disk_image }}"
+        precreate_port: false
