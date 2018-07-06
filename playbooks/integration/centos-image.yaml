@@ -38,8 +38,6 @@
       command: >
           virt-get-kernel -a {{ centos_image_file }}
           -o {{ temp_dir.path }} --unversioned-names
-      environment:
-        LIBGUESTFS_DEBUG: 1
 
     - name: Copy the kernel and ramdisk to the target directory
       copy:
@@ -54,8 +52,6 @@
 
     - name: Extract the root file system
       command: virt-tar-out -a {{ centos_image_file }} / {{ temp_dir.path }}/root.tar
-      environment:
-        LIBGUESTFS_DEBUG: 1
 
     - name: Extract /etc/fstab and /etc/selinux/config
       command: >
@@ -90,8 +86,6 @@
 
     - name: Pack the root file system into a partition image
       command: virt-make-fs {{ temp_dir.path }}/root.tar {{ centos_partition_file }}
-      environment:
-        LIBGUESTFS_DEBUG: 1
 
     - name: Print filesystems from the image
       command: virt-filesystems -a {{ centos_partition_file }} -l --extra --block-devices
