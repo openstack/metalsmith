@@ -99,7 +99,19 @@
     description: |
         Integration job using Glance as image source.
     parent: metalsmith-integration-base
+    pre-run: playbooks/integration/centos-image.yaml
     run: playbooks/integration/run.yaml
+    vars:
+      centos_image_name: CentOS-7-x86_64-GenericCloud
+      centos_image_url: https://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud.qcow2.xz
+      centos_image_file: ~/CentOS-7-x86_64-GenericCloud.qcow2
+      centos_kernel_file: ~/CentOS-7-x86_64-GenericCloud.kernel
+      centos_initramfs_file: ~/CentOS-7-x86_64-GenericCloud.initramfs
+      centos_partition_file: ~/CentOS-7-x86_64-GenericCloud-root.qcow2
+      centos_glance_whole_disk_image: test-centos-wholedisk
+      centos_glance_kernel_image: test-centos-kernel
+      centos_glance_initramds_image: test-centos-initramfs
+      centos_glance_root_image: test-centos-partition
 
 - project:
     templates:

@@ -5,52 +5,23 @@
   tasks:
     - include: ssh-key.yaml
 
-    - include: centos-image.yaml
-
-    - name: Upload the CentOS whole-disk image
-      command: >
-          openstack image create --disk-format qcow2
-          --public --file {{ centos_image_file }} test-centos-wholedisk
-
-    - name: Upload the CentOS kernel image
-      command: >
-          openstack image create --disk-format aki --container-format aki \
-          --public --file {{ centos_kernel_file }} -f value -c id test-centos-kernel
-      register: centos_kernel_id
-      failed_when: centos_kernel_id.stdout == ""
-
-    - name: Upload the CentOS initramfs image
-      command: >
-          openstack image create --disk-format ari --container-format ari \
-          --public --file {{ centos_initramfs_file }} -f value -c id test-centos-initramfs
-      register: centos_initramfs_id
-      failed_when: centos_initramfs_id.stdout == ""
-
-    - name: Upload the CentOS partition image
-      command: >
-          openstack image create --disk-format qcow2
-          --public --file {{ centos_partition_file }}
-          --property kernel_id={{ centos_kernel_id.stdout }}
-          --property ramdisk_id={{ centos_initramfs_id.stdout }}
-          test-centos-partition
-
     - name: Test partition image with netboot
       include: exercise.yaml
       vars:
-        image: test-centos-partition
+        image: "{{ centos_glance_root_image }}"
         precreate_port: false
         netboot: true
 
     - name: Test whole-disk image with local boot
       include: exercise.yaml
       vars:
-        image: test-centos-wholedisk
+        image: "{{ centos_glance_whole_disk_image }}"
         precreate_port: false
         netboot: false
 
     - name: Test partition image with local boot and port
       include: exercise.yaml
       vars:
-        image: test-centos-partition
+        image: "{{ centos_glance_root_image }}"
         precreate_port: true
         netboot: false
