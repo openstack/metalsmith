@@ -116,6 +116,8 @@
 - project:
     templates:
       - docs-on-readthedocs
+    vars:
+      rtd_webhook_id: '37378'
     check:
       jobs:
         - openstack-tox-lower-constraints
