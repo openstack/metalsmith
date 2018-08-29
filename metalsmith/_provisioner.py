@@ -506,3 +506,14 @@ class Provisioner(object):
                     self._api.get_node(inst, accept_hostname=True))
                 for inst in instances
             ]
+
+    def list_instances(self):
+        """List instances deployed by metalsmith.
+
+        :return: list of :py:class:`metalsmith.Instance` objects.
+        """
+        nodes = self._api.list_nodes(provision_state=None, associated=True)
+        instances = [i for i in
+                     (_instance.Instance(self._api, node) for node in nodes)
+                     if i._is_deployed_by_metalsmith]
+        return instances

@@ -751,6 +751,18 @@ class TestShowWait(testtools.TestCase):
         mock_pr.return_value.show_instances.assert_called_once_with(
             ['uuid1', 'hostname2'])
 
+    def test_list(self, mock_os_conf, mock_pr):
+        mock_pr.return_value.list_instances.return_value = self.instances
+        args = ['list']
+        _cmd.main(args)
+
+        self.mock_print.assert_has_calls([
+            mock.call(mock.ANY, node='name-1 (UUID 1)', state='active'),
+            mock.call(mock.ANY, ips='private=1.2.3.4'),
+            mock.call(mock.ANY, node='name-2 (UUID 2)', state='deploying'),
+        ])
+        mock_pr.return_value.list_instances.assert_called_once_with()
+
     def test_wait(self, mock_os_conf, mock_pr):
         mock_pr.return_value.wait_for_provisioning.return_value = (
             self.instances)
@@ -789,6 +801,18 @@ class TestShowWait(testtools.TestCase):
             self.assertEqual(json.loads(fake_io.getvalue()),
                              {'hostname1': {'1': 'name-1'},
                               'hostname2': {'2': 'name-2'}})
+
+    def test_list_json(self, mock_os_conf, mock_pr):
+        mock_pr.return_value.list_instances.return_value = self.instances
+        args = ['--format', 'json', 'list']
+
+        fake_io = six.StringIO()
+        with mock.patch('sys.stdout', fake_io):
+            _cmd.main(args)
+            self.assertEqual(json.loads(fake_io.getvalue()),
+                             {'hostname1': {'1': 'name-1'},
+                              'hostname2': {'2': 'name-2'}})
+        mock_pr.return_value.list_instances.assert_called_once_with()
 
     def test_wait_json(self, mock_os_conf, mock_pr):
         mock_pr.return_value.wait_for_provisioning.return_value = (

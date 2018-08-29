@@ -16,14 +16,15 @@
 from metalsmith import _os_api
 
 
+_PROGRESS_STATES = frozenset(['deploying', 'wait call-back',
+                              'deploy complete'])
 # NOTE(dtantsur): include available since there is a period of time between
 # claiming the instance and starting the actual provisioning via ironic.
-_DEPLOYING_STATES = frozenset(['available', 'deploying', 'wait call-back',
-                               'deploy complete'])
+_DEPLOYING_STATES = _PROGRESS_STATES | {'available'}
 _ACTIVE_STATES = frozenset(['active'])
-_ERROR_STATE = frozenset(['error', 'deploy failed'])
+_ERROR_STATES = frozenset(['error', 'deploy failed'])
 
-_HEALTHY_STATES = frozenset(['deploying', 'active'])
+_HEALTHY_STATES = _PROGRESS_STATES | _ACTIVE_STATES
 
 
 class Instance(object):
@@ -57,6 +58,10 @@ class Instance(object):
     def is_deployed(self):
         """Whether the node is deployed."""
         return self._node.provision_state in _ACTIVE_STATES
+
+    @property
+    def _is_deployed_by_metalsmith(self):
+        return _os_api.HOSTNAME_FIELD in self._node.instance_info
 
     @property
     def is_healthy(self):
@@ -101,7 +106,7 @@ class Instance(object):
         prov_state = self._node.provision_state
         if prov_state in _DEPLOYING_STATES:
             return 'deploying'
-        elif prov_state in _ERROR_STATE:
+        elif prov_state in _ERROR_STATES:
             return 'error'
         elif prov_state in _ACTIVE_STATES:
             if self._node.maintenance:

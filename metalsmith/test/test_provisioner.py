@@ -903,3 +903,23 @@ class TestWaitForState(Base):
 
         mock_sleep.assert_called_with(1)
         self.assertEqual(3, mock_sleep.call_count)
+
+
+class TestListInstances(Base):
+    def setUp(self):
+        super(TestListInstances, self).setUp()
+        self.nodes = [
+            mock.Mock(spec=_os_api.NODE_FIELDS, provision_state=state,
+                      instance_info={'metalsmith_hostname': '1234'})
+            for state in ('active', 'active', 'deploying', 'wait call-back',
+                          'deploy failed', 'available')
+        ]
+        del self.nodes[-1].instance_info['metalsmith_hostname']
+        self.api.list_nodes.return_value = self.nodes
+
+    def test_list(self):
+        instances = self.pr.list_instances()
+        self.assertTrue(isinstance(i, _instance.Instance) for i in instances)
+        self.assertEqual(self.nodes[:5], [i.node for i in instances])
+        self.api.list_nodes.assert_called_once_with(provision_state=None,
+                                                    associated=True)

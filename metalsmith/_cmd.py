@@ -85,6 +85,11 @@ def _do_wait(api, args, formatter):
     formatter.show(instances)
 
 
+def _do_list(api, args, formatter):
+    instances = api.list_instances()
+    formatter.show(instances)
+
+
 def _parse_args(args, config):
     parser = argparse.ArgumentParser(
         description='Deployment and Scheduling tool for Bare Metal')
@@ -150,6 +155,9 @@ def _parse_args(args, config):
     show = subparsers.add_parser('show')
     show.set_defaults(func=_do_show)
     show.add_argument('instance', nargs='+', help='instance UUID(s)')
+
+    show = subparsers.add_parser('list')
+    show.set_defaults(func=_do_list)
 
     wait = subparsers.add_parser('wait')
     wait.set_defaults(func=_do_wait)

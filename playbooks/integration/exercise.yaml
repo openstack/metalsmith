@@ -29,7 +29,7 @@
           - "{{ ssh_key_file }}"
         user_name: "{{ configure_instance_user | default('') }}"
 
-- name: Get instance info via CLI
+- name: Get instance info via CLI show
   command: metalsmith --format=json show test
   register: instance_info
 
@@ -37,6 +37,15 @@
   set_fact:
     instance: "{{ (instance_info.stdout | from_json).test }}"
   failed_when: instance.state != 'active' or instance.node.provision_state != 'active'
+
+- name: Get instance info via CLI list
+  command: metalsmith --format=json list
+  register: instance_info_via_list
+
+- name: Verify that instance info via list is also correct
+  set_fact:
+    instance_via_list: "{{ (instance_info_via_list.stdout | from_json).test }}"
+  failed_when: instance_via_list.state != 'active' or instance_via_list.node.provision_state != 'active'
 
 - name: Show active node information
   command: openstack baremetal node show {{ instance.node.uuid }}
