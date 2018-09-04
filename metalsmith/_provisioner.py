@@ -26,6 +26,7 @@ from metalsmith import _os_api
 from metalsmith import _scheduler
 from metalsmith import _utils
 from metalsmith import exceptions
+from metalsmith import sources
 
 
 LOG = logging.getLogger(__name__)
@@ -178,7 +179,8 @@ class Provisioner(object):
         :param node: Node object, UUID or name. Will be reserved first, if
             not reserved already. Must be in the "available" state with
             maintenance mode off.
-        :param image: Image name or UUID to provision.
+        :param image: Image source - one of :mod:`~metalsmith.sources`,
+            `Image` name or UUID.
         :param nics: List of virtual NICs to attach to physical ports.
             Each item is a dict with a key describing the type of the NIC:
             either a port (``{"port": "<port name or ID>"}``) or a network
@@ -203,6 +205,9 @@ class Provisioner(object):
         """
         if config is None:
             config = _config.InstanceConfig()
+        if isinstance(image, six.string_types):
+            image = sources.Glance(image)
+
         node = self._check_node_for_deploy(node)
         created_ports = []
         attached_ports = []
@@ -211,14 +216,7 @@ class Provisioner(object):
             hostname = self._check_hostname(node, hostname)
             root_disk_size = _utils.get_root_disk(root_disk_size, node)
 
-            try:
-                image = self._api.get_image(image)
-            except Exception as exc:
-                raise exceptions.InvalidImage(
-                    'Cannot find image %(image)s: %(error)s' %
-                    {'image': image, 'error': exc})
-
-            LOG.debug('Image: %s', image)
+            image._validate(self._api)
 
             nics = self._get_nics(nics or [])
 
@@ -235,17 +233,12 @@ class Provisioner(object):
 
             capabilities['boot_option'] = 'netboot' if netboot else 'local'
 
-            updates = {'/instance_info/image_source': image.id,
-                       '/instance_info/root_gb': root_disk_size,
+            updates = {'/instance_info/root_gb': root_disk_size,
                        '/instance_info/capabilities': capabilities,
                        '/extra/%s' % _CREATED_PORTS: created_ports,
                        '/extra/%s' % _ATTACHED_PORTS: attached_ports,
                        '/instance_info/%s' % _os_api.HOSTNAME_FIELD: hostname}
-
-            for prop in ('kernel', 'ramdisk'):
-                value = getattr(image, '%s_id' % prop, None)
-                if value:
-                    updates['/instance_info/%s' % prop] = value
+            updates.update(image._node_updates(self._api))
 
             LOG.debug('Updating node %(node)s with %(updates)s',
                       {'node': _utils.log_node(node), 'updates': updates})

@@ -22,6 +22,7 @@ from metalsmith import _instance
 from metalsmith import _os_api
 from metalsmith import _provisioner
 from metalsmith import exceptions
+from metalsmith import sources
 
 
 class Base(testtools.TestCase):
@@ -188,6 +189,26 @@ class TestProvisionNode(Base):
 
     def test_ok(self):
         inst = self.pr.provision_node(self.node, 'image',
+                                      [{'network': 'network'}])
+
+        self.assertEqual(inst.uuid, self.node.uuid)
+        self.assertEqual(inst.node, self.node)
+
+        self.api.create_port.assert_called_once_with(
+            network_id=self.api.get_network.return_value.id)
+        self.api.attach_port_to_node.assert_called_once_with(
+            self.node.uuid, self.api.create_port.return_value.id)
+        self.api.update_node.assert_called_once_with(self.node, self.updates)
+        self.api.validate_node.assert_called_once_with(self.node,
+                                                       validate_deploy=True)
+        self.api.node_action.assert_called_once_with(self.node, 'active',
+                                                     configdrive=mock.ANY)
+        self.assertFalse(self.wait_mock.called)
+        self.assertFalse(self.api.release_node.called)
+        self.assertFalse(self.api.delete_port.called)
+
+    def test_ok_with_source(self):
+        inst = self.pr.provision_node(self.node, sources.Glance('image'),
                                       [{'network': 'network'}])
 
         self.assertEqual(inst.uuid, self.node.uuid)
