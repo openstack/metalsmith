@@ -113,35 +113,35 @@ class TestScheduleNode(testtools.TestCase):
 class TestCapabilitiesFilter(testtools.TestCase):
 
     def test_fail_no_capabilities(self):
-        fltr = _scheduler.CapabilitiesFilter('rsc', {'profile': 'compute'})
+        fltr = _scheduler.CapabilitiesFilter({'profile': 'compute'})
         self.assertRaisesRegex(exceptions.CapabilitiesNotFound,
                                'No available nodes found with capabilities '
                                'profile=compute, existing capabilities: none',
                                fltr.fail)
 
     def test_nothing_requested_nothing_found(self):
-        fltr = _scheduler.CapabilitiesFilter('rsc', {})
+        fltr = _scheduler.CapabilitiesFilter({})
         node = mock.Mock(properties={}, spec=['properties', 'name', 'uuid'])
         self.assertTrue(fltr(node))
 
     def test_matching_node(self):
-        fltr = _scheduler.CapabilitiesFilter('rsc', {'profile': 'compute',
-                                                     'foo': 'bar'})
+        fltr = _scheduler.CapabilitiesFilter({'profile': 'compute',
+                                              'foo': 'bar'})
         node = mock.Mock(
             properties={'capabilities': 'foo:bar,profile:compute,answer:42'},
             spec=['properties', 'name', 'uuid'])
         self.assertTrue(fltr(node))
 
     def test_not_matching_node(self):
-        fltr = _scheduler.CapabilitiesFilter('rsc', {'profile': 'compute',
-                                                     'foo': 'bar'})
+        fltr = _scheduler.CapabilitiesFilter({'profile': 'compute',
+                                              'foo': 'bar'})
         node = mock.Mock(
             properties={'capabilities': 'foo:bar,answer:42'},
             spec=['properties', 'name', 'uuid'])
         self.assertFalse(fltr(node))
 
     def test_fail_message(self):
-        fltr = _scheduler.CapabilitiesFilter('rsc', {'profile': 'compute'})
+        fltr = _scheduler.CapabilitiesFilter({'profile': 'compute'})
         node = mock.Mock(
             properties={'capabilities': 'profile:control'},
             spec=['properties', 'name', 'uuid'])
@@ -153,7 +153,7 @@ class TestCapabilitiesFilter(testtools.TestCase):
                                fltr.fail)
 
     def test_malformed_capabilities(self):
-        fltr = _scheduler.CapabilitiesFilter('rsc', {'profile': 'compute'})
+        fltr = _scheduler.CapabilitiesFilter({'profile': 'compute'})
         for cap in ['foo,profile:control', 42, 'a:b:c']:
             node = mock.Mock(properties={'capabilities': cap},
                              spec=['properties', 'name', 'uuid'])
@@ -169,8 +169,7 @@ class TestValidationFilter(testtools.TestCase):
     def setUp(self):
         super(TestValidationFilter, self).setUp()
         self.api = mock.Mock(spec=['validate_node'])
-        self.fltr = _scheduler.ValidationFilter(self.api, 'rsc',
-                                                {'profile': 'compute'})
+        self.fltr = _scheduler.ValidationFilter(self.api)
 
     def test_pass(self):
         node = mock.Mock(spec=['uuid', 'name'])
@@ -195,7 +194,7 @@ class TestIronicReserver(testtools.TestCase):
         self.node = mock.Mock(spec=['uuid', 'name'])
         self.api = mock.Mock(spec=['reserve_node', 'release_node'])
         self.api.reserve_node.side_effect = lambda node, instance_uuid: node
-        self.reserver = _scheduler.IronicReserver(self.api, 'rsc', {})
+        self.reserver = _scheduler.IronicReserver(self.api)
 
     def test_fail(self, mock_validation):
         self.assertRaisesRegex(exceptions.AllNodesReserved,

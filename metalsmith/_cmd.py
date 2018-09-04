@@ -56,7 +56,9 @@ def _do_deploy(api, args, formatter):
     if args.user_name:
         config.add_user(args.user_name, sudo=args.passwordless_sudo)
 
-    node = api.reserve_node(args.resource_class, capabilities=capabilities,
+    node = api.reserve_node(resource_class=args.resource_class,
+                            conductor_group=args.conductor_group,
+                            capabilities=capabilities,
                             candidates=args.candidate)
     instance = api.provision_node(node,
                                   image=args.image,
@@ -138,6 +140,8 @@ def _parse_args(args, config):
                         'Node\'s name or UUID')
     deploy.add_argument('--resource-class',
                         help='node resource class to deploy')
+    deploy.add_argument('--conductor-group',
+                        help='conductor group to pick the node from')
     deploy.add_argument('--candidate', action='append',
                         help='A candidate node to use for scheduling (can be '
                         'specified several times)')

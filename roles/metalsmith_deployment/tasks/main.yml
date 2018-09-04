@@ -28,6 +28,9 @@
     {% if resource_class %}
     --resource-class {{ resource_class }}
     {% endif %}
+    {% if conductor_group %}
+    --conductor-group {{ conductor_group }}
+    {% endif %}
     {% for node in candidates %}
       --candidate {{ node }}
     {% endfor %}
@@ -35,6 +38,7 @@
   vars:
     candidates: "{{ instance.candidates | default(metalsmith_candidates) }}"
     capabilities: "{{ instance.capabilities | default(metalsmith_capabilities) }}"
+    conductor_group: "{{ instance.conductor_group | default(metalsmith_conductor_group) }}"
     extra_args: "{{ instance.extra_args | default(metalsmith_extra_args) }}"
     image: "{{ instance.image | default(metalsmith_image) }}"
     netboot: "{{ instance.netboot | default(metalsmith_netboot) }}"

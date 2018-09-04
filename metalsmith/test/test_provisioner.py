@@ -25,13 +25,18 @@ from metalsmith import exceptions
 from metalsmith import sources
 
 
+NODE_FIELDS = ['name', 'uuid', 'instance_info', 'instance_uuid', 'maintenance',
+               'maintenance_reason', 'properties', 'provision_state', 'extra',
+               'last_error']
+
+
 class Base(testtools.TestCase):
 
     def setUp(self):
         super(Base, self).setUp()
         self.pr = _provisioner.Provisioner(mock.Mock())
         self._reset_api_mock()
-        self.node = mock.Mock(spec=_os_api.NODE_FIELDS + ['to_dict'],
+        self.node = mock.Mock(spec=NODE_FIELDS + ['to_dict'],
                               uuid='000', instance_uuid=None,
                               properties={'local_gb': 100},
                               instance_info={},
@@ -59,8 +64,8 @@ class TestReserveNode(Base):
     def test_no_nodes(self):
         self.api.list_nodes.return_value = []
 
-        self.assertRaises(exceptions.ResourceClassNotFound,
-                          self.pr.reserve_node, 'control')
+        self.assertRaises(exceptions.NodesNotFound,
+                          self.pr.reserve_node, resource_class='control')
         self.assertFalse(self.api.reserve_node.called)
 
     def test_simple_ok(self):
@@ -99,11 +104,29 @@ class TestReserveNode(Base):
         self.api.list_nodes.return_value = nodes
         self.api.reserve_node.side_effect = lambda n, instance_uuid: n
 
-        node = self.pr.reserve_node('control', {'answer': '42'})
+        node = self.pr.reserve_node('control', capabilities={'answer': '42'})
 
         self.assertIs(node, expected)
         self.api.update_node.assert_called_once_with(
             node, {'/instance_info/capabilities': {'answer': '42'}})
+
+    def test_custom_predicate(self):
+        nodes = [
+            mock.Mock(spec=['uuid', 'name', 'properties'],
+                      properties={'local_gb': 100}),
+            mock.Mock(spec=['uuid', 'name', 'properties'],
+                      properties={'local_gb': 150}),
+            mock.Mock(spec=['uuid', 'name', 'properties'],
+                      properties={'local_gb': 200}),
+        ]
+        self.api.list_nodes.return_value = nodes[:]
+        self.api.reserve_node.side_effect = lambda n, instance_uuid: n
+
+        node = self.pr.reserve_node(
+            predicate=lambda node: 100 < node.properties['local_gb'] < 200)
+
+        self.assertEqual(node, nodes[1])
+        self.assertFalse(self.api.update_node.called)
 
     def test_provided_node(self):
         nodes = [
@@ -146,6 +169,28 @@ class TestReserveNode(Base):
         self.api.reserve_node.side_effect = lambda n, instance_uuid: n
 
         node = self.pr.reserve_node('compute', candidates=nodes,
+                                    capabilities={'cat': 'meow'})
+
+        self.assertEqual(node, nodes[2])
+        self.assertFalse(self.api.list_nodes.called)
+        self.api.update_node.assert_called_once_with(
+            node, {'/instance_info/capabilities': {'cat': 'meow'}})
+
+    def test_nodes_filtered_by_conductor_group(self):
+        nodes = [
+            mock.Mock(spec=['uuid', 'name', 'properties', 'conductor_group'],
+                      properties={'local_gb': 100}, conductor_group='loc1'),
+            mock.Mock(spec=['uuid', 'name', 'properties', 'conductor_group'],
+                      properties={'local_gb': 100, 'capabilities': 'cat:meow'},
+                      conductor_group=''),
+            mock.Mock(spec=['uuid', 'name', 'properties', 'conductor_group'],
+                      properties={'local_gb': 100, 'capabilities': 'cat:meow'},
+                      conductor_group='loc1'),
+        ]
+        self.api.reserve_node.side_effect = lambda n, instance_uuid: n
+
+        node = self.pr.reserve_node(conductor_group='loc1',
+                                    candidates=nodes,
                                     capabilities={'cat': 'meow'})
 
         self.assertEqual(node, nodes[2])
@@ -848,7 +893,7 @@ class TestWaitForState(Base):
 
     def test_success_one_node(self, mock_sleep):
         nodes = [
-            mock.Mock(spec=_os_api.NODE_FIELDS, provision_state=state)
+            mock.Mock(spec=NODE_FIELDS, provision_state=state)
             for state in ('deploying', 'deploy wait', 'deploying', 'active')
         ]
         self.api.get_node.side_effect = nodes
@@ -862,7 +907,7 @@ class TestWaitForState(Base):
 
     def test_success_several_nodes(self, mock_sleep):
         nodes = [
-            mock.Mock(spec=_os_api.NODE_FIELDS, provision_state=state)
+            mock.Mock(spec=NODE_FIELDS, provision_state=state)
             for state in ('deploying', 'deploy wait',  # iteration 1
                           'deploying', 'active',       # iteration 2
                           'active')                    # iteration 3
@@ -879,7 +924,7 @@ class TestWaitForState(Base):
 
     def test_one_node_failed(self, mock_sleep):
         nodes = [
-            mock.Mock(spec=_os_api.NODE_FIELDS, provision_state=state)
+            mock.Mock(spec=NODE_FIELDS, provision_state=state)
             for state in ('deploying', 'deploy wait',    # iteration 1
                           'deploying', 'deploy failed',  # iteration 2
                           'active')                      # iteration 3
@@ -898,7 +943,7 @@ class TestWaitForState(Base):
     def test_timeout(self, mock_sleep):
         def _fake_get(*args, **kwargs):
             while True:
-                yield mock.Mock(spec=_os_api.NODE_FIELDS,
+                yield mock.Mock(spec=NODE_FIELDS,
                                 provision_state='deploying')
 
         self.api.get_node.side_effect = _fake_get()
@@ -913,7 +958,7 @@ class TestWaitForState(Base):
 
     def test_custom_delay(self, mock_sleep):
         nodes = [
-            mock.Mock(spec=_os_api.NODE_FIELDS, provision_state=state)
+            mock.Mock(spec=NODE_FIELDS, provision_state=state)
             for state in ('deploying', 'deploy wait', 'deploying', 'active')
         ]
         self.api.get_node.side_effect = nodes
@@ -930,7 +975,7 @@ class TestListInstances(Base):
     def setUp(self):
         super(TestListInstances, self).setUp()
         self.nodes = [
-            mock.Mock(spec=_os_api.NODE_FIELDS, provision_state=state,
+            mock.Mock(spec=NODE_FIELDS, provision_state=state,
                       instance_info={'metalsmith_hostname': '1234'})
             for state in ('active', 'active', 'deploying', 'wait call-back',
                           'deploy failed', 'available')

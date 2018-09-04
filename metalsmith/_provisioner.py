@@ -50,8 +50,8 @@ class Provisioner(object):
         self._api = _os_api.API(session=session, cloud_region=cloud_region)
         self._dry_run = dry_run
 
-    def reserve_node(self, resource_class=None, capabilities=None,
-                     candidates=None):
+    def reserve_node(self, resource_class=None, conductor_group=None,
+                     capabilities=None, candidates=None, predicate=None):
         """Find and reserve a suitable node.
 
         Example::
@@ -61,11 +61,17 @@ class Provisioner(object):
 
         :param resource_class: Requested resource class. If ``None``, a node
             with any resource class can be chosen.
+        :param conductor_group: Conductor group to pick the nodes from.
+            Value ``None`` means any group, use empty string "" for nodes
+            from the default group.
         :param capabilities: Requested capabilities as a dict.
         :param candidates: List of nodes (UUIDs, names or `Node` objects)
             to pick from. The filters (for resource class and capabilities)
             are still applied to the provided list. The order in which
             the nodes are considered is retained.
+        :param predicate: Custom predicate to run on nodes. A callable that
+            accepts a node and returns ``True`` if it should be included,
+            ``False`` otherwise. Any exceptions are propagated to the caller.
         :return: reserved `Node` object.
         :raises: :py:class:`metalsmith.exceptions.ReservationFailed`
         """
@@ -76,22 +82,28 @@ class Provisioner(object):
             if resource_class:
                 nodes = [node for node in nodes
                          if node.resource_class == resource_class]
+            if conductor_group is not None:
+                nodes = [node for node in nodes
+                         if node.conductor_group == conductor_group]
         else:
-            nodes = self._api.list_nodes(resource_class=resource_class)
+            nodes = self._api.list_nodes(resource_class=resource_class,
+                                         conductor_group=conductor_group)
             # Ensure parallel executions don't try nodes in the same sequence
             random.shuffle(nodes)
 
         if not nodes:
-            raise exceptions.ResourceClassNotFound(resource_class,
-                                                   capabilities)
+            raise exceptions.NodesNotFound(resource_class, conductor_group)
 
         LOG.debug('Ironic nodes: %s', nodes)
 
-        filters = [_scheduler.CapabilitiesFilter(resource_class, capabilities),
-                   _scheduler.ValidationFilter(self._api,
-                                               resource_class, capabilities)]
-        reserver = _scheduler.IronicReserver(self._api, resource_class,
-                                             capabilities)
+        filters = [_scheduler.CapabilitiesFilter(capabilities),
+                   _scheduler.ValidationFilter(self._api)]
+        if predicate is not None:
+            # NOTE(dtantsur): run the provided predicate before the validation,
+            # since validation requires network interactions.
+            filters.insert(-1, predicate)
+
+        reserver = _scheduler.IronicReserver(self._api)
         node = _scheduler.schedule_node(nodes, filters, reserver,
                                         dry_run=self._dry_run)
         if capabilities:
