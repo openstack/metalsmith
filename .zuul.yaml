@@ -125,12 +125,15 @@
       metalsmith_whole_disk_image: test-centos-wholedisk
 
 - job:
-    name: metalsmith-integration-glance-netboot-cirros-iscsi
+    name: metalsmith-integration-glance-netboot-cirros-iscsi-py3
     description: |
         Integration job using Glance as image source and CirrOS with netboot.
     parent: metalsmith-integration-base
     vars:
+      devstack_localrc:
+        USE_PYTHON3: true
       metalsmith_netboot: true
+      metalsmith_python: python3
 
 - job:
     name: metalsmith-integration-glance-netboot-cirros-direct
@@ -156,11 +159,11 @@
       jobs:
         - openstack-tox-lower-constraints
         - metalsmith-integration-glance-localboot-centos7
-        - metalsmith-integration-glance-netboot-cirros-iscsi
+        - metalsmith-integration-glance-netboot-cirros-iscsi-py3
         - metalsmith-integration-glance-netboot-cirros-direct
     gate:
       jobs:
         - openstack-tox-lower-constraints
         - metalsmith-integration-glance-localboot-centos7
-        - metalsmith-integration-glance-netboot-cirros-iscsi
+        - metalsmith-integration-glance-netboot-cirros-iscsi-py3
         - metalsmith-integration-glance-netboot-cirros-direct
