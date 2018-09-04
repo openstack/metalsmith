@@ -1,18 +1,39 @@
 - name: Find Cirros UEC image
-  shell: |
-    openstack image list -f value -c ID -c Name \
-      | awk '/cirros.*uec/ { print $1; exit 0; }'
+  shell: openstack image list -f value -c Name | grep 'cirros-.*-uec$'
   register: cirros_uec_image_result
   failed_when: cirros_uec_image_result.stdout == ""
 
 - name: Find Cirros disk image
-  shell: |
-    openstack image list -f value -c ID -c Name \
-      | awk '/cirros.*disk/ { print $1; exit 0; }'
+  shell: openstack image list -f value -c Name | grep 'cirros-.*-disk$'
   register: cirros_disk_image_result
   failed_when: cirros_disk_image_result.stdout == ""
 
-- name: Set image facts
+- name: Set image facts for Glance image
   set_fact:
     metalsmith_whole_disk_image: "{{ cirros_disk_image_result.stdout }}"
     metalsmith_partition_image: "{{ cirros_uec_image_result.stdout }}"
+  when: not (metalsmith_use_http | default(false))
+
+- block:
+    - name: Get baremetal HTTP endpoint
+      shell: |
+        source /opt/stack/devstack/openrc admin admin > /dev/null
+        iniget /etc/ironic/ironic.conf deploy http_url
+      args:
+        executable: /bin/bash
+      register: baremetal_endpoint_result
+      failed_when: baremetal_endpoint_result.stdout == ""
+
+    - name: Calculate MD5 checksum for HTTP disk image
+      shell: |
+          md5sum /opt/stack/devstack/files/{{ cirros_disk_image_result.stdout }}.img \
+              | awk '{ print $1; }'
+      register: cirros_disk_image_checksum_result
+      failed_when: cirros_disk_image_checksum_result.stdout == ""
+
+    - name: Set facts for HTTP image
+      set_fact:
+        metalsmith_whole_disk_image: "{{ baremetal_endpoint_result.stdout}}/{{ cirros_disk_image_result.stdout }}.img"
+        metalsmith_whole_disk_checksum: "{{ cirros_disk_image_checksum_result.stdout }}"
+
+  when: metalsmith_use_http | default(false)

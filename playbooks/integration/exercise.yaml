@@ -23,6 +23,7 @@
     metalsmith_instances:
       - hostname: test
         image: "{{ image }}"
+        image_checksum: "{{ image_checksum | default('') }}"
         nics:
           - "{{ nic }}"
         ssh_public_keys:

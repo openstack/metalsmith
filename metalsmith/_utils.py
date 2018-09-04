@@ -112,3 +112,16 @@ def validate_nics(nics):
     if unknown_nic_types:
         raise ValueError("Unexpected NIC type(s) %s, supported values are "
                          "'port' and 'network'" % ', '.join(unknown_nic_types))
+
+
+def parse_checksums(checksums):
+    """Parse standard checksums file."""
+    result = {}
+    for line in checksums.split('\n'):
+        if not line.strip():
+            continue
+
+        checksum, fname = line.strip().split(None, 1)
+        result[fname.strip().lstrip('*')] = checksum.strip()
+
+    return result

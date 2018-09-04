@@ -8,14 +8,18 @@
     - include: cirros-image.yaml
       when: metalsmith_whole_disk_image is not defined
 
-    - name: Test a partition image
-      include: exercise.yaml
-      vars:
-        image: "{{ metalsmith_partition_image }}"
-        precreate_port: false
-
     - name: Test a whole-disk image
       include: exercise.yaml
       vars:
         image: "{{ metalsmith_whole_disk_image }}"
+        image_checksum: "{{ metalsmith_whole_disk_checksum | default('') }}"
         precreate_port: false
+
+    - name: Test a partition image
+      include: exercise.yaml
+      vars:
+        image: "{{ metalsmith_partition_image }}"
+        image_checksum: "{{ metalsmith_partition_checksum | default('') }}"
+        precreate_port: false
+      # FIXME(dtantsur): cover partition images
+      when: not (metalsmith_use_http | default(false))

@@ -23,6 +23,8 @@ The following optional variables provide the defaults for Instance_ attributes:
     the default for ``extra_args``.
 ``metalsmith_image``
     the default for ``image``.
+``metalsmith_image_checksum``
+    the default for ``image_checksum``.
 ``metalsmith_netboot``
     the default for ``netboot``
 ``metalsmith_nics``
@@ -53,7 +55,9 @@ Each instances has the following attributes:
 ``extra_args`` (defaults to ``metalsmith_extra_args``)
     additional arguments to pass to the ``metalsmith`` CLI on all calls.
 ``image`` (defaults to ``metalsmith_image``)
-    UUID or name of the image to use for deployment. Mandatory.
+    UUID, name or HTTP(s) URL of the image to use for deployment. Mandatory.
+``image_checksum`` (defaults to ``metalsmith_image_checksum``)
+    MD5 checksum or checksum file URL for an HTTP(s) image.
 ``netboot``
     whether to boot the deployed instance from network (PXE, iPXE, etc).
     The default is to use local boot (requires a bootloader on the image).

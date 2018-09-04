@@ -23,9 +23,14 @@ from metalsmith import _config
 from metalsmith import _format
 from metalsmith import _provisioner
 from metalsmith import _utils
+from metalsmith import sources
 
 
 LOG = logging.getLogger(__name__)
+
+
+def _is_http(smth):
+    return smth.startswith('http://') or smth.startswith('https://')
 
 
 class NICAction(argparse.Action):
@@ -52,6 +57,18 @@ def _do_deploy(api, args, formatter):
     if args.hostname and not _utils.is_hostname_safe(args.hostname):
         raise RuntimeError("%s cannot be used as a hostname" % args.hostname)
 
+    if _is_http(args.image):
+        if not args.image_checksum:
+            raise RuntimeError("HTTP(s) images require --image-checksum")
+        elif _is_http(args.image_checksum):
+            source = sources.HttpWholeDiskImage(
+                args.image, checksum_url=args.image_checksum)
+        else:
+            source = sources.HttpWholeDiskImage(
+                args.image, checksum=args.image_checksum)
+    else:
+        source = args.image
+
     config = _config.InstanceConfig(ssh_keys=ssh_keys)
     if args.user_name:
         config.add_user(args.user_name, sudo=args.passwordless_sudo)
@@ -61,7 +78,7 @@ def _do_deploy(api, args, formatter):
                             capabilities=capabilities,
                             candidates=args.candidate)
     instance = api.provision_node(node,
-                                  image=args.image,
+                                  image=source,
                                   nics=args.nics,
                                   root_disk_size=args.root_disk_size,
                                   config=config,
@@ -122,8 +139,10 @@ def _parse_args(args, config):
                           'active')
     wait_grp.add_argument('--no-wait', action='store_true',
                           help='disable waiting for deploy to finish')
-    deploy.add_argument('--image', help='image to use (name or UUID)',
+    deploy.add_argument('--image', help='image to use (name, UUID or URL)',
                         required=True)
+    deploy.add_argument('--image-checksum',
+                        help='image MD5 checksum or URL with checksums')
     deploy.add_argument('--network', help='network to use (name or UUID)',
                         dest='nics', action=NICAction)
     deploy.add_argument('--port', help='port to attach (name or UUID)',

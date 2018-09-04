@@ -16,6 +16,7 @@
 import fixtures
 import mock
 from openstack import exceptions as os_exc
+import requests
 import testtools
 
 from metalsmith import _config
@@ -280,7 +281,7 @@ class TestProvisionNode(Base):
         self.assertFalse(self.conn.network.delete_port.called)
 
     def test_ok_with_source(self):
-        inst = self.pr.provision_node(self.node, sources.Glance('image'),
+        inst = self.pr.provision_node(self.node, sources.GlanceImage('image'),
                                       [{'network': 'network'}])
 
         self.assertEqual(inst.uuid, self.node.uuid)
@@ -421,6 +422,100 @@ class TestProvisionNode(Base):
 
         self.pr.provision_node(self.node, 'image', [{'network': 'network'}])
 
+        self.conn.network.create_port.assert_called_once_with(
+            network_id=self.conn.network.find_network.return_value.id)
+        self.api.attach_port_to_node.assert_called_once_with(
+            self.node.uuid, self.conn.network.create_port.return_value.id)
+        self.api.update_node.assert_called_once_with(self.node, self.updates)
+        self.api.validate_node.assert_called_once_with(self.node,
+                                                       validate_deploy=True)
+        self.api.node_action.assert_called_once_with(self.node, 'active',
+                                                     configdrive=mock.ANY)
+        self.assertFalse(self.wait_mock.called)
+        self.assertFalse(self.api.release_node.called)
+        self.assertFalse(self.conn.network.delete_port.called)
+
+    def test_with_http_and_checksum_whole_disk(self):
+        self.updates['/instance_info/image_source'] = 'https://host/image'
+        self.updates['/instance_info/image_checksum'] = 'abcd'
+        del self.updates['/instance_info/kernel']
+        del self.updates['/instance_info/ramdisk']
+
+        inst = self.pr.provision_node(
+            self.node,
+            sources.HttpWholeDiskImage('https://host/image', checksum='abcd'),
+            [{'network': 'network'}])
+
+        self.assertEqual(inst.uuid, self.node.uuid)
+        self.assertEqual(inst.node, self.node)
+
+        self.assertFalse(self.conn.image.find_image.called)
+        self.conn.network.create_port.assert_called_once_with(
+            network_id=self.conn.network.find_network.return_value.id)
+        self.api.attach_port_to_node.assert_called_once_with(
+            self.node.uuid, self.conn.network.create_port.return_value.id)
+        self.api.update_node.assert_called_once_with(self.node, self.updates)
+        self.api.validate_node.assert_called_once_with(self.node,
+                                                       validate_deploy=True)
+        self.api.node_action.assert_called_once_with(self.node, 'active',
+                                                     configdrive=mock.ANY)
+        self.assertFalse(self.wait_mock.called)
+        self.assertFalse(self.api.release_node.called)
+        self.assertFalse(self.conn.network.delete_port.called)
+
+    @mock.patch.object(requests, 'get', autospec=True)
+    def test_with_http_and_checksum_url(self, mock_get):
+        self.updates['/instance_info/image_source'] = 'https://host/image'
+        self.updates['/instance_info/image_checksum'] = 'abcd'
+        del self.updates['/instance_info/kernel']
+        del self.updates['/instance_info/ramdisk']
+        mock_get.return_value.text = """
+defg *something else
+abcd  image
+"""
+
+        inst = self.pr.provision_node(
+            self.node,
+            sources.HttpWholeDiskImage('https://host/image',
+                                       checksum_url='https://host/checksums'),
+            [{'network': 'network'}])
+
+        self.assertEqual(inst.uuid, self.node.uuid)
+        self.assertEqual(inst.node, self.node)
+
+        self.assertFalse(self.conn.image.find_image.called)
+        mock_get.assert_called_once_with('https://host/checksums')
+        self.conn.network.create_port.assert_called_once_with(
+            network_id=self.conn.network.find_network.return_value.id)
+        self.api.attach_port_to_node.assert_called_once_with(
+            self.node.uuid, self.conn.network.create_port.return_value.id)
+        self.api.update_node.assert_called_once_with(self.node, self.updates)
+        self.api.validate_node.assert_called_once_with(self.node,
+                                                       validate_deploy=True)
+        self.api.node_action.assert_called_once_with(self.node, 'active',
+                                                     configdrive=mock.ANY)
+        self.assertFalse(self.wait_mock.called)
+        self.assertFalse(self.api.release_node.called)
+        self.assertFalse(self.conn.network.delete_port.called)
+
+    def test_with_http_and_checksum_partition(self):
+        self.updates['/instance_info/image_source'] = 'https://host/image'
+        self.updates['/instance_info/image_checksum'] = 'abcd'
+        self.updates['/instance_info/kernel'] = 'https://host/kernel'
+        self.updates['/instance_info/ramdisk'] = 'https://host/ramdisk'
+
+        inst = self.pr.provision_node(
+            self.node,
+            sources.HttpPartitionImage('https://host/image',
+                                       checksum='abcd',
+                                       kernel_url='https://host/kernel',
+                                       ramdisk_url='https://host/ramdisk'),
+            [{'network': 'network'}])
+
+        self.assertEqual(inst.uuid, self.node.uuid)
+        self.assertEqual(inst.node, self.node)
+
+        self.assertFalse(self.conn.image.find_image.called)
         self.conn.network.create_port.assert_called_once_with(
             network_id=self.conn.network.find_network.return_value.id)
         self.api.attach_port_to_node.assert_called_once_with(
@@ -700,6 +795,82 @@ class TestProvisionNode(Base):
         self.assertFalse(self.api.node_action.called)
         self.api.release_node.assert_called_once_with(self.node)
 
+    @mock.patch.object(requests, 'get', autospec=True)
+    def test_no_checksum_with_http_image(self, mock_get):
+        self.updates['/instance_info/image_source'] = 'https://host/image'
+        self.updates['/instance_info/image_checksum'] = 'abcd'
+        del self.updates['/instance_info/kernel']
+        del self.updates['/instance_info/ramdisk']
+        mock_get.return_value.text = """
+defg *something else
+abcd  and-not-image-again
+"""
+
+        self.assertRaisesRegex(exceptions.InvalidImage,
+                               'no image checksum',
+                               self.pr.provision_node,
+                               self.node,
+                               sources.HttpWholeDiskImage(
+                                   'https://host/image',
+                                   checksum_url='https://host/checksums'),
+                               [{'network': 'network'}])
+
+        self.assertFalse(self.conn.image.find_image.called)
+        mock_get.assert_called_once_with('https://host/checksums')
+        self.api.update_node.assert_called_once_with(self.node, CLEAN_UP)
+        self.assertFalse(self.api.node_action.called)
+        self.api.release_node.assert_called_once_with(self.node)
+
+    @mock.patch.object(requests, 'get', autospec=True)
+    def test_malformed_checksum_with_http_image(self, mock_get):
+        self.updates['/instance_info/image_source'] = 'https://host/image'
+        self.updates['/instance_info/image_checksum'] = 'abcd'
+        del self.updates['/instance_info/kernel']
+        del self.updates['/instance_info/ramdisk']
+        mock_get.return_value.text = """
+<html>
+    <p>I am not a checksum file!</p>
+</html>"""
+
+        self.assertRaisesRegex(exceptions.InvalidImage,
+                               'Invalid checksum file',
+                               self.pr.provision_node,
+                               self.node,
+                               sources.HttpWholeDiskImage(
+                                   'https://host/image',
+                                   checksum_url='https://host/checksums'),
+                               [{'network': 'network'}])
+
+        self.assertFalse(self.conn.image.find_image.called)
+        mock_get.assert_called_once_with('https://host/checksums')
+        self.api.update_node.assert_called_once_with(self.node, CLEAN_UP)
+        self.assertFalse(self.api.node_action.called)
+        self.api.release_node.assert_called_once_with(self.node)
+
+    @mock.patch.object(requests, 'get', autospec=True)
+    def test_cannot_download_checksum_with_http_image(self, mock_get):
+        self.updates['/instance_info/image_source'] = 'https://host/image'
+        self.updates['/instance_info/image_checksum'] = 'abcd'
+        del self.updates['/instance_info/kernel']
+        del self.updates['/instance_info/ramdisk']
+        mock_get.return_value.raise_for_status.side_effect = (
+            requests.RequestException("boom"))
+
+        self.assertRaisesRegex(exceptions.InvalidImage,
+                               'Cannot download checksum file',
+                               self.pr.provision_node,
+                               self.node,
+                               sources.HttpWholeDiskImage(
+                                   'https://host/image',
+                                   checksum_url='https://host/checksums'),
+                               [{'network': 'network'}])
+
+        self.assertFalse(self.conn.image.find_image.called)
+        mock_get.assert_called_once_with('https://host/checksums')
+        self.api.update_node.assert_called_once_with(self.node, CLEAN_UP)
+        self.assertFalse(self.api.node_action.called)
+        self.api.release_node.assert_called_once_with(self.node)
+
     def test_invalid_network(self):
         self.conn.network.find_network.side_effect = RuntimeError('Not found')
         self.assertRaisesRegex(exceptions.InvalidNIC, 'Not found',
@@ -834,6 +1005,20 @@ class TestProvisionNode(Base):
         self.assertFalse(self.api.update_node.called)
         self.assertFalse(self.api.node_action.called)
         self.assertFalse(self.api.release_node.called)
+
+    def test_invalid_http_source(self):
+        self.assertRaises(TypeError, sources.HttpWholeDiskImage,
+                          'http://host/image')
+        self.assertRaises(TypeError, sources.HttpWholeDiskImage,
+                          'http://host/image', checksum='abcd',
+                          checksum_url='http://host/checksum')
+        self.assertRaises(TypeError, sources.HttpPartitionImage,
+                          'http://host/image', 'http://host/kernel',
+                          'http://host/ramdisk')
+        self.assertRaises(TypeError, sources.HttpPartitionImage,
+                          'http://host/image', 'http://host/kernel',
+                          'http://host/ramdisk', checksum='abcd',
+                          checksum_url='http://host/checksum')
 
 
 class TestUnprovisionNode(Base):

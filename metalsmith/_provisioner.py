@@ -234,7 +234,7 @@ class Provisioner(object):
         if config is None:
             config = _config.InstanceConfig()
         if isinstance(image, six.string_types):
-            image = sources.Glance(image)
+            image = sources.GlanceImage(image)
 
         node = self._check_node_for_deploy(node)
         created_ports = []

@@ -146,6 +146,20 @@
       devstack_localrc:
         IRONIC_DEFAULT_DEPLOY_INTERFACE: direct
 
+- job:
+    name: metalsmith-integration-http-netboot-cirros-direct-py3
+    description: |
+        Integration job using HTTP as image source and direct deploy.
+    parent: metalsmith-integration-base
+    run: playbooks/integration/run.yaml
+    vars:
+      metalsmith_netboot: true
+      metalsmith_python: python3
+      metalsmith_use_http: true
+      devstack_localrc:
+        IRONIC_DEFAULT_DEPLOY_INTERFACE: direct
+        USE_PYTHON3: true
+
 - project:
     templates:
       - check-requirements
@@ -161,9 +175,11 @@
         - metalsmith-integration-glance-localboot-centos7
         - metalsmith-integration-glance-netboot-cirros-iscsi-py3
         - metalsmith-integration-glance-netboot-cirros-direct
+        - metalsmith-integration-http-netboot-cirros-direct-py3
     gate:
       jobs:
         - openstack-tox-lower-constraints
         - metalsmith-integration-glance-localboot-centos7
         - metalsmith-integration-glance-netboot-cirros-iscsi-py3
         - metalsmith-integration-glance-netboot-cirros-direct
+        - metalsmith-integration-http-netboot-cirros-direct-py3

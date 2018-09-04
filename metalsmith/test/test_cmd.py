@@ -25,6 +25,7 @@ from metalsmith import _cmd
 from metalsmith import _config
 from metalsmith import _instance
 from metalsmith import _provisioner
+from metalsmith import sources
 
 
 @mock.patch.object(_provisioner, 'Provisioner', autospec=True)
@@ -624,6 +625,72 @@ class TestDeploy(testtools.TestCase):
             hostname=None,
             netboot=False,
             wait=1800)
+
+    def test_args_http_image_with_checksum(self, mock_os_conf, mock_pr):
+        args = ['deploy', '--image', 'https://example.com/image.img',
+                '--image-checksum', '95e750180c7921ea0d545c7165db66b8',
+                '--resource-class', 'compute']
+        _cmd.main(args)
+        mock_pr.assert_called_once_with(
+            cloud_region=mock_os_conf.return_value.get_one.return_value,
+            dry_run=False)
+        mock_pr.return_value.reserve_node.assert_called_once_with(
+            resource_class='compute',
+            conductor_group=None,
+            capabilities={},
+            candidates=None
+        )
+        mock_pr.return_value.provision_node.assert_called_once_with(
+            mock_pr.return_value.reserve_node.return_value,
+            image=mock.ANY,
+            nics=None,
+            root_disk_size=None,
+            config=mock.ANY,
+            hostname=None,
+            netboot=False,
+            wait=1800)
+        source = mock_pr.return_value.provision_node.call_args[1]['image']
+        self.assertIsInstance(source, sources.HttpWholeDiskImage)
+        self.assertEqual('https://example.com/image.img', source.url)
+        self.assertEqual('95e750180c7921ea0d545c7165db66b8', source.checksum)
+
+    def test_args_http_image_with_checksum_url(self, mock_os_conf, mock_pr):
+        args = ['deploy', '--image', 'http://example.com/image.img',
+                '--image-checksum', 'http://example.com/CHECKSUMS',
+                '--resource-class', 'compute']
+        _cmd.main(args)
+        mock_pr.assert_called_once_with(
+            cloud_region=mock_os_conf.return_value.get_one.return_value,
+            dry_run=False)
+        mock_pr.return_value.reserve_node.assert_called_once_with(
+            resource_class='compute',
+            conductor_group=None,
+            capabilities={},
+            candidates=None
+        )
+        mock_pr.return_value.provision_node.assert_called_once_with(
+            mock_pr.return_value.reserve_node.return_value,
+            image=mock.ANY,
+            nics=None,
+            root_disk_size=None,
+            config=mock.ANY,
+            hostname=None,
+            netboot=False,
+            wait=1800)
+        source = mock_pr.return_value.provision_node.call_args[1]['image']
+        self.assertIsInstance(source, sources.HttpWholeDiskImage)
+        self.assertEqual('http://example.com/image.img', source.url)
+        self.assertEqual('http://example.com/CHECKSUMS', source.checksum_url)
+
+    @mock.patch.object(_cmd.LOG, 'critical', autospec=True)
+    def test_args_http_image_without_checksum(self, mock_log, mock_os_conf,
+                                              mock_pr):
+        args = ['deploy', '--image', 'http://example.com/image.img',
+                '--resource-class', 'compute']
+        self.assertRaises(SystemExit, _cmd.main, args)
+        self.assertTrue(mock_log.called)
+        self.assertFalse(mock_pr.return_value.reserve_node.called)
+        self.assertFalse(mock_pr.return_value.provision_node.called)
 
     def test_args_custom_wait(self, mock_os_conf, mock_pr):
         args = ['deploy', '--network', 'mynet', '--image', 'myimg',

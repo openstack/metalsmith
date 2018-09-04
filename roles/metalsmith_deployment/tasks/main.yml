@@ -34,6 +34,9 @@
     {% for node in candidates %}
       --candidate {{ node }}
     {% endfor %}
+    {% if image_checksum %}
+      --image-checksum {{ image_checksum }}
+    {% endif %}
   when: state == 'present'
   vars:
     candidates: "{{ instance.candidates | default(metalsmith_candidates) }}"
@@ -41,6 +44,7 @@
     conductor_group: "{{ instance.conductor_group | default(metalsmith_conductor_group) }}"
     extra_args: "{{ instance.extra_args | default(metalsmith_extra_args) }}"
     image: "{{ instance.image | default(metalsmith_image) }}"
+    image: "{{ instance.image_checksum | default(metalsmith_image_checksum) }}"
     netboot: "{{ instance.netboot | default(metalsmith_netboot) }}"
     nics: "{{ instance.nics | default(metalsmith_nics) }}"
     resource_class: "{{ instance.resource_class | default(metalsmith_resource_class) }}"
