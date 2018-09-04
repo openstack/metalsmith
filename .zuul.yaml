@@ -145,6 +145,10 @@
 
 - project:
     templates:
+      - check-requirements
+      - openstack-python-jobs
+      - openstack-python35-jobs
+      - openstack-python36-jobs
       - docs-on-readthedocs
     vars:
       rtd_webhook_id: '37378'
