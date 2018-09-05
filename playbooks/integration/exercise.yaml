@@ -61,7 +61,7 @@
     {{ configure_instance_user | default('cirros') }}@{{ instance_ip }}
     "cat /etc/hostname"
   register: ssh_result
-  until: ssh_result | succeeded
+  until: ssh_result is success
   retries: 30
   delay: 20
 
