@@ -17,6 +17,8 @@ The following optional variables provide the defaults for Instance_ attributes:
     the default for ``candidates``.
 ``metalsmith_capabilities``
     the default for ``capabilities``.
+``metalsmith_conductor_group``
+    the default for ``conductor_group``.
 ``metalsmith_extra_args``
     the default for ``extra_args``.
 ``metalsmith_image``
@@ -43,6 +45,11 @@ Each instances has the following attributes:
     list of nodes (UUIDs or names) to be considered for deployment.
 ``capabilities`` (defaults to ``metalsmith_capabilities``)
     node capabilities to request when scheduling.
+``conductor_group`` (defaults to ``metalsmith_conductor_group``)
+    conductor group to pick nodes from.
+
+    .. note:: Currently it's not possible to specify the default group.
+
 ``extra_args`` (defaults to ``metalsmith_extra_args``)
     additional arguments to pass to the ``metalsmith`` CLI on all calls.
 ``image`` (defaults to ``metalsmith_image``)

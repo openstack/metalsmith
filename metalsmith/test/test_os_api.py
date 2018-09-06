@@ -54,8 +54,7 @@ class TestNodes(testtools.TestCase):
 
     def test_get_node_by_uuid(self):
         res = self.api.get_node('uuid1')
-        self.cli.node.get.assert_called_once_with('uuid1',
-                                                  fields=_os_api.NODE_FIELDS)
+        self.cli.node.get.assert_called_once_with('uuid1')
         self.assertIs(res, self.cli.node.get.return_value)
 
     def test_get_node_by_hostname(self):
@@ -66,8 +65,7 @@ class TestNodes(testtools.TestCase):
         ]
         res = self.api.get_node('host1', accept_hostname=True)
         # Loading details
-        self.cli.node.get.assert_called_once_with('uuid1',
-                                                  fields=_os_api.NODE_FIELDS)
+        self.cli.node.get.assert_called_once_with('uuid1')
         self.assertIs(res, self.cli.node.get.return_value)
 
     def test_get_node_by_hostname_not_found(self):
@@ -78,8 +76,7 @@ class TestNodes(testtools.TestCase):
         ]
         res = self.api.get_node('host1', accept_hostname=True)
         # Loading details
-        self.cli.node.get.assert_called_once_with('host1',
-                                                  fields=_os_api.NODE_FIELDS)
+        self.cli.node.get.assert_called_once_with('host1')
         self.assertIs(res, self.cli.node.get.return_value)
 
     def test_get_node_by_node(self):
@@ -90,8 +87,7 @@ class TestNodes(testtools.TestCase):
     def test_get_node_by_node_with_refresh(self):
         res = self.api.get_node(mock.Mock(spec=['uuid'], uuid='uuid1'),
                                 refresh=True)
-        self.cli.node.get.assert_called_once_with('uuid1',
-                                                  fields=_os_api.NODE_FIELDS)
+        self.cli.node.get.assert_called_once_with('uuid1')
         self.assertIs(res, self.cli.node.get.return_value)
 
     def test_get_node_by_instance(self):
@@ -104,8 +100,7 @@ class TestNodes(testtools.TestCase):
         inst = _instance.Instance(mock.Mock(),
                                   mock.Mock(spec=['uuid'], uuid='uuid1'))
         res = self.api.get_node(inst, refresh=True)
-        self.cli.node.get.assert_called_once_with('uuid1',
-                                                  fields=_os_api.NODE_FIELDS)
+        self.cli.node.get.assert_called_once_with('uuid1')
         self.assertIs(res, self.cli.node.get.return_value)
 
     def test_find_node_by_hostname(self):
@@ -116,8 +111,7 @@ class TestNodes(testtools.TestCase):
         ]
         res = self.api.find_node_by_hostname('host1')
         # Loading details
-        self.cli.node.get.assert_called_once_with('uuid1',
-                                                  fields=_os_api.NODE_FIELDS)
+        self.cli.node.get.assert_called_once_with('uuid1')
         self.assertIs(res, self.cli.node.get.return_value)
 
     def test_find_node_by_hostname_cached(self):

@@ -19,42 +19,64 @@ class Error(Exception):
 
 
 class ReservationFailed(Error):
-    """Failed to reserve a suitable node."""
+    """Failed to reserve a suitable node.
 
-    def __init__(self, message, requested_resource_class,
-                 requested_capabilities):
-        super(ReservationFailed, self).__init__(message)
-        self.requested_resource_class = requested_resource_class
-        self.requested_capabilities = requested_capabilities
+    This is the base class for all reservation failures.
+    """
 
 
-class ResourceClassNotFound(ReservationFailed):
-    """No nodes match the given resource class."""
+class NodesNotFound(ReservationFailed):
+    """Initial nodes lookup returned an empty list.
 
-    def __init__(self, requested_resource_class, requested_capabilities):
-        message = ("No available nodes found with resource class %s" %
-                   requested_resource_class)
-        super(ResourceClassNotFound, self).__init__(message,
-                                                    requested_resource_class,
-                                                    requested_capabilities)
+    :ivar requested_resource_class: Requested resource class.
+    :ivar requested_conductor_group: Requested conductor group to pick nodes
+        from.
+    """
+
+    def __init__(self, resource_class, conductor_group):
+        message = "No available nodes%(rc)s found%(cg)s" % {
+            'rc': 'with resource class %s' % resource_class
+            if resource_class else '',
+            'cg': 'in conductor group %s' % (conductor_group or '<default>')
+            if conductor_group is not None else ''
+        }
+        self.requested_resource_class = resource_class
+        self.requested_conductor_group = conductor_group
+        super(NodesNotFound, self).__init__(message)
 
 
 class CapabilitiesNotFound(ReservationFailed):
-    """Requested capabilities do not match any nodes."""
+    """Requested capabilities do not match any nodes.
+
+    :ivar requested_capabilities: Requested node's capabilities.
+    """
+
+    def __init__(self, message, capabilities):
+        self.requested_capabilities = capabilities
+        super(CapabilitiesNotFound, self).__init__(message)
 
 
 class ValidationFailed(ReservationFailed):
-    """Validation failed for all requested nodes."""
+    """Validation failed for all requested nodes.
+
+    :ivar nodes: List of nodes that were checked.
+    """
+
+    def __init__(self, message, nodes):
+        self.nodes = nodes
+        super(ValidationFailed, self).__init__(message)
 
 
 class AllNodesReserved(ReservationFailed):
-    """All nodes are already reserved."""
+    """All nodes are already reserved.
 
-    def __init__(self, requested_resource_class, requested_capabilities):
+    :ivar nodes: List of nodes that were checked.
+    """
+
+    def __init__(self, nodes):
+        self.nodes = nodes
         message = 'All the candidate nodes are already reserved'
-        super(AllNodesReserved, self).__init__(message,
-                                               requested_resource_class,
-                                               requested_capabilities)
+        super(AllNodesReserved, self).__init__(message)
 
 
 class InvalidImage(Error):

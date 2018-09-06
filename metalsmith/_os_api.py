@@ -24,9 +24,6 @@ from metalsmith import _utils
 
 
 LOG = logging.getLogger(__name__)
-NODE_FIELDS = ['name', 'uuid', 'instance_info', 'instance_uuid', 'maintenance',
-               'maintenance_reason', 'properties', 'provision_state', 'extra',
-               'last_error']
 HOSTNAME_FIELD = 'metalsmith_hostname'
 
 
@@ -57,7 +54,9 @@ class API(object):
     """Various OpenStack API's."""
 
     IRONIC_VERSION = '1'
-    IRONIC_MICRO_VERSION = '1.28'
+    # TODO(dtantsur): use openstacksdk and stop hardcoding this here.
+    # 1.46 (Rocky) adds conductor_group.
+    IRONIC_MICRO_VERSION = '1.46'
 
     _node_list = None
 
@@ -139,7 +138,7 @@ class API(object):
                 if by_hostname is not None:
                     return by_hostname
 
-            return self.ironic.node.get(node, fields=NODE_FIELDS)
+            return self.ironic.node.get(node)
         elif hasattr(node, 'node'):
             # Instance object
             node = node.node
@@ -147,7 +146,7 @@ class API(object):
             node = node
 
         if refresh:
-            return self.ironic.node.get(node.uuid, fields=NODE_FIELDS)
+            return self.ironic.node.get(node.uuid)
         else:
             return node
 
@@ -161,14 +160,14 @@ class API(object):
     def list_node_ports(self, node):
         return self.ironic.node.list_ports(_node_id(node), limit=0)
 
-    def list_nodes(self, resource_class=None, maintenance=False,
-                   associated=False, provision_state='available',
-                   fields=None):
-        return self.ironic.node.list(limit=0, resource_class=resource_class,
-                                     maintenance=maintenance,
+    def list_nodes(self, maintenance=False, associated=False,
+                   provision_state='available', **filters):
+        if 'fields' not in filters:
+            filters['detail'] = True
+        return self.ironic.node.list(limit=0, maintenance=maintenance,
                                      associated=associated,
                                      provision_state=provision_state,
-                                     fields=fields or NODE_FIELDS)
+                                     **filters)
 
     def node_action(self, node, action, **kwargs):
         self.ironic.node.set_provision_state(_node_id(node), action, **kwargs)

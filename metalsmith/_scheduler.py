@@ -117,8 +117,7 @@ def schedule_node(nodes, filters, reserver, dry_run=False):
 class CapabilitiesFilter(Filter):
     """Filter that checks capabilities."""
 
-    def __init__(self, resource_class, capabilities):
-        self._resource_class = resource_class
+    def __init__(self, capabilities):
         self._capabilities = capabilities
         self._counter = collections.Counter()
 
@@ -159,20 +158,16 @@ class CapabilitiesFilter(Filter):
         message = ("No available nodes found with capabilities %(req)s, "
                    "existing capabilities: %(exist)s" %
                    {'req': requested, 'exist': existing or 'none'})
-        raise exceptions.CapabilitiesNotFound(message,
-                                              self._resource_class,
-                                              self._capabilities)
+        raise exceptions.CapabilitiesNotFound(message, self._capabilities)
 
 
 class ValidationFilter(Filter):
     """Filter that runs validation on nodes."""
 
-    def __init__(self, api, resource_class, capabilities):
+    def __init__(self, api):
         self._api = api
-        # These are only used for better exceptions
-        self._resource_class = resource_class
-        self._capabilities = capabilities
-        self._failed_validation = []
+        self._messages = []
+        self._failed_nodes = []
 
     def __call__(self, node):
         try:
@@ -181,45 +176,44 @@ class ValidationFilter(Filter):
             message = ('Node %(node)s failed validation: %(err)s' %
                        {'node': _utils.log_node(node), 'err': exc})
             LOG.warning(message)
-            self._failed_validation.append(message)
+            self._messages.append(message)
+            self._failed_nodes.append(node)
             return False
 
         return True
 
     def fail(self):
-        errors = ", ".join(self._failed_validation)
+        errors = ", ".join(self._messages)
         message = "All available nodes have failed validation: %s" % errors
-        raise exceptions.ValidationFailed(message,
-                                          self._resource_class,
-                                          self._capabilities)
+        raise exceptions.ValidationFailed(message, self._failed_nodes)
 
 
 class IronicReserver(Reserver):
 
-    def __init__(self, api, resource_class, capabilities):
+    def __init__(self, api):
         self._api = api
-        # These are only used for better exceptions
-        self._resource_class = resource_class
-        self._capabilities = capabilities
+        self._failed_nodes = []
 
     def __call__(self, node):
-        result = self._api.reserve_node(node, instance_uuid=node.uuid)
+        try:
+            result = self._api.reserve_node(node, instance_uuid=node.uuid)
 
-        # Try validation again to be sure nothing has changed
-        validator = ValidationFilter(self._api, self._resource_class,
-                                     self._capabilities)
-        if not validator(result):
-            LOG.warning('Validation of node %s failed after reservation',
-                        _utils.log_node(node))
-            try:
-                self._api.release_node(node)
-            except Exception:
-                LOG.exception('Failed to release the reserved node %s',
-                              _utils.log_node(node))
-            validator.fail()
+            # Try validation again to be sure nothing has changed
+            validator = ValidationFilter(self._api)
+            if not validator(result):
+                LOG.warning('Validation of node %s failed after reservation',
+                            _utils.log_node(node))
+                try:
+                    self._api.release_node(node)
+                except Exception:
+                    LOG.exception('Failed to release the reserved node %s',
+                                  _utils.log_node(node))
+                validator.fail()
 
-        return result
+            return result
+        except Exception:
+            self._failed_nodes.append(node)
+            raise
 
     def fail(self):
-        raise exceptions.AllNodesReserved(self._resource_class,
-                                          self._capabilities)
+        raise exceptions.AllNodesReserved(self._failed_nodes)

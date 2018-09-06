@@ -1,6 +1,7 @@
 # Optional parameters
 metalsmith_candidates: []
 metalsmith_capabilities: {}
+metalsmith_conductor_group:
 metalsmith_extra_args:
 metalsmith_netboot: false
 metalsmith_nics: []
