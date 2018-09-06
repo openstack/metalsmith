@@ -31,13 +31,13 @@ class TestInstanceIPAddresses(test_provisioner.Base):
                       network_id=n, fixed_ips=[{'ip_address': ip}])
             for n, ip in [('0', '192.168.0.1'), ('1', '10.0.0.2')]
         ]
-        self.api.get_port.side_effect = self.ports
+        self.conn.network.get_port.side_effect = self.ports
         self.nets = [
             mock.Mock(spec=['id', 'name'], id=str(i)) for i in range(2)
         ]
         for n in self.nets:
             n.name = 'name-%s' % n.id
-        self.api.get_network.side_effect = self.nets
+        self.conn.network.get_network.side_effect = self.nets
 
     def test_ip_addresses(self):
         ips = self.instance.ip_addresses()

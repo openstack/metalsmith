@@ -18,6 +18,7 @@ import random
 import sys
 import time
 
+from openstack import connection
 import six
 
 from metalsmith import _config
@@ -44,10 +45,25 @@ class Provisioner(object):
         to use when making API requests. Mutually exclusive with **session**.
     :param dry_run: boolean value, set to ``True`` to prevent any API calls
         from being actually made.
+
+    :ivar connection: `openstacksdk` `Connection` object used for accessing
+        OpenStack API during provisioning.
     """
 
     def __init__(self, session=None, cloud_region=None, dry_run=False):
-        self._api = _os_api.API(session=session, cloud_region=cloud_region)
+        if cloud_region is None:
+            if session is None:
+                raise TypeError('Either session or cloud_region must '
+                                'be provided')
+            self.connection = connection.Connection(session=session)
+        elif session is not None:
+            raise TypeError('Either session or cloud_region must be provided, '
+                            'but not both')
+        else:
+            session = cloud_region.get_session()
+            self.connection = connection.Connection(config=cloud_region)
+
+        self._api = _os_api.API(session, self.connection)
         self._dry_run = dry_run
 
     def reserve_node(self, resource_class=None, conductor_group=None,
@@ -228,7 +244,7 @@ class Provisioner(object):
             hostname = self._check_hostname(node, hostname)
             root_disk_size = _utils.get_root_disk(root_disk_size, node)
 
-            image._validate(self._api)
+            image._validate(self.connection)
 
             nics = self._get_nics(nics or [])
 
@@ -250,7 +266,7 @@ class Provisioner(object):
                        '/extra/%s' % _CREATED_PORTS: created_ports,
                        '/extra/%s' % _ATTACHED_PORTS: attached_ports,
                        '/instance_info/%s' % _os_api.HOSTNAME_FIELD: hostname}
-            updates.update(image._node_updates(self._api))
+            updates.update(image._node_updates(self.connection))
 
             LOG.debug('Updating node %(node)s with %(updates)s',
                       {'node': _utils.log_node(node), 'updates': updates})
@@ -299,7 +315,8 @@ class Provisioner(object):
             nic_type, nic_id = next(iter(nic.items()))
             if nic_type == 'network':
                 try:
-                    network = self._api.get_network(nic_id)
+                    network = self.connection.network.find_network(
+                        nic_id, ignore_missing=False)
                 except Exception as exc:
                     raise exceptions.InvalidNIC(
                         'Cannot find network %(net)s: %(error)s' %
@@ -308,7 +325,8 @@ class Provisioner(object):
                     result.append((nic_type, network))
             else:
                 try:
-                    port = self._api.get_port(nic_id)
+                    port = self.connection.network.find_port(
+                        nic_id, ignore_missing=False)
                 except Exception as exc:
                     raise exceptions.InvalidNIC(
                         'Cannot find port %(port)s: %(error)s' %
@@ -323,7 +341,7 @@ class Provisioner(object):
         """Create and attach ports on given networks."""
         for nic_type, nic in nics:
             if nic_type == 'network':
-                port = self._api.create_port(network_id=nic.id)
+                port = self.connection.network.create_port(network_id=nic.id)
                 created_ports.append(port.id)
                 LOG.info('Created port %(port)s for node %(node)s on '
                          'network %(net)s',
@@ -359,7 +377,8 @@ class Provisioner(object):
         for port_id in created_ports:
             LOG.debug('Deleting port %s', port_id)
             try:
-                self._api.delete_port(port_id)
+                self.connection.network.delete_port(port_id,
+                                                    ignore_missing=False)
             except Exception as exc:
                 LOG.warning('Failed to delete neutron port %(port)s: %(exc)s',
                             {'port': port_id, 'exc': exc})

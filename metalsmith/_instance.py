@@ -77,8 +77,9 @@ class Instance(object):
         result = []
         vifs = self._api.list_node_attached_ports(self.node)
         for vif in vifs:
-            port = self._api.get_port(vif.id)
-            port.network = self._api.get_network(port.network_id)
+            port = self._api.connection.network.get_port(vif.id)
+            port.network = self._api.connection.network.get_network(
+                port.network_id)
             result.append(port)
         return result
 

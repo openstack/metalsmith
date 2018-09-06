@@ -21,27 +21,6 @@ from metalsmith import _instance
 from metalsmith import _os_api
 
 
-class TestInit(testtools.TestCase):
-    def test_missing_auth(self):
-        self.assertRaisesRegex(TypeError, 'must be provided', _os_api.API)
-
-    def test_both_provided(self):
-        self.assertRaisesRegex(TypeError, 'not both', _os_api.API,
-                               session=mock.Mock(), cloud_region=mock.Mock())
-
-    def test_session_only(self):
-        session = mock.Mock()
-        api = _os_api.API(session=session)
-        self.assertIs(api.session, session)
-
-    @mock.patch.object(_os_api.connection, 'Connection', autospec=True)
-    def test_cloud_region_only(self, mock_conn):
-        region = mock.Mock()
-        api = _os_api.API(cloud_region=region)
-        self.assertIs(api.session, region.get_session.return_value)
-        mock_conn.assert_called_once_with(config=region)
-
-
 class TestNodes(testtools.TestCase):
     def setUp(self):
         super(TestNodes, self).setUp()
@@ -50,7 +29,7 @@ class TestNodes(testtools.TestCase):
             fixtures.MockPatchObject(_os_api.ir_client, 'get_client',
                                      autospec=True))
         self.cli = self.ironic_fixture.mock.return_value
-        self.api = _os_api.API(session=self.session)
+        self.api = _os_api.API(session=self.session, connection=mock.Mock())
 
     def test_get_node_by_uuid(self):
         res = self.api.get_node('uuid1')

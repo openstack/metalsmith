@@ -15,6 +15,7 @@
 
 import fixtures
 import mock
+from openstack import exceptions as os_exc
 import testtools
 
 from metalsmith import _config
@@ -28,6 +29,28 @@ from metalsmith import sources
 NODE_FIELDS = ['name', 'uuid', 'instance_info', 'instance_uuid', 'maintenance',
                'maintenance_reason', 'properties', 'provision_state', 'extra',
                'last_error']
+
+
+class TestInit(testtools.TestCase):
+    def test_missing_auth(self):
+        self.assertRaisesRegex(TypeError, 'must be provided',
+                               _provisioner.Provisioner)
+
+    def test_both_provided(self):
+        self.assertRaisesRegex(TypeError, 'not both', _provisioner.Provisioner,
+                               session=mock.Mock(), cloud_region=mock.Mock())
+
+    @mock.patch.object(_provisioner.connection, 'Connection', autospec=True)
+    def test_session_only(self, mock_conn):
+        session = mock.Mock()
+        _provisioner.Provisioner(session=session)
+        mock_conn.assert_called_once_with(session=session)
+
+    @mock.patch.object(_provisioner.connection, 'Connection', autospec=True)
+    def test_cloud_region_only(self, mock_conn):
+        region = mock.Mock()
+        _provisioner.Provisioner(cloud_region=region)
+        mock_conn.assert_called_once_with(config=region)
 
 
 class Base(testtools.TestCase):
@@ -57,6 +80,10 @@ class Base(testtools.TestCase):
         self.api.find_node_by_hostname.return_value = None
         self.api.cache_node_list_for_lookup = mock.MagicMock()
         self.pr._api = self.api
+
+        self.conn = mock.Mock(spec=['image', 'network', 'baremetal'])
+        self.pr.connection = self.conn
+        self.api.connection = self.conn
 
 
 class TestReserveNode(Base):
@@ -210,19 +237,19 @@ class TestProvisionNode(Base):
 
     def setUp(self):
         super(TestProvisionNode, self).setUp()
-        image = self.api.get_image.return_value
+        self.image = self.conn.image.find_image.return_value
         self.node.instance_uuid = self.node.uuid
         self.updates = {
-            '/instance_info/ramdisk': image.ramdisk_id,
-            '/instance_info/kernel': image.kernel_id,
-            '/instance_info/image_source': image.id,
+            '/instance_info/ramdisk': self.image.ramdisk_id,
+            '/instance_info/kernel': self.image.kernel_id,
+            '/instance_info/image_source': self.image.id,
             '/instance_info/root_gb': 99,  # 100 - 1
             '/instance_info/capabilities': {'boot_option': 'local'},
             '/extra/metalsmith_created_ports': [
-                self.api.create_port.return_value.id
+                self.conn.network.create_port.return_value.id
             ],
             '/extra/metalsmith_attached_ports': [
-                self.api.create_port.return_value.id
+                self.conn.network.create_port.return_value.id
             ],
             '/instance_info/%s' % _os_api.HOSTNAME_FIELD: 'control-0'
         }
@@ -239,10 +266,10 @@ class TestProvisionNode(Base):
         self.assertEqual(inst.uuid, self.node.uuid)
         self.assertEqual(inst.node, self.node)
 
-        self.api.create_port.assert_called_once_with(
-            network_id=self.api.get_network.return_value.id)
+        self.conn.network.create_port.assert_called_once_with(
+            network_id=self.conn.network.find_network.return_value.id)
         self.api.attach_port_to_node.assert_called_once_with(
-            self.node.uuid, self.api.create_port.return_value.id)
+            self.node.uuid, self.conn.network.create_port.return_value.id)
         self.api.update_node.assert_called_once_with(self.node, self.updates)
         self.api.validate_node.assert_called_once_with(self.node,
                                                        validate_deploy=True)
@@ -250,7 +277,7 @@ class TestProvisionNode(Base):
                                                      configdrive=mock.ANY)
         self.assertFalse(self.wait_mock.called)
         self.assertFalse(self.api.release_node.called)
-        self.assertFalse(self.api.delete_port.called)
+        self.assertFalse(self.conn.network.delete_port.called)
 
     def test_ok_with_source(self):
         inst = self.pr.provision_node(self.node, sources.Glance('image'),
@@ -259,10 +286,10 @@ class TestProvisionNode(Base):
         self.assertEqual(inst.uuid, self.node.uuid)
         self.assertEqual(inst.node, self.node)
 
-        self.api.create_port.assert_called_once_with(
-            network_id=self.api.get_network.return_value.id)
+        self.conn.network.create_port.assert_called_once_with(
+            network_id=self.conn.network.find_network.return_value.id)
         self.api.attach_port_to_node.assert_called_once_with(
-            self.node.uuid, self.api.create_port.return_value.id)
+            self.node.uuid, self.conn.network.create_port.return_value.id)
         self.api.update_node.assert_called_once_with(self.node, self.updates)
         self.api.validate_node.assert_called_once_with(self.node,
                                                        validate_deploy=True)
@@ -270,7 +297,7 @@ class TestProvisionNode(Base):
                                                      configdrive=mock.ANY)
         self.assertFalse(self.wait_mock.called)
         self.assertFalse(self.api.release_node.called)
-        self.assertFalse(self.api.delete_port.called)
+        self.assertFalse(self.conn.network.delete_port.called)
 
     def test_with_config(self):
         config = mock.MagicMock(spec=_config.InstanceConfig)
@@ -283,10 +310,10 @@ class TestProvisionNode(Base):
 
         config.build_configdrive_directory.assert_called_once_with(
             self.node, self.node.name)
-        self.api.create_port.assert_called_once_with(
-            network_id=self.api.get_network.return_value.id)
+        self.conn.network.create_port.assert_called_once_with(
+            network_id=self.conn.network.find_network.return_value.id)
         self.api.attach_port_to_node.assert_called_once_with(
-            self.node.uuid, self.api.create_port.return_value.id)
+            self.node.uuid, self.conn.network.create_port.return_value.id)
         self.api.update_node.assert_called_once_with(self.node, self.updates)
         self.api.validate_node.assert_called_once_with(self.node,
                                                        validate_deploy=True)
@@ -294,7 +321,7 @@ class TestProvisionNode(Base):
                                                      configdrive=mock.ANY)
         self.assertFalse(self.wait_mock.called)
         self.assertFalse(self.api.release_node.called)
-        self.assertFalse(self.api.delete_port.called)
+        self.assertFalse(self.conn.network.delete_port.called)
 
     def test_with_hostname(self):
         hostname = 'control-0.example.com'
@@ -306,10 +333,10 @@ class TestProvisionNode(Base):
         self.assertEqual(inst.uuid, self.node.uuid)
         self.assertEqual(inst.node, self.node)
 
-        self.api.create_port.assert_called_once_with(
-            network_id=self.api.get_network.return_value.id)
+        self.conn.network.create_port.assert_called_once_with(
+            network_id=self.conn.network.find_network.return_value.id)
         self.api.attach_port_to_node.assert_called_once_with(
-            self.node.uuid, self.api.create_port.return_value.id)
+            self.node.uuid, self.conn.network.create_port.return_value.id)
         self.api.update_node.assert_called_once_with(self.node, self.updates)
         self.api.validate_node.assert_called_once_with(self.node,
                                                        validate_deploy=True)
@@ -317,7 +344,7 @@ class TestProvisionNode(Base):
                                                      configdrive=mock.ANY)
         self.assertFalse(self.wait_mock.called)
         self.assertFalse(self.api.release_node.called)
-        self.assertFalse(self.api.delete_port.called)
+        self.assertFalse(self.conn.network.delete_port.called)
 
     def test_name_not_valid_hostname(self):
         self.node.name = 'node_1'
@@ -328,10 +355,10 @@ class TestProvisionNode(Base):
         self.assertEqual(inst.uuid, self.node.uuid)
         self.assertEqual(inst.node, self.node)
 
-        self.api.create_port.assert_called_once_with(
-            network_id=self.api.get_network.return_value.id)
+        self.conn.network.create_port.assert_called_once_with(
+            network_id=self.conn.network.find_network.return_value.id)
         self.api.attach_port_to_node.assert_called_once_with(
-            self.node.uuid, self.api.create_port.return_value.id)
+            self.node.uuid, self.conn.network.create_port.return_value.id)
         self.api.update_node.assert_called_once_with(self.node, self.updates)
         self.api.validate_node.assert_called_once_with(self.node,
                                                        validate_deploy=True)
@@ -339,7 +366,7 @@ class TestProvisionNode(Base):
                                                      configdrive=mock.ANY)
         self.assertFalse(self.wait_mock.called)
         self.assertFalse(self.api.release_node.called)
-        self.assertFalse(self.api.delete_port.called)
+        self.assertFalse(self.conn.network.delete_port.called)
 
     def test_unreserved(self):
         self.node.instance_uuid = None
@@ -348,10 +375,10 @@ class TestProvisionNode(Base):
 
         self.api.reserve_node.assert_called_once_with(
             self.node, instance_uuid=self.node.uuid)
-        self.api.create_port.assert_called_once_with(
-            network_id=self.api.get_network.return_value.id)
+        self.conn.network.create_port.assert_called_once_with(
+            network_id=self.conn.network.find_network.return_value.id)
         self.api.attach_port_to_node.assert_called_once_with(
-            self.node.uuid, self.api.create_port.return_value.id)
+            self.node.uuid, self.conn.network.create_port.return_value.id)
         self.api.update_node.assert_called_once_with(self.node, self.updates)
         self.api.validate_node.assert_called_once_with(self.node,
                                                        validate_deploy=True)
@@ -359,23 +386,24 @@ class TestProvisionNode(Base):
                                                      configdrive=mock.ANY)
         self.assertFalse(self.wait_mock.called)
         self.assertFalse(self.api.release_node.called)
-        self.assertFalse(self.api.delete_port.called)
+        self.assertFalse(self.conn.network.delete_port.called)
 
     def test_with_ports(self):
         self.updates['/extra/metalsmith_created_ports'] = []
         self.updates['/extra/metalsmith_attached_ports'] = [
-            self.api.get_port.return_value.id
+            self.conn.network.find_port.return_value.id
         ] * 2
 
         self.pr.provision_node(self.node, 'image',
                                [{'port': 'port1'}, {'port': 'port2'}])
 
-        self.assertFalse(self.api.create_port.called)
+        self.assertFalse(self.conn.network.create_port.called)
         self.api.attach_port_to_node.assert_called_with(
-            self.node.uuid, self.api.get_port.return_value.id)
+            self.node.uuid, self.conn.network.find_port.return_value.id)
         self.assertEqual(2, self.api.attach_port_to_node.call_count)
-        self.assertEqual([mock.call('port1'), mock.call('port2')],
-                         self.api.get_port.call_args_list)
+        self.assertEqual([mock.call('port1', ignore_missing=False),
+                          mock.call('port2', ignore_missing=False)],
+                         self.conn.network.find_port.call_args_list)
         self.api.update_node.assert_called_once_with(self.node, self.updates)
         self.api.validate_node.assert_called_once_with(self.node,
                                                        validate_deploy=True)
@@ -383,21 +411,20 @@ class TestProvisionNode(Base):
                                                      configdrive=mock.ANY)
         self.assertFalse(self.wait_mock.called)
         self.assertFalse(self.api.release_node.called)
-        self.assertFalse(self.api.delete_port.called)
+        self.assertFalse(self.conn.network.delete_port.called)
 
     def test_whole_disk(self):
-        image = self.api.get_image.return_value
-        image.kernel_id = None
-        image.ramdisk_id = None
+        self.image.kernel_id = None
+        self.image.ramdisk_id = None
         del self.updates['/instance_info/kernel']
         del self.updates['/instance_info/ramdisk']
 
         self.pr.provision_node(self.node, 'image', [{'network': 'network'}])
 
-        self.api.create_port.assert_called_once_with(
-            network_id=self.api.get_network.return_value.id)
+        self.conn.network.create_port.assert_called_once_with(
+            network_id=self.conn.network.find_network.return_value.id)
         self.api.attach_port_to_node.assert_called_once_with(
-            self.node.uuid, self.api.create_port.return_value.id)
+            self.node.uuid, self.conn.network.create_port.return_value.id)
         self.api.update_node.assert_called_once_with(self.node, self.updates)
         self.api.validate_node.assert_called_once_with(self.node,
                                                        validate_deploy=True)
@@ -405,7 +432,7 @@ class TestProvisionNode(Base):
                                                      configdrive=mock.ANY)
         self.assertFalse(self.wait_mock.called)
         self.assertFalse(self.api.release_node.called)
-        self.assertFalse(self.api.delete_port.called)
+        self.assertFalse(self.conn.network.delete_port.called)
 
     def test_with_root_disk_size(self):
         self.updates['/instance_info/root_gb'] = 50
@@ -413,10 +440,10 @@ class TestProvisionNode(Base):
         self.pr.provision_node(self.node, 'image', [{'network': 'network'}],
                                root_disk_size=50)
 
-        self.api.create_port.assert_called_once_with(
-            network_id=self.api.get_network.return_value.id)
+        self.conn.network.create_port.assert_called_once_with(
+            network_id=self.conn.network.find_network.return_value.id)
         self.api.attach_port_to_node.assert_called_once_with(
-            self.node.uuid, self.api.create_port.return_value.id)
+            self.node.uuid, self.conn.network.create_port.return_value.id)
         self.api.update_node.assert_called_once_with(self.node, self.updates)
         self.api.validate_node.assert_called_once_with(self.node,
                                                        validate_deploy=True)
@@ -424,7 +451,7 @@ class TestProvisionNode(Base):
                                                      configdrive=mock.ANY)
         self.assertFalse(self.wait_mock.called)
         self.assertFalse(self.api.release_node.called)
-        self.assertFalse(self.api.delete_port.called)
+        self.assertFalse(self.conn.network.delete_port.called)
 
     def test_with_capabilities(self):
         inst = self.pr.provision_node(self.node, 'image',
@@ -436,10 +463,10 @@ class TestProvisionNode(Base):
         self.assertEqual(inst.uuid, self.node.uuid)
         self.assertEqual(inst.node, self.node)
 
-        self.api.create_port.assert_called_once_with(
-            network_id=self.api.get_network.return_value.id)
+        self.conn.network.create_port.assert_called_once_with(
+            network_id=self.conn.network.find_network.return_value.id)
         self.api.attach_port_to_node.assert_called_once_with(
-            self.node.uuid, self.api.create_port.return_value.id)
+            self.node.uuid, self.conn.network.create_port.return_value.id)
         self.api.update_node.assert_called_once_with(self.node, self.updates)
         self.api.validate_node.assert_called_once_with(self.node,
                                                        validate_deploy=True)
@@ -447,7 +474,7 @@ class TestProvisionNode(Base):
                                                      configdrive=mock.ANY)
         self.assertFalse(self.wait_mock.called)
         self.assertFalse(self.api.release_node.called)
-        self.assertFalse(self.api.delete_port.called)
+        self.assertFalse(self.conn.network.delete_port.called)
 
     def test_with_existing_capabilities(self):
         self.node.instance_info['capabilities'] = {'answer': '42'}
@@ -459,10 +486,10 @@ class TestProvisionNode(Base):
         self.assertEqual(inst.uuid, self.node.uuid)
         self.assertEqual(inst.node, self.node)
 
-        self.api.create_port.assert_called_once_with(
-            network_id=self.api.get_network.return_value.id)
+        self.conn.network.create_port.assert_called_once_with(
+            network_id=self.conn.network.find_network.return_value.id)
         self.api.attach_port_to_node.assert_called_once_with(
-            self.node.uuid, self.api.create_port.return_value.id)
+            self.node.uuid, self.conn.network.create_port.return_value.id)
         self.api.update_node.assert_called_once_with(self.node, self.updates)
         self.api.validate_node.assert_called_once_with(self.node,
                                                        validate_deploy=True)
@@ -470,7 +497,7 @@ class TestProvisionNode(Base):
                                                      configdrive=mock.ANY)
         self.assertFalse(self.wait_mock.called)
         self.assertFalse(self.api.release_node.called)
-        self.assertFalse(self.api.delete_port.called)
+        self.assertFalse(self.conn.network.delete_port.called)
 
     def test_override_existing_capabilities(self):
         self.node.instance_info['capabilities'] = {'answer': '1',
@@ -484,10 +511,10 @@ class TestProvisionNode(Base):
         self.assertEqual(inst.uuid, self.node.uuid)
         self.assertEqual(inst.node, self.node)
 
-        self.api.create_port.assert_called_once_with(
-            network_id=self.api.get_network.return_value.id)
+        self.conn.network.create_port.assert_called_once_with(
+            network_id=self.conn.network.find_network.return_value.id)
         self.api.attach_port_to_node.assert_called_once_with(
-            self.node.uuid, self.api.create_port.return_value.id)
+            self.node.uuid, self.conn.network.create_port.return_value.id)
         self.api.update_node.assert_called_once_with(self.node, self.updates)
         self.api.validate_node.assert_called_once_with(self.node,
                                                        validate_deploy=True)
@@ -495,20 +522,20 @@ class TestProvisionNode(Base):
                                                      configdrive=mock.ANY)
         self.assertFalse(self.wait_mock.called)
         self.assertFalse(self.api.release_node.called)
-        self.assertFalse(self.api.delete_port.called)
+        self.assertFalse(self.conn.network.delete_port.called)
 
     def test_with_wait(self):
-        self.api.get_port.return_value = mock.Mock(
+        self.conn.network.find_port.return_value = mock.Mock(
             spec=['fixed_ips'],
             fixed_ips=[{'ip_address': '192.168.1.5'}, {}]
         )
         self.pr.provision_node(self.node, 'image', [{'network': 'network'}],
                                wait=3600)
 
-        self.api.create_port.assert_called_once_with(
-            network_id=self.api.get_network.return_value.id)
+        self.conn.network.create_port.assert_called_once_with(
+            network_id=self.conn.network.find_network.return_value.id)
         self.api.attach_port_to_node.assert_called_once_with(
-            self.node.uuid, self.api.create_port.return_value.id)
+            self.node.uuid, self.conn.network.create_port.return_value.id)
         self.api.update_node.assert_called_once_with(self.node, self.updates)
         self.api.validate_node.assert_called_once_with(self.node,
                                                        validate_deploy=True)
@@ -520,19 +547,19 @@ class TestProvisionNode(Base):
                                                delay=15,
                                                timeout=3600)
         self.assertFalse(self.api.release_node.called)
-        self.assertFalse(self.api.delete_port.called)
+        self.assertFalse(self.conn.network.delete_port.called)
 
     def test_dry_run(self):
         self.pr._dry_run = True
         self.pr.provision_node(self.node, 'image', [{'network': 'network'}])
 
-        self.assertFalse(self.api.create_port.called)
+        self.assertFalse(self.conn.network.create_port.called)
         self.assertFalse(self.api.attach_port_to_node.called)
         self.assertFalse(self.api.update_node.called)
         self.assertFalse(self.api.node_action.called)
         self.assertFalse(self.wait_mock.called)
         self.assertFalse(self.api.release_node.called)
-        self.assertFalse(self.api.delete_port.called)
+        self.assertFalse(self.conn.network.delete_port.called)
 
     def test_unreserve_dry_run(self):
         self.pr._dry_run = True
@@ -541,13 +568,13 @@ class TestProvisionNode(Base):
         self.pr.provision_node(self.node, 'image', [{'network': 'network'}])
 
         self.assertFalse(self.api.reserve_node.called)
-        self.assertFalse(self.api.create_port.called)
+        self.assertFalse(self.conn.network.create_port.called)
         self.assertFalse(self.api.attach_port_to_node.called)
         self.assertFalse(self.api.update_node.called)
         self.assertFalse(self.api.node_action.called)
         self.assertFalse(self.wait_mock.called)
         self.assertFalse(self.api.release_node.called)
-        self.assertFalse(self.api.delete_port.called)
+        self.assertFalse(self.conn.network.delete_port.called)
 
     def test_deploy_failure(self):
         self.api.node_action.side_effect = RuntimeError('boom')
@@ -559,16 +586,18 @@ class TestProvisionNode(Base):
         self.api.update_node.assert_any_call(self.node, CLEAN_UP)
         self.assertFalse(self.wait_mock.called)
         self.api.release_node.assert_called_once_with(self.node)
-        self.api.delete_port.assert_called_once_with(
-            self.api.create_port.return_value.id)
+        self.conn.network.delete_port.assert_called_once_with(
+            self.conn.network.create_port.return_value.id,
+            ignore_missing=False)
         calls = [
-            mock.call(self.node, self.api.create_port.return_value.id),
-            mock.call(self.node, self.api.get_port.return_value.id)
+            mock.call(self.node,
+                      self.conn.network.create_port.return_value.id),
+            mock.call(self.node, self.conn.network.find_port.return_value.id)
         ]
         self.api.detach_port_from_node.assert_has_calls(calls, any_order=True)
 
     def test_port_creation_failure(self):
-        self.api.create_port.side_effect = RuntimeError('boom')
+        self.conn.network.create_port.side_effect = RuntimeError('boom')
         self.assertRaisesRegex(RuntimeError, 'boom',
                                self.pr.provision_node, self.node,
                                'image', [{'network': 'network'}], wait=3600)
@@ -576,7 +605,7 @@ class TestProvisionNode(Base):
         self.api.update_node.assert_called_once_with(self.node, CLEAN_UP)
         self.assertFalse(self.api.node_action.called)
         self.api.release_node.assert_called_once_with(self.node)
-        self.assertFalse(self.api.delete_port.called)
+        self.assertFalse(self.conn.network.delete_port.called)
         self.assertFalse(self.api.detach_port_from_node.called)
 
     def test_port_attach_failure(self):
@@ -588,15 +617,32 @@ class TestProvisionNode(Base):
         self.api.update_node.assert_called_once_with(self.node, CLEAN_UP)
         self.assertFalse(self.api.node_action.called)
         self.api.release_node.assert_called_once_with(self.node)
-        self.api.delete_port.assert_called_once_with(
-            self.api.create_port.return_value.id)
+        self.conn.network.delete_port.assert_called_once_with(
+            self.conn.network.create_port.return_value.id,
+            ignore_missing=False)
         self.api.detach_port_from_node.assert_called_once_with(
-            self.node, self.api.create_port.return_value.id)
+            self.node, self.conn.network.create_port.return_value.id)
+
+    def test_failure_during_port_deletion(self):
+        self.conn.network.delete_port.side_effect = AssertionError()
+        self.api.node_action.side_effect = RuntimeError('boom')
+        self.assertRaisesRegex(RuntimeError, 'boom',
+                               self.pr.provision_node, self.node,
+                               'image', [{'network': 'network'}],
+                               wait=3600)
+
+        self.assertFalse(self.wait_mock.called)
+        self.api.release_node.assert_called_once_with(self.node)
+        self.conn.network.delete_port.assert_called_once_with(
+            self.conn.network.create_port.return_value.id,
+            ignore_missing=False)
+        self.api.detach_port_from_node.assert_called_once_with(
+            self.node, self.conn.network.create_port.return_value.id)
 
     @mock.patch.object(_provisioner.LOG, 'exception', autospec=True)
     def test_failure_during_deploy_failure(self, mock_log_exc):
         for failed_call in ['detach_port_from_node',
-                            'delete_port', 'release_node']:
+                            'release_node']:
             self._reset_api_mock()
             getattr(self.api, failed_call).side_effect = AssertionError()
             self.api.node_action.side_effect = RuntimeError('boom')
@@ -607,10 +653,11 @@ class TestProvisionNode(Base):
 
             self.assertFalse(self.wait_mock.called)
             self.api.release_node.assert_called_once_with(self.node)
-            self.api.delete_port.assert_called_once_with(
-                self.api.create_port.return_value.id)
+            self.conn.network.delete_port.assert_called_once_with(
+                self.conn.network.create_port.return_value.id,
+                ignore_missing=False)
             self.api.detach_port_from_node.assert_called_once_with(
-                self.node, self.api.create_port.return_value.id)
+                self.node, self.conn.network.create_port.return_value.id)
             self.assertEqual(mock_log_exc.called,
                              failed_call == 'release_node')
 
@@ -624,10 +671,11 @@ class TestProvisionNode(Base):
 
         self.assertFalse(self.wait_mock.called)
         self.api.release_node.assert_called_once_with(self.node)
-        self.api.delete_port.assert_called_once_with(
-            self.api.create_port.return_value.id)
+        self.conn.network.delete_port.assert_called_once_with(
+            self.conn.network.create_port.return_value.id,
+            ignore_missing=False)
         self.api.detach_port_from_node.assert_called_once_with(
-            self.node, self.api.create_port.return_value.id)
+            self.node, self.conn.network.create_port.return_value.id)
 
     def test_wait_failure(self):
         self.wait_mock.side_effect = RuntimeError('boom')
@@ -639,11 +687,12 @@ class TestProvisionNode(Base):
         self.api.node_action.assert_called_once_with(self.node, 'active',
                                                      configdrive=mock.ANY)
         self.assertFalse(self.api.release_node.called)
-        self.assertFalse(self.api.delete_port.called)
+        self.assertFalse(self.conn.network.delete_port.called)
         self.assertFalse(self.api.detach_port_from_node.called)
 
     def test_missing_image(self):
-        self.api.get_image.side_effect = RuntimeError('Not found')
+        self.conn.image.find_image.side_effect = os_exc.ResourceNotFound(
+            'Not found')
         self.assertRaisesRegex(exceptions.InvalidImage, 'Not found',
                                self.pr.provision_node,
                                self.node, 'image', [{'network': 'network'}])
@@ -652,22 +701,22 @@ class TestProvisionNode(Base):
         self.api.release_node.assert_called_once_with(self.node)
 
     def test_invalid_network(self):
-        self.api.get_network.side_effect = RuntimeError('Not found')
+        self.conn.network.find_network.side_effect = RuntimeError('Not found')
         self.assertRaisesRegex(exceptions.InvalidNIC, 'Not found',
                                self.pr.provision_node,
                                self.node, 'image', [{'network': 'network'}])
         self.api.update_node.assert_called_once_with(self.node, CLEAN_UP)
-        self.assertFalse(self.api.create_port.called)
+        self.assertFalse(self.conn.network.create_port.called)
         self.assertFalse(self.api.node_action.called)
         self.api.release_node.assert_called_once_with(self.node)
 
     def test_invalid_port(self):
-        self.api.get_port.side_effect = RuntimeError('Not found')
+        self.conn.network.find_port.side_effect = RuntimeError('Not found')
         self.assertRaisesRegex(exceptions.InvalidNIC, 'Not found',
                                self.pr.provision_node,
                                self.node, 'image', [{'port': 'port1'}])
         self.api.update_node.assert_called_once_with(self.node, CLEAN_UP)
-        self.assertFalse(self.api.create_port.called)
+        self.assertFalse(self.conn.network.create_port.called)
         self.assertFalse(self.api.node_action.called)
         self.api.release_node.assert_called_once_with(self.node)
 
@@ -676,7 +725,7 @@ class TestProvisionNode(Base):
         self.assertRaises(exceptions.UnknownRootDiskSize,
                           self.pr.provision_node,
                           self.node, 'image', [{'network': 'network'}])
-        self.assertFalse(self.api.create_port.called)
+        self.assertFalse(self.conn.network.create_port.called)
         self.assertFalse(self.api.node_action.called)
         self.api.release_node.assert_called_once_with(self.node)
 
@@ -686,7 +735,7 @@ class TestProvisionNode(Base):
             self.assertRaises(exceptions.UnknownRootDiskSize,
                               self.pr.provision_node,
                               self.node, 'image', [{'network': 'network'}])
-        self.assertFalse(self.api.create_port.called)
+        self.assertFalse(self.conn.network.create_port.called)
         self.assertFalse(self.api.node_action.called)
         self.api.release_node.assert_called_with(self.node)
 
@@ -699,7 +748,7 @@ class TestProvisionNode(Base):
                           self.pr.provision_node,
                           self.node, 'image', [{'network': 'network'}],
                           root_disk_size=0)
-        self.assertFalse(self.api.create_port.called)
+        self.assertFalse(self.conn.network.create_port.called)
         self.assertFalse(self.api.node_action.called)
         self.api.release_node.assert_called_with(self.node)
 
@@ -707,7 +756,7 @@ class TestProvisionNode(Base):
         self.assertRaisesRegex(TypeError, 'must be a list',
                                self.pr.provision_node,
                                self.node, 'image', 42)
-        self.assertFalse(self.api.create_port.called)
+        self.assertFalse(self.conn.network.create_port.called)
         self.assertFalse(self.api.attach_port_to_node.called)
         self.assertFalse(self.api.node_action.called)
         self.api.release_node.assert_called_once_with(self.node)
@@ -717,7 +766,7 @@ class TestProvisionNode(Base):
             self.assertRaisesRegex(TypeError, 'must be a dict',
                                    self.pr.provision_node,
                                    self.node, 'image', item)
-        self.assertFalse(self.api.create_port.called)
+        self.assertFalse(self.conn.network.create_port.called)
         self.assertFalse(self.api.attach_port_to_node.called)
         self.assertFalse(self.api.node_action.called)
         self.api.release_node.assert_called_with(self.node)
@@ -726,7 +775,7 @@ class TestProvisionNode(Base):
         self.assertRaisesRegex(ValueError, r'Unexpected NIC type\(s\) foo',
                                self.pr.provision_node,
                                self.node, 'image', [{'foo': 'bar'}])
-        self.assertFalse(self.api.create_port.called)
+        self.assertFalse(self.conn.network.create_port.called)
         self.assertFalse(self.api.attach_port_to_node.called)
         self.assertFalse(self.api.node_action.called)
         self.api.release_node.assert_called_once_with(self.node)
@@ -737,7 +786,7 @@ class TestProvisionNode(Base):
                                self.node, 'image', [{'port': 'port1'}],
                                hostname='n_1')
         self.api.update_node.assert_called_once_with(self.node, CLEAN_UP)
-        self.assertFalse(self.api.create_port.called)
+        self.assertFalse(self.conn.network.create_port.called)
         self.assertFalse(self.api.node_action.called)
         self.api.release_node.assert_called_once_with(self.node)
 
@@ -749,7 +798,7 @@ class TestProvisionNode(Base):
                                self.node, 'image', [{'port': 'port1'}],
                                hostname='host')
         self.api.update_node.assert_called_once_with(self.node, CLEAN_UP)
-        self.assertFalse(self.api.create_port.called)
+        self.assertFalse(self.conn.network.create_port.called)
         self.assertFalse(self.api.node_action.called)
         self.api.release_node.assert_called_once_with(self.node)
 
@@ -758,7 +807,7 @@ class TestProvisionNode(Base):
         self.assertRaisesRegex(exceptions.InvalidNode, 'not found',
                                self.pr.provision_node,
                                self.node, 'image', [{'network': 'network'}])
-        self.assertFalse(self.api.create_port.called)
+        self.assertFalse(self.conn.network.create_port.called)
         self.assertFalse(self.api.update_node.called)
         self.assertFalse(self.api.node_action.called)
         self.assertFalse(self.api.release_node.called)
@@ -769,7 +818,7 @@ class TestProvisionNode(Base):
                                'reserved by instance nova',
                                self.pr.provision_node,
                                self.node, 'image', [{'network': 'network'}])
-        self.assertFalse(self.api.create_port.called)
+        self.assertFalse(self.conn.network.create_port.called)
         self.assertFalse(self.api.update_node.called)
         self.assertFalse(self.api.node_action.called)
         self.assertFalse(self.api.release_node.called)
@@ -781,7 +830,7 @@ class TestProvisionNode(Base):
                                'in maintenance mode .* power failure',
                                self.pr.provision_node,
                                self.node, 'image', [{'network': 'network'}])
-        self.assertFalse(self.api.create_port.called)
+        self.assertFalse(self.conn.network.create_port.called)
         self.assertFalse(self.api.update_node.called)
         self.assertFalse(self.api.node_action.called)
         self.assertFalse(self.api.release_node.called)
@@ -801,7 +850,8 @@ class TestUnprovisionNode(Base):
         result = self.pr.unprovision_node(self.node)
         self.assertIs(result, self.node)
 
-        self.api.delete_port.assert_called_once_with('port1')
+        self.conn.network.delete_port.assert_called_once_with(
+            'port1', ignore_missing=False)
         self.api.detach_port_from_node.assert_called_once_with(self.node,
                                                                'port1')
         self.api.node_action.assert_called_once_with(self.node, 'deleted')
@@ -814,7 +864,8 @@ class TestUnprovisionNode(Base):
         self.node.extra['metalsmith_attached_ports'] = ['port1', 'port2']
         self.pr.unprovision_node(self.node)
 
-        self.api.delete_port.assert_called_once_with('port1')
+        self.conn.network.delete_port.assert_called_once_with(
+            'port1', ignore_missing=False)
         calls = [mock.call(self.node, 'port1'), mock.call(self.node, 'port2')]
         self.api.detach_port_from_node.assert_has_calls(calls, any_order=True)
         self.api.node_action.assert_called_once_with(self.node, 'deleted')
@@ -827,7 +878,8 @@ class TestUnprovisionNode(Base):
         result = self.pr.unprovision_node(self.node, wait=3600)
         self.assertIs(result, self.node)
 
-        self.api.delete_port.assert_called_once_with('port1')
+        self.conn.network.delete_port.assert_called_once_with(
+            'port1', ignore_missing=False)
         self.api.detach_port_from_node.assert_called_once_with(self.node,
                                                                'port1')
         self.api.node_action.assert_called_once_with(self.node, 'deleted')
@@ -844,7 +896,7 @@ class TestUnprovisionNode(Base):
 
         self.assertFalse(self.api.node_action.called)
         self.assertFalse(self.api.release_node.called)
-        self.assertFalse(self.api.delete_port.called)
+        self.assertFalse(self.conn.network.delete_port.called)
         self.assertFalse(self.api.detach_port_from_node.called)
         self.assertFalse(self.wait_mock.called)
         self.assertFalse(self.api.update_node.called)

@@ -17,7 +17,6 @@ import contextlib
 import logging
 
 from ironicclient import client as ir_client
-from openstack import connection
 import six
 
 from metalsmith import _utils
@@ -60,24 +59,11 @@ class API(object):
 
     _node_list = None
 
-    def __init__(self, session=None, cloud_region=None):
-        if cloud_region is None:
-            if session is None:
-                raise TypeError('Either session or cloud_region must '
-                                'be provided')
-            self.session = session
-            self.connection = connection.Connection(session=session)
-        elif session is not None:
-            raise TypeError('Either session or cloud_region must be provided, '
-                            'but not both')
-        else:
-            self.session = cloud_region.get_session()
-            self.connection = connection.Connection(config=cloud_region)
-
-        LOG.debug('Creating service clients')
+    def __init__(self, session, connection):
         self.ironic = ir_client.get_client(
-            self.IRONIC_VERSION, session=self.session,
+            self.IRONIC_VERSION, session=session,
             os_ironic_api_version=self.IRONIC_MICRO_VERSION)
+        self.connection = connection
 
     def _nodes_for_lookup(self):
         return self.list_nodes(maintenance=None,
@@ -94,15 +80,6 @@ class API(object):
             self._node_list = self._nodes_for_lookup()
         yield self._node_list
         self._node_list = None
-
-    def create_port(self, network_id, **kwargs):
-        return self.connection.network.create_port(network_id=network_id,
-                                                   admin_state_up=True,
-                                                   **kwargs)
-
-    def delete_port(self, port_id):
-        self.connection.network.delete_port(port_id,
-                                            ignore_missing=False)
 
     def detach_port_from_node(self, node, port_id):
         self.ironic.node.vif_detach(_node_id(node), port_id)
@@ -123,14 +100,6 @@ class API(object):
             # Fetch the complete node record
             return self.get_node(existing[0].uuid, accept_hostname=False)
 
-    def get_image(self, image_id):
-        return self.connection.image.find_image(image_id,
-                                                ignore_missing=False)
-
-    def get_network(self, network_id):
-        return self.connection.network.find_network(network_id,
-                                                    ignore_missing=False)
-
     def get_node(self, node, refresh=False, accept_hostname=False):
         if isinstance(node, six.string_types):
             if accept_hostname and _utils.is_hostname_safe(node):
@@ -149,10 +118,6 @@ class API(object):
             return self.ironic.node.get(node.uuid)
         else:
             return node
-
-    def get_port(self, port_id):
-        return self.connection.network.find_port(port_id,
-                                                 ignore_missing=False)
 
     def list_node_attached_ports(self, node):
         return self.ironic.node.vif_list(_node_id(node))
