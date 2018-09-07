@@ -58,6 +58,7 @@ class TestDeploy(testtools.TestCase):
             resource_class='compute',
             conductor_group=None,
             capabilities={},
+            traits=[],
             candidates=None
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
@@ -105,6 +106,7 @@ class TestDeploy(testtools.TestCase):
             resource_class='compute',
             conductor_group=None,
             capabilities={},
+            traits=[],
             candidates=None
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
@@ -179,6 +181,7 @@ class TestDeploy(testtools.TestCase):
             resource_class='compute',
             conductor_group=None,
             capabilities={},
+            traits=[],
             candidates=None
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
@@ -203,6 +206,7 @@ class TestDeploy(testtools.TestCase):
             resource_class='compute',
             conductor_group=None,
             capabilities={},
+            traits=[],
             candidates=None
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
@@ -235,6 +239,7 @@ class TestDeploy(testtools.TestCase):
             resource_class='compute',
             conductor_group=None,
             capabilities={},
+            traits=[],
             candidates=None
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
@@ -269,6 +274,7 @@ class TestDeploy(testtools.TestCase):
             resource_class='compute',
             conductor_group=None,
             capabilities={},
+            traits=[],
             candidates=None
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
@@ -301,6 +307,7 @@ class TestDeploy(testtools.TestCase):
             resource_class='compute',
             conductor_group=None,
             capabilities={},
+            traits=[],
             candidates=None
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
@@ -333,6 +340,7 @@ class TestDeploy(testtools.TestCase):
             resource_class='compute',
             conductor_group=None,
             capabilities={},
+            traits=[],
             candidates=None
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
@@ -390,6 +398,32 @@ class TestDeploy(testtools.TestCase):
             resource_class='compute',
             conductor_group=None,
             capabilities={'foo': 'bar', 'answer': '42'},
+            traits=[],
+            candidates=None
+        )
+        mock_pr.return_value.provision_node.assert_called_once_with(
+            mock_pr.return_value.reserve_node.return_value,
+            image='myimg',
+            nics=[{'network': 'mynet'}],
+            root_disk_size=None,
+            config=mock.ANY,
+            hostname=None,
+            netboot=False,
+            wait=1800)
+
+    def test_args_traits(self, mock_os_conf, mock_pr):
+        args = ['deploy', '--network', 'mynet', '--image', 'myimg',
+                '--trait', 'foo:bar', '--trait', 'answer:42',
+                '--resource-class', 'compute']
+        _cmd.main(args)
+        mock_pr.assert_called_once_with(
+            cloud_region=mock_os_conf.return_value.get_one.return_value,
+            dry_run=False)
+        mock_pr.return_value.reserve_node.assert_called_once_with(
+            resource_class='compute',
+            conductor_group=None,
+            capabilities={},
+            traits=['foo:bar', 'answer:42'],
             candidates=None
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
@@ -417,6 +451,7 @@ class TestDeploy(testtools.TestCase):
                 resource_class='compute',
                 conductor_group=None,
                 capabilities={},
+                traits=[],
                 candidates=None
             )
             mock_pr.return_value.provision_node.assert_called_once_with(
@@ -443,6 +478,7 @@ class TestDeploy(testtools.TestCase):
             resource_class='compute',
             conductor_group=None,
             capabilities={},
+            traits=[],
             candidates=None
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
@@ -472,6 +508,7 @@ class TestDeploy(testtools.TestCase):
             resource_class='compute',
             conductor_group=None,
             capabilities={},
+            traits=[],
             candidates=None
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
@@ -498,6 +535,7 @@ class TestDeploy(testtools.TestCase):
             resource_class='compute',
             conductor_group=None,
             capabilities={},
+            traits=[],
             candidates=None
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
@@ -520,6 +558,7 @@ class TestDeploy(testtools.TestCase):
             resource_class='compute',
             conductor_group=None,
             capabilities={},
+            traits=[],
             candidates=None
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
@@ -544,6 +583,7 @@ class TestDeploy(testtools.TestCase):
             resource_class='compute',
             conductor_group=None,
             capabilities={},
+            traits=[],
             candidates=None
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
@@ -568,6 +608,7 @@ class TestDeploy(testtools.TestCase):
             resource_class='compute',
             conductor_group=None,
             capabilities={},
+            traits=[],
             candidates=None
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
@@ -591,6 +632,7 @@ class TestDeploy(testtools.TestCase):
             resource_class=None,
             conductor_group=None,
             capabilities={},
+            traits=[],
             candidates=['node1', 'node2']
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
@@ -614,6 +656,7 @@ class TestDeploy(testtools.TestCase):
             resource_class='compute',
             conductor_group='loc1',
             capabilities={},
+            traits=[],
             candidates=None
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
@@ -638,6 +681,7 @@ class TestDeploy(testtools.TestCase):
             resource_class='compute',
             conductor_group=None,
             capabilities={},
+            traits=[],
             candidates=None
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
@@ -666,6 +710,7 @@ class TestDeploy(testtools.TestCase):
             resource_class='compute',
             conductor_group=None,
             capabilities={},
+            traits=[],
             candidates=None
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
@@ -703,6 +748,7 @@ class TestDeploy(testtools.TestCase):
             resource_class='compute',
             conductor_group=None,
             capabilities={},
+            traits=[],
             candidates=None
         )
         mock_pr.return_value.provision_node.assert_called_once_with(
@@ -726,6 +772,7 @@ class TestDeploy(testtools.TestCase):
             resource_class='compute',
             conductor_group=None,
             capabilities={},
+            traits=[],
             candidates=None
         )
         mock_pr.return_value.provision_node.assert_called_once_with(

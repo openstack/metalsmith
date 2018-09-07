@@ -124,6 +124,7 @@
       metalsmith_precreate_port: false
       metalsmith_partition_image: test-centos-partition
       metalsmith_whole_disk_image: test-centos-wholedisk
+      metalsmith_traits: [CUSTOM_GOLD]
 
 - job:
     name: metalsmith-integration-glance-netboot-cirros-iscsi-py3

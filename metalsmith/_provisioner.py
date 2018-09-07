@@ -67,7 +67,8 @@ class Provisioner(object):
         self._dry_run = dry_run
 
     def reserve_node(self, resource_class=None, conductor_group=None,
-                     capabilities=None, candidates=None, predicate=None):
+                     capabilities=None, traits=None, candidates=None,
+                     predicate=None):
         """Find and reserve a suitable node.
 
         Example::
@@ -81,6 +82,7 @@ class Provisioner(object):
             Value ``None`` means any group, use empty string "" for nodes
             from the default group.
         :param capabilities: Requested capabilities as a dict.
+        :param traits: Requested traits as a list of strings.
         :param candidates: List of nodes (UUIDs, names or `Node` objects)
             to pick from. The filters (for resource class and capabilities)
             are still applied to the provided list. The order in which
@@ -111,15 +113,21 @@ class Provisioner(object):
         LOG.debug('Candidate nodes: %s', nodes)
 
         filters.append(_scheduler.CapabilitiesFilter(capabilities))
+        filters.append(_scheduler.TraitsFilter(traits))
         if predicate is not None:
             filters.append(_scheduler.CustomPredicateFilter(predicate))
 
         reserver = _scheduler.IronicReserver(self._api)
         node = _scheduler.schedule_node(nodes, filters, reserver,
                                         dry_run=self._dry_run)
+
+        update = {}
         if capabilities:
-            node = self._api.update_node(
-                node, {'/instance_info/capabilities': capabilities})
+            update['/instance_info/capabilities'] = capabilities
+        if traits:
+            update['/instance_info/traits'] = traits
+        if update:
+            node = self._api.update_node(node, update)
 
         LOG.debug('Reserved node: %s', node)
         return node

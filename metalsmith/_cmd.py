@@ -76,6 +76,7 @@ def _do_deploy(api, args, formatter):
     node = api.reserve_node(resource_class=args.resource_class,
                             conductor_group=args.conductor_group,
                             capabilities=capabilities,
+                            traits=args.trait,
                             candidates=args.candidate)
     instance = api.provision_node(node,
                                   image=source,
@@ -153,7 +154,9 @@ def _parse_args(args, config):
                         help='root disk size (in GiB), defaults to (local_gb '
                         '- 2)')
     deploy.add_argument('--capability', action='append', metavar='NAME=VALUE',
-                        default=[], help='capabilities the nodes should have')
+                        default=[], help='capabilities the node should have')
+    deploy.add_argument('--trait', action='append',
+                        default=[], help='trait the node should have')
     deploy.add_argument('--ssh-public-key', help='SSH public key to load')
     deploy.add_argument('--hostname', help='Host name to use, defaults to '
                         'Node\'s name or UUID')

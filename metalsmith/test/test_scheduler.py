@@ -164,6 +164,38 @@ class TestCapabilitiesFilter(testtools.TestCase):
                                fltr.fail)
 
 
+class TestTraitsFilter(testtools.TestCase):
+
+    def test_fail_no_traits(self):
+        fltr = _scheduler.TraitsFilter(['tr1', 'tr2'])
+        self.assertRaisesRegex(exceptions.TraitsNotFound,
+                               'No available nodes found with traits '
+                               'tr1, tr2, existing traits: none',
+                               fltr.fail)
+
+    def test_no_traits(self):
+        fltr = _scheduler.TraitsFilter([])
+        node = mock.Mock(spec=['name', 'uuid'])
+        self.assertTrue(fltr(node))
+
+    def test_ok(self):
+        fltr = _scheduler.TraitsFilter(['tr1', 'tr2'])
+        node = mock.Mock(spec=['name', 'uuid', 'traits'],
+                         traits=['tr3', 'tr2', 'tr1'])
+        self.assertTrue(fltr(node))
+
+    def test_missing_one(self):
+        fltr = _scheduler.TraitsFilter(['tr1', 'tr2'])
+        node = mock.Mock(spec=['name', 'uuid', 'traits'],
+                         traits=['tr3', 'tr1'])
+        self.assertFalse(fltr(node))
+
+    def test_missing_all(self):
+        fltr = _scheduler.TraitsFilter(['tr1', 'tr2'])
+        node = mock.Mock(spec=['name', 'uuid', 'traits'], traits=None)
+        self.assertFalse(fltr(node))
+
+
 class TestIronicReserver(testtools.TestCase):
 
     def setUp(self):

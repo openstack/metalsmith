@@ -6,6 +6,9 @@
     {% for cap_name, cap_value in capabilities.items() %}
       --capability {{ cap_name }}={{ cap_value }}
     {% endfor %}
+    {% for trait in traits %}
+      --trait {{ trait }}
+    {% endfor %}
     {% for nic in nics %}
       {% for nic_type, nic_value in nic.items() %}
         --{{ nic_type }} {{ nic_value }}
@@ -51,6 +54,7 @@
     root_size: "{{ instance.root_size | default(metalsmith_root_size) }}"
     ssh_public_keys: "{{ instance.ssh_public_keys | default(metalsmith_ssh_public_keys) }}"
     state: "{{ instance.state | default('present') }}"
+    traits: "{{ instance.traits | default(metalsmith_traits) }}"
     user_name: "{{ instance.user_name | default(metalsmith_user_name) }}"
   with_items: "{{ metalsmith_instances }}"
   loop_control:

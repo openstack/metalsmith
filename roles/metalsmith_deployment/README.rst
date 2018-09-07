@@ -35,6 +35,8 @@ The following optional variables provide the defaults for Instance_ attributes:
     the default for ``root_size``.
 ``metalsmith_ssh_public_keys``
     the default for ``ssh_public_keys``.
+``metalsmith_traits``
+    the default for ``traits``.
 ``metalsmith_user_name``
     the default for ``user_name``, the default value is ``metalsmith``.
 
@@ -93,6 +95,8 @@ Each instances has the following attributes:
 
 ``ssh_public_keys`` (defaults to ``metalsmith_ssh_public_keys``)
     list of file names with SSH public keys to put to the node.
+``traits``
+    list of traits the node should have.
 ``user_name`` (defaults to ``metalsmith_user_name``)
     name of the user to create on the instance via configdrive. Requires
     cloud-init_ on the image.
@@ -121,6 +125,8 @@ Example
                 root_size: 100
                 capabilities:
                   boot_mode: uefi
+                traits:
+                  - CUSTOM_GPU
               - hostname: compute-1
                 resource_class: compute
                 root_size: 100

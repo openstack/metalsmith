@@ -142,6 +142,9 @@ class CapabilitiesFilter(Filter):
         self._counter = collections.Counter()
 
     def __call__(self, node):
+        if not self._capabilities:
+            return True
+
         try:
             caps = _utils.get_capabilities(node)
         except Exception:
@@ -179,6 +182,41 @@ class CapabilitiesFilter(Filter):
                    "existing capabilities: %(exist)s" %
                    {'req': requested, 'exist': existing or 'none'})
         raise exceptions.CapabilitiesNotFound(message, self._capabilities)
+
+
+class TraitsFilter(Filter):
+    """Filter that checks traits."""
+
+    def __init__(self, traits):
+        self._traits = traits
+        self._counter = collections.Counter()
+
+    def __call__(self, node):
+        if not self._traits:
+            return True
+
+        traits = node.traits or []
+        LOG.debug('Traits for node %(node)s: %(traits)s',
+                  {'node': _utils.log_node(node), 'traits': traits})
+        for trait in traits:
+            self._counter[trait] += 1
+
+        missing = set(self._traits) - set(traits)
+        if missing:
+            LOG.debug('Node %(node)s does not have traits %(missing)s',
+                      {'node': _utils.log_node(node), 'missing': missing})
+            return False
+
+        return True
+
+    def fail(self):
+        existing = ", ".join("%s (%d node(s))" % item
+                             for item in self._counter.items())
+        requested = ', '.join(self._traits)
+        message = ("No available nodes found with traits %(req)s, "
+                   "existing traits: %(exist)s" %
+                   {'req': requested, 'exist': existing or 'none'})
+        raise exceptions.TraitsNotFound(message, self._traits)
 
 
 class CustomPredicateFilter(Filter):

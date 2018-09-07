@@ -67,6 +67,17 @@ class CapabilitiesNotFound(ReservationFailed):
         super(CapabilitiesNotFound, self).__init__(message)
 
 
+class TraitsNotFound(ReservationFailed):
+    """Requested traits do not match any nodes.
+
+    :ivar requested_traits: Requested node's traits.
+    """
+
+    def __init__(self, message, traits):
+        self.requested_traits = traits
+        super(TraitsNotFound, self).__init__(message)
+
+
 class ValidationFailed(ReservationFailed):
     """Validation failed for all requested nodes."""
 

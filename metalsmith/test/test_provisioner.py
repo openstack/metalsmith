@@ -29,7 +29,7 @@ from metalsmith import sources
 
 NODE_FIELDS = ['name', 'uuid', 'instance_info', 'instance_uuid', 'maintenance',
                'maintenance_reason', 'properties', 'provision_state', 'extra',
-               'last_error']
+               'last_error', 'traits']
 
 
 class TestInit(testtools.TestCase):
@@ -137,6 +137,23 @@ class TestReserveNode(Base):
         self.assertIs(node, expected)
         self.api.update_node.assert_called_once_with(
             node, {'/instance_info/capabilities': {'answer': '42'}})
+
+    def test_with_traits(self):
+        nodes = [
+            mock.Mock(spec=['uuid', 'name', 'properties'],
+                      properties={'local_gb': 100}, traits=traits)
+            for traits in [['foo', 'answer:1'], ['answer:42', 'foo'],
+                           ['answer'], None]
+        ]
+        expected = nodes[1]
+        self.api.list_nodes.return_value = nodes
+        self.api.reserve_node.side_effect = lambda n, instance_uuid: n
+
+        node = self.pr.reserve_node(traits=['foo', 'answer:42'])
+
+        self.assertIs(node, expected)
+        self.api.update_node.assert_called_once_with(
+            node, {'/instance_info/traits': ['foo', 'answer:42']})
 
     def test_custom_predicate(self):
         nodes = [
