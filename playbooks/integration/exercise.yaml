@@ -1,18 +1,18 @@
 - name: Create a port
   command: openstack port create --network private test-port
-  when: precreate_port
+  when: metalsmith_precreate_port
 
 - name: Set port argument
   set_fact:
     nic:
       port: test-port
-  when: precreate_port
+  when: metalsmith_precreate_port
 
 - name: Set network argument
   set_fact:
     nic:
       network: private
-  when: not precreate_port
+  when: not metalsmith_precreate_port
 
 - name: Deploy a node
   include_role:
@@ -101,6 +101,6 @@
 
 - name: Delete created port
   command: openstack port delete test-port
-  when: precreate_port
+  when: metalsmith_precreate_port
   # FIXME(dtantsur): fails because of ironic mis-behavior
   ignore_errors: true

@@ -121,6 +121,7 @@
     vars:
       configure_instance_user: metalsmith
       metalsmith_netboot: false
+      metalsmith_precreate_port: false
       metalsmith_partition_image: test-centos-partition
       metalsmith_whole_disk_image: test-centos-wholedisk
 
@@ -133,6 +134,7 @@
       devstack_localrc:
         USE_PYTHON3: true
       metalsmith_netboot: true
+      metalsmith_precreate_port: true
       metalsmith_python: python3
 
 - job:
@@ -143,6 +145,7 @@
     run: playbooks/integration/run.yaml
     vars:
       metalsmith_netboot: true
+      metalsmith_precreate_port: false
       devstack_localrc:
         IRONIC_DEFAULT_DEPLOY_INTERFACE: direct
 
@@ -154,6 +157,7 @@
     run: playbooks/integration/run.yaml
     vars:
       metalsmith_netboot: true
+      metalsmith_precreate_port: true
       metalsmith_python: python3
       metalsmith_use_http: true
       devstack_localrc:
