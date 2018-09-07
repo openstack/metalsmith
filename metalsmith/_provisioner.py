@@ -95,29 +95,24 @@ class Provisioner(object):
 
         if candidates:
             nodes = [self._api.get_node(node) for node in candidates]
-            if resource_class:
-                nodes = [node for node in nodes
-                         if node.resource_class == resource_class]
-            if conductor_group is not None:
-                nodes = [node for node in nodes
-                         if node.conductor_group == conductor_group]
+            filters = [
+                _scheduler.NodeTypeFilter(resource_class, conductor_group),
+            ]
         else:
             nodes = self._api.list_nodes(resource_class=resource_class,
                                          conductor_group=conductor_group)
+            if not nodes:
+                raise exceptions.NodesNotFound(resource_class, conductor_group)
             # Ensure parallel executions don't try nodes in the same sequence
             random.shuffle(nodes)
+            # No need to filter by resource_class and conductor_group any more
+            filters = []
 
-        if not nodes:
-            raise exceptions.NodesNotFound(resource_class, conductor_group)
+        LOG.debug('Candidate nodes: %s', nodes)
 
-        LOG.debug('Ironic nodes: %s', nodes)
-
-        filters = [_scheduler.CapabilitiesFilter(capabilities),
-                   _scheduler.ValidationFilter(self._api)]
+        filters.append(_scheduler.CapabilitiesFilter(capabilities))
         if predicate is not None:
-            # NOTE(dtantsur): run the provided predicate before the validation,
-            # since validation requires network interactions.
-            filters.insert(-1, predicate)
+            filters.append(_scheduler.CustomPredicateFilter(predicate))
 
         reserver = _scheduler.IronicReserver(self._api)
         node = _scheduler.schedule_node(nodes, filters, reserver,

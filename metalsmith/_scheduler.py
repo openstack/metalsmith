@@ -114,6 +114,26 @@ def schedule_node(nodes, filters, reserver, dry_run=False):
     assert False, "BUG: %s.fail did not raise" % reserver.__class__.__name__
 
 
+class NodeTypeFilter(Filter):
+    """Filter that checks resource class and conductor group."""
+
+    def __init__(self, resource_class=None, conductor_group=None):
+        self.resource_class = resource_class
+        self.conductor_group = conductor_group
+
+    def __call__(self, node):
+        return (
+            (self.resource_class is None or
+             node.resource_class == self.resource_class) and
+            (self.conductor_group is None or
+             node.conductor_group == self.conductor_group)
+        )
+
+    def fail(self):
+        raise exceptions.NodesNotFound(self.resource_class,
+                                       self.conductor_group)
+
+
 class CapabilitiesFilter(Filter):
     """Filter that checks capabilities."""
 
@@ -161,31 +181,22 @@ class CapabilitiesFilter(Filter):
         raise exceptions.CapabilitiesNotFound(message, self._capabilities)
 
 
-class ValidationFilter(Filter):
-    """Filter that runs validation on nodes."""
+class CustomPredicateFilter(Filter):
 
-    def __init__(self, api):
-        self._api = api
-        self._messages = []
+    def __init__(self, predicate):
+        self.predicate = predicate
         self._failed_nodes = []
 
     def __call__(self, node):
-        try:
-            self._api.validate_node(node.uuid)
-        except RuntimeError as exc:
-            message = ('Node %(node)s failed validation: %(err)s' %
-                       {'node': _utils.log_node(node), 'err': exc})
-            LOG.warning(message)
-            self._messages.append(message)
+        if not self.predicate(node):
             self._failed_nodes.append(node)
             return False
 
         return True
 
     def fail(self):
-        errors = ", ".join(self._messages)
-        message = "All available nodes have failed validation: %s" % errors
-        raise exceptions.ValidationFailed(message, self._failed_nodes)
+        message = 'No nodes satisfied the custom predicate %s' % self.predicate
+        raise exceptions.CustomPredicateFailed(message, self._failed_nodes)
 
 
 class IronicReserver(Reserver):
@@ -194,26 +205,22 @@ class IronicReserver(Reserver):
         self._api = api
         self._failed_nodes = []
 
+    def validate(self, node):
+        try:
+            self._api.validate_node(node)
+        except RuntimeError as exc:
+            message = ('Node %(node)s failed validation: %(err)s' %
+                       {'node': _utils.log_node(node), 'err': exc})
+            LOG.warning(message)
+            raise exceptions.ValidationFailed(message)
+
     def __call__(self, node):
         try:
-            result = self._api.reserve_node(node, instance_uuid=node.uuid)
-
-            # Try validation again to be sure nothing has changed
-            validator = ValidationFilter(self._api)
-            if not validator(result):
-                LOG.warning('Validation of node %s failed after reservation',
-                            _utils.log_node(node))
-                try:
-                    self._api.release_node(node)
-                except Exception:
-                    LOG.exception('Failed to release the reserved node %s',
-                                  _utils.log_node(node))
-                validator.fail()
-
-            return result
+            self.validate(node)
+            return self._api.reserve_node(node, instance_uuid=node.uuid)
         except Exception:
             self._failed_nodes.append(node)
             raise
 
     def fail(self):
-        raise exceptions.AllNodesReserved(self._failed_nodes)
+        raise exceptions.NoNodesReserved(self._failed_nodes)

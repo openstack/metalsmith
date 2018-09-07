@@ -156,6 +156,25 @@ class TestReserveNode(Base):
         self.assertEqual(node, nodes[1])
         self.assertFalse(self.api.update_node.called)
 
+    def test_custom_predicate_false(self):
+        nodes = [
+            mock.Mock(spec=['uuid', 'name', 'properties'],
+                      properties={'local_gb': 100}),
+            mock.Mock(spec=['uuid', 'name', 'properties'],
+                      properties={'local_gb': 150}),
+            mock.Mock(spec=['uuid', 'name', 'properties'],
+                      properties={'local_gb': 200}),
+        ]
+        self.api.list_nodes.return_value = nodes[:]
+
+        self.assertRaisesRegex(exceptions.CustomPredicateFailed,
+                               'custom predicate',
+                               self.pr.reserve_node,
+                               predicate=lambda node: False)
+
+        self.assertFalse(self.api.update_node.called)
+        self.assertFalse(self.api.reserve_node.called)
+
     def test_provided_node(self):
         nodes = [
             mock.Mock(spec=['uuid', 'name', 'properties'],
@@ -225,6 +244,26 @@ class TestReserveNode(Base):
         self.assertFalse(self.api.list_nodes.called)
         self.api.update_node.assert_called_once_with(
             node, {'/instance_info/capabilities': {'cat': 'meow'}})
+
+    def test_provided_nodes_no_match(self):
+        nodes = [
+            mock.Mock(spec=['uuid', 'name', 'properties', 'resource_class',
+                            'conductor_group'],
+                      properties={'local_gb': 100}, resource_class='compute',
+                      conductor_group='loc1'),
+            mock.Mock(spec=['uuid', 'name', 'properties', 'resource_class',
+                            'conductor_group'],
+                      properties={'local_gb': 100}, resource_class='control',
+                      conductor_group='loc2'),
+        ]
+
+        self.assertRaises(exceptions.NodesNotFound,
+                          self.pr.reserve_node, candidates=nodes,
+                          resource_class='control', conductor_group='loc1')
+
+        self.assertFalse(self.api.list_nodes.called)
+        self.assertFalse(self.api.reserve_node.called)
+        self.assertFalse(self.api.update_node.called)
 
 
 CLEAN_UP = {

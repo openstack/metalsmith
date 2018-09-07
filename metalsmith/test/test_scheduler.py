@@ -164,77 +164,39 @@ class TestCapabilitiesFilter(testtools.TestCase):
                                fltr.fail)
 
 
-class TestValidationFilter(testtools.TestCase):
-
-    def setUp(self):
-        super(TestValidationFilter, self).setUp()
-        self.api = mock.Mock(spec=['validate_node'])
-        self.fltr = _scheduler.ValidationFilter(self.api)
-
-    def test_pass(self):
-        node = mock.Mock(spec=['uuid', 'name'])
-        self.assertTrue(self.fltr(node))
-
-    def test_fail_validation(self):
-        node = mock.Mock(spec=['uuid', 'name'])
-        self.api.validate_node.side_effect = RuntimeError('boom')
-        self.assertFalse(self.fltr(node))
-
-        self.assertRaisesRegex(exceptions.ValidationFailed,
-                               'All available nodes have failed validation: '
-                               'Node .* failed validation: boom',
-                               self.fltr.fail)
-
-
-@mock.patch.object(_scheduler, 'ValidationFilter', autospec=True)
 class TestIronicReserver(testtools.TestCase):
 
     def setUp(self):
         super(TestIronicReserver, self).setUp()
         self.node = mock.Mock(spec=['uuid', 'name'])
-        self.api = mock.Mock(spec=['reserve_node', 'release_node'])
+        self.api = mock.Mock(spec=['reserve_node', 'release_node',
+                                   'validate_node'])
         self.api.reserve_node.side_effect = lambda node, instance_uuid: node
         self.reserver = _scheduler.IronicReserver(self.api)
 
-    def test_fail(self, mock_validation):
-        self.assertRaisesRegex(exceptions.AllNodesReserved,
+    def test_fail(self):
+        self.assertRaisesRegex(exceptions.NoNodesReserved,
                                'All the candidate nodes are already reserved',
                                self.reserver.fail)
 
-    def test_ok(self, mock_validation):
+    def test_ok(self):
         self.assertEqual(self.node, self.reserver(self.node))
+        self.api.validate_node.assert_called_with(self.node)
         self.api.reserve_node.assert_called_once_with(
             self.node, instance_uuid=self.node.uuid)
-        mock_validation.return_value.assert_called_once_with(self.node)
 
-    def test_reservation_failed(self, mock_validation):
+    def test_reservation_failed(self):
         self.api.reserve_node.side_effect = RuntimeError('conflict')
         self.assertRaisesRegex(RuntimeError, 'conflict',
                                self.reserver, self.node)
+        self.api.validate_node.assert_called_with(self.node)
         self.api.reserve_node.assert_called_once_with(
             self.node, instance_uuid=self.node.uuid)
-        self.assertFalse(mock_validation.return_value.called)
 
-    def test_validation_failed(self, mock_validation):
-        mock_validation.return_value.return_value = False
-        mock_validation.return_value.fail.side_effect = RuntimeError('fail')
-        self.assertRaisesRegex(RuntimeError, 'fail',
+    def test_validation_failed(self):
+        self.api.validate_node.side_effect = RuntimeError('fail')
+        self.assertRaisesRegex(exceptions.ValidationFailed, 'fail',
                                self.reserver, self.node)
-        self.api.reserve_node.assert_called_once_with(
-            self.node, instance_uuid=self.node.uuid)
-        mock_validation.return_value.assert_called_once_with(self.node)
-        self.api.release_node.assert_called_once_with(self.node)
-
-    @mock.patch.object(_scheduler.LOG, 'exception', autospec=True)
-    def test_validation_and_release_failed(self, mock_log_exc,
-                                           mock_validation):
-        mock_validation.return_value.return_value = False
-        mock_validation.return_value.fail.side_effect = RuntimeError('fail')
-        self.api.release_node.side_effect = Exception()
-        self.assertRaisesRegex(RuntimeError, 'fail',
-                               self.reserver, self.node)
-        self.api.reserve_node.assert_called_once_with(
-            self.node, instance_uuid=self.node.uuid)
-        mock_validation.return_value.assert_called_once_with(self.node)
-        self.api.release_node.assert_called_once_with(self.node)
-        self.assertTrue(mock_log_exc.called)
+        self.api.validate_node.assert_called_once_with(self.node)
+        self.assertFalse(self.api.reserve_node.called)
+        self.assertFalse(self.api.release_node.called)

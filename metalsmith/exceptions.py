@@ -45,6 +45,17 @@ class NodesNotFound(ReservationFailed):
         super(NodesNotFound, self).__init__(message)
 
 
+class CustomPredicateFailed(ReservationFailed):
+    """Custom predicate yielded no nodes.
+
+    :ivar nodes: List of nodes that were checked.
+    """
+
+    def __init__(self, message, nodes):
+        self.nodes = nodes
+        super(CustomPredicateFailed, self).__init__(message)
+
+
 class CapabilitiesNotFound(ReservationFailed):
     """Requested capabilities do not match any nodes.
 
@@ -57,26 +68,20 @@ class CapabilitiesNotFound(ReservationFailed):
 
 
 class ValidationFailed(ReservationFailed):
-    """Validation failed for all requested nodes.
-
-    :ivar nodes: List of nodes that were checked.
-    """
-
-    def __init__(self, message, nodes):
-        self.nodes = nodes
-        super(ValidationFailed, self).__init__(message)
+    """Validation failed for all requested nodes."""
 
 
-class AllNodesReserved(ReservationFailed):
-    """All nodes are already reserved.
+class NoNodesReserved(ReservationFailed):
+    """All nodes are already reserved or failed validation.
 
     :ivar nodes: List of nodes that were checked.
     """
 
     def __init__(self, nodes):
         self.nodes = nodes
-        message = 'All the candidate nodes are already reserved'
-        super(AllNodesReserved, self).__init__(message)
+        message = ('All the candidate nodes are already reserved '
+                   'or failed validation')
+        super(NoNodesReserved, self).__init__(message)
 
 
 class InvalidImage(Error):
