@@ -170,19 +170,18 @@
       - openstack-python-jobs
       - openstack-python35-jobs
       - openstack-python36-jobs
+      - openstack-lower-constraints-jobs
       - docs-on-readthedocs
     vars:
       rtd_webhook_id: '37378'
     check:
       jobs:
-        - openstack-tox-lower-constraints
         - metalsmith-integration-glance-localboot-centos7
         - metalsmith-integration-glance-netboot-cirros-iscsi-py3
         - metalsmith-integration-glance-netboot-cirros-direct
         - metalsmith-integration-http-netboot-cirros-direct-py3
     gate:
       jobs:
-        - openstack-tox-lower-constraints
         - metalsmith-integration-glance-localboot-centos7
         - metalsmith-integration-glance-netboot-cirros-iscsi-py3
         - metalsmith-integration-glance-netboot-cirros-direct
