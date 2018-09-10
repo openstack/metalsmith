@@ -196,7 +196,7 @@ class Provisioner(object):
 
     def provision_node(self, node, image, nics=None, root_disk_size=None,
                        config=None, hostname=None, netboot=False,
-                       capabilities=None, wait=None):
+                       capabilities=None, traits=None, wait=None):
         """Provision the node with the given image.
 
         Example::
@@ -227,6 +227,10 @@ class Provisioner(object):
             overwrites the capabilities set by :meth:`reserve_node`.
             Note that the capabilities are not checked against the ones
             provided by the node - use :meth:`reserve_node` for that.
+        :param traits: Requested traits of the node. If present, overwrites
+            the traits set by :meth:`reserve_node`. Note that the traits are
+            not checked against the ones provided by the node - use
+            :meth:`reserve_node` for that.
         :param wait: How many seconds to wait for the deployment to finish,
             None to return immediately.
         :return: :py:class:`metalsmith.Instance` object with the current
@@ -270,6 +274,8 @@ class Provisioner(object):
                        '/extra/%s' % _ATTACHED_PORTS: attached_ports,
                        '/instance_info/%s' % _os_api.HOSTNAME_FIELD: hostname}
             updates.update(image._node_updates(self.connection))
+            if traits is not None:
+                updates['/instance_info/traits'] = traits
 
             LOG.debug('Updating node %(node)s with %(updates)s',
                       {'node': _utils.log_node(node), 'updates': updates})

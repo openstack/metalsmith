@@ -675,6 +675,51 @@ abcd  image
         self.assertFalse(self.api.release_node.called)
         self.assertFalse(self.conn.network.delete_port.called)
 
+    def test_with_traits(self):
+        inst = self.pr.provision_node(self.node, 'image',
+                                      [{'network': 'network'}],
+                                      traits=['1', '2'])
+        self.updates['/instance_info/traits'] = ['1', '2']
+
+        self.assertEqual(inst.uuid, self.node.uuid)
+        self.assertEqual(inst.node, self.node)
+
+        self.conn.network.create_port.assert_called_once_with(
+            network_id=self.conn.network.find_network.return_value.id)
+        self.api.attach_port_to_node.assert_called_once_with(
+            self.node.uuid, self.conn.network.create_port.return_value.id)
+        self.api.update_node.assert_called_once_with(self.node, self.updates)
+        self.api.validate_node.assert_called_once_with(self.node,
+                                                       validate_deploy=True)
+        self.api.node_action.assert_called_once_with(self.node, 'active',
+                                                     configdrive=mock.ANY)
+        self.assertFalse(self.wait_mock.called)
+        self.assertFalse(self.api.release_node.called)
+        self.assertFalse(self.conn.network.delete_port.called)
+
+    def test_override_existing_traits(self):
+        self.node.traits = ['42']
+        inst = self.pr.provision_node(self.node, 'image',
+                                      [{'network': 'network'}],
+                                      traits=['1', '2'])
+        self.updates['/instance_info/traits'] = ['1', '2']
+
+        self.assertEqual(inst.uuid, self.node.uuid)
+        self.assertEqual(inst.node, self.node)
+
+        self.conn.network.create_port.assert_called_once_with(
+            network_id=self.conn.network.find_network.return_value.id)
+        self.api.attach_port_to_node.assert_called_once_with(
+            self.node.uuid, self.conn.network.create_port.return_value.id)
+        self.api.update_node.assert_called_once_with(self.node, self.updates)
+        self.api.validate_node.assert_called_once_with(self.node,
+                                                       validate_deploy=True)
+        self.api.node_action.assert_called_once_with(self.node, 'active',
+                                                     configdrive=mock.ANY)
+        self.assertFalse(self.wait_mock.called)
+        self.assertFalse(self.api.release_node.called)
+        self.assertFalse(self.conn.network.delete_port.called)
+
     def test_with_wait(self):
         self.conn.network.find_port.return_value = mock.Mock(
             spec=['fixed_ips'],
