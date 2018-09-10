@@ -29,7 +29,6 @@ from metalsmith import sources
 
 
 @mock.patch.object(_provisioner, 'Provisioner', autospec=True)
-@mock.patch.object(_cmd.os_config, 'OpenStackConfig', autospec=True)
 class TestDeploy(testtools.TestCase):
     def setUp(self):
         super(TestDeploy, self).setUp()
@@ -37,8 +36,42 @@ class TestDeploy(testtools.TestCase):
             'metalsmith._format._print', autospec=True))
         self.mock_print = self.print_fixture.mock
 
+        self.os_conf_fixture = self.useFixture(fixtures.MockPatchObject(
+            _cmd.os_config, 'OpenStackConfig', autospec=True))
+        self.mock_os_conf = self.os_conf_fixture.mock
+
+    def _check(self, mock_pr, args, reserve_args, provision_args,
+               dry_run=False):
+        reserve_defaults = dict(resource_class='compute',
+                                conductor_group=None,
+                                capabilities={},
+                                traits=[],
+                                candidates=None)
+        reserve_defaults.update(reserve_args)
+
+        provision_defaults = dict(image='myimg',
+                                  nics=[{'network': 'mynet'}],
+                                  root_size_gb=None,
+                                  swap_size_mb=None,
+                                  config=mock.ANY,
+                                  hostname=None,
+                                  netboot=False,
+                                  wait=1800)
+        provision_defaults.update(provision_args)
+
+        _cmd.main(args)
+
+        mock_pr.assert_called_once_with(
+            cloud_region=self.mock_os_conf.return_value.get_one.return_value,
+            dry_run=dry_run)
+        mock_pr.return_value.reserve_node.assert_called_once_with(
+            **reserve_defaults)
+        mock_pr.return_value.provision_node.assert_called_once_with(
+            mock_pr.return_value.reserve_node.return_value,
+            **provision_defaults)
+
     @mock.patch.object(_cmd, 'logging', autospec=True)
-    def test_args_ok(self, mock_log, mock_os_conf, mock_pr):
+    def test_args_ok(self, mock_log, mock_pr):
         instance = mock_pr.return_value.provision_node.return_value
         instance.create_autospec(_instance.Instance)
         instance.node.name = None
@@ -49,27 +82,8 @@ class TestDeploy(testtools.TestCase):
 
         args = ['deploy', '--network', 'mynet', '--image', 'myimg',
                 '--resource-class', 'compute']
-        _cmd.main(args)
+        self._check(mock_pr, args, {}, {})
 
-        mock_pr.assert_called_once_with(
-            cloud_region=mock_os_conf.return_value.get_one.return_value,
-            dry_run=False)
-        mock_pr.return_value.reserve_node.assert_called_once_with(
-            resource_class='compute',
-            conductor_group=None,
-            capabilities={},
-            traits=[],
-            candidates=None
-        )
-        mock_pr.return_value.provision_node.assert_called_once_with(
-            mock_pr.return_value.reserve_node.return_value,
-            image='myimg',
-            nics=[{'network': 'mynet'}],
-            root_disk_size=None,
-            config=mock.ANY,
-            hostname=None,
-            netboot=False,
-            wait=1800)
         config = mock_pr.return_value.provision_node.call_args[1]['config']
         self.assertEqual([], config.ssh_keys)
         mock_log.basicConfig.assert_called_once_with(level=mock_log.WARNING,
@@ -86,7 +100,7 @@ class TestDeploy(testtools.TestCase):
         ])
 
     @mock.patch.object(_cmd, 'logging', autospec=True)
-    def test_args_json_format(self, mock_log, mock_os_conf, mock_pr):
+    def test_args_json_format(self, mock_log, mock_pr):
         instance = mock_pr.return_value.provision_node.return_value
         instance.create_autospec(_instance.Instance)
         instance.to_dict.return_value = {'node': 'dict'}
@@ -95,29 +109,10 @@ class TestDeploy(testtools.TestCase):
                 '--image', 'myimg', '--resource-class', 'compute']
         fake_io = six.StringIO()
         with mock.patch('sys.stdout', fake_io):
-            _cmd.main(args)
+            self._check(mock_pr, args, {}, {})
             self.assertEqual(json.loads(fake_io.getvalue()),
                              {'node': 'dict'})
 
-        mock_pr.assert_called_once_with(
-            cloud_region=mock_os_conf.return_value.get_one.return_value,
-            dry_run=False)
-        mock_pr.return_value.reserve_node.assert_called_once_with(
-            resource_class='compute',
-            conductor_group=None,
-            capabilities={},
-            traits=[],
-            candidates=None
-        )
-        mock_pr.return_value.provision_node.assert_called_once_with(
-            mock_pr.return_value.reserve_node.return_value,
-            image='myimg',
-            nics=[{'network': 'mynet'}],
-            root_disk_size=None,
-            config=mock.ANY,
-            hostname=None,
-            netboot=False,
-            wait=1800)
         mock_log.basicConfig.assert_called_once_with(level=mock_log.WARNING,
                                                      format=mock.ANY)
         self.assertEqual(
@@ -126,7 +121,7 @@ class TestDeploy(testtools.TestCase):
                 mock_log.CRITICAL).call_list(),
             mock_log.getLogger.mock_calls)
 
-    def test_no_ips(self, mock_os_conf, mock_pr):
+    def test_no_ips(self, mock_pr):
         instance = mock_pr.return_value.provision_node.return_value
         instance.create_autospec(_instance.Instance)
         instance.is_deployed = True
@@ -137,12 +132,12 @@ class TestDeploy(testtools.TestCase):
 
         args = ['deploy', '--network', 'mynet', '--image', 'myimg',
                 '--resource-class', 'compute']
-        _cmd.main(args)
+        self._check(mock_pr, args, {}, {})
 
         self.mock_print.assert_called_once_with(mock.ANY, node='123',
                                                 state='active'),
 
-    def test_not_deployed_no_ips(self, mock_os_conf, mock_pr):
+    def test_not_deployed_no_ips(self, mock_pr):
         instance = mock_pr.return_value.provision_node.return_value
         instance.create_autospec(_instance.Instance)
         instance.is_deployed = False
@@ -152,72 +147,34 @@ class TestDeploy(testtools.TestCase):
 
         args = ['deploy', '--network', 'mynet', '--image', 'myimg',
                 '--resource-class', 'compute']
-        _cmd.main(args)
+        self._check(mock_pr, args, {}, {})
 
         self.mock_print.assert_called_once_with(mock.ANY, node='123',
                                                 state='deploying'),
 
     @mock.patch.object(_cmd.LOG, 'info', autospec=True)
-    def test_no_logs_not_deployed(self, mock_log, mock_os_conf, mock_pr):
+    def test_no_logs_not_deployed(self, mock_log, mock_pr):
         instance = mock_pr.return_value.provision_node.return_value
         instance.create_autospec(_instance.Instance)
         instance.is_deployed = False
 
         args = ['deploy', '--network', 'mynet', '--image', 'myimg',
                 '--resource-class', 'compute']
-        _cmd.main(args)
+        self._check(mock_pr, args, {}, {})
 
         self.assertFalse(mock_log.called)
         self.assertFalse(instance.ip_addresses.called)
 
-    def test_args_dry_run(self, mock_os_conf, mock_pr):
+    def test_args_dry_run(self, mock_pr):
         args = ['--dry-run', 'deploy', '--network', 'mynet',
                 '--image', 'myimg', '--resource-class', 'compute']
-        _cmd.main(args)
-        mock_pr.assert_called_once_with(
-            cloud_region=mock_os_conf.return_value.get_one.return_value,
-            dry_run=True)
-        mock_pr.return_value.reserve_node.assert_called_once_with(
-            resource_class='compute',
-            conductor_group=None,
-            capabilities={},
-            traits=[],
-            candidates=None
-        )
-        mock_pr.return_value.provision_node.assert_called_once_with(
-            mock_pr.return_value.reserve_node.return_value,
-            image='myimg',
-            nics=[{'network': 'mynet'}],
-            root_disk_size=None,
-            config=mock.ANY,
-            hostname=None,
-            netboot=False,
-            wait=1800)
+        self._check(mock_pr, args, {}, {}, dry_run=True)
 
     @mock.patch.object(_cmd, 'logging', autospec=True)
-    def test_args_debug(self, mock_log, mock_os_conf, mock_pr):
+    def test_args_debug(self, mock_log, mock_pr):
         args = ['--debug', 'deploy', '--network', 'mynet', '--image', 'myimg',
                 '--resource-class', 'compute']
-        _cmd.main(args)
-        mock_pr.assert_called_once_with(
-            cloud_region=mock_os_conf.return_value.get_one.return_value,
-            dry_run=False)
-        mock_pr.return_value.reserve_node.assert_called_once_with(
-            resource_class='compute',
-            conductor_group=None,
-            capabilities={},
-            traits=[],
-            candidates=None
-        )
-        mock_pr.return_value.provision_node.assert_called_once_with(
-            mock_pr.return_value.reserve_node.return_value,
-            image='myimg',
-            nics=[{'network': 'mynet'}],
-            root_disk_size=None,
-            config=mock.ANY,
-            hostname=None,
-            netboot=False,
-            wait=1800)
+        self._check(mock_pr, args, {}, {})
 
         mock_log.basicConfig.assert_called_once_with(level=mock_log.DEBUG,
                                                      format=mock.ANY)
@@ -228,29 +185,10 @@ class TestDeploy(testtools.TestCase):
             mock_log.getLogger.mock_calls)
 
     @mock.patch.object(_cmd, 'logging', autospec=True)
-    def test_args_quiet(self, mock_log, mock_os_conf, mock_pr):
+    def test_args_quiet(self, mock_log, mock_pr):
         args = ['--quiet', 'deploy', '--network', 'mynet', '--image', 'myimg',
                 '--resource-class', 'compute']
-        _cmd.main(args)
-        mock_pr.assert_called_once_with(
-            cloud_region=mock_os_conf.return_value.get_one.return_value,
-            dry_run=False)
-        mock_pr.return_value.reserve_node.assert_called_once_with(
-            resource_class='compute',
-            conductor_group=None,
-            capabilities={},
-            traits=[],
-            candidates=None
-        )
-        mock_pr.return_value.provision_node.assert_called_once_with(
-            mock_pr.return_value.reserve_node.return_value,
-            image='myimg',
-            nics=[{'network': 'mynet'}],
-            root_disk_size=None,
-            config=mock.ANY,
-            hostname=None,
-            netboot=False,
-            wait=1800)
+        self._check(mock_pr, args, {}, {})
 
         mock_log.basicConfig.assert_called_once_with(level=mock_log.CRITICAL,
                                                      format=mock.ANY)
@@ -263,29 +201,10 @@ class TestDeploy(testtools.TestCase):
         self.assertFalse(self.mock_print.called)
 
     @mock.patch.object(_cmd, 'logging', autospec=True)
-    def test_args_verbose_1(self, mock_log, mock_os_conf, mock_pr):
+    def test_args_verbose_1(self, mock_log, mock_pr):
         args = ['-v', 'deploy', '--network', 'mynet', '--image', 'myimg',
                 '--resource-class', 'compute']
-        _cmd.main(args)
-        mock_pr.assert_called_once_with(
-            cloud_region=mock_os_conf.return_value.get_one.return_value,
-            dry_run=False)
-        mock_pr.return_value.reserve_node.assert_called_once_with(
-            resource_class='compute',
-            conductor_group=None,
-            capabilities={},
-            traits=[],
-            candidates=None
-        )
-        mock_pr.return_value.provision_node.assert_called_once_with(
-            mock_pr.return_value.reserve_node.return_value,
-            image='myimg',
-            nics=[{'network': 'mynet'}],
-            root_disk_size=None,
-            config=mock.ANY,
-            hostname=None,
-            netboot=False,
-            wait=1800)
+        self._check(mock_pr, args, {}, {})
 
         mock_log.basicConfig.assert_called_once_with(level=mock_log.WARNING,
                                                      format=mock.ANY)
@@ -296,29 +215,10 @@ class TestDeploy(testtools.TestCase):
             mock_log.getLogger.mock_calls)
 
     @mock.patch.object(_cmd, 'logging', autospec=True)
-    def test_args_verbose_2(self, mock_log, mock_os_conf, mock_pr):
+    def test_args_verbose_2(self, mock_log, mock_pr):
         args = ['-vv', 'deploy', '--network', 'mynet', '--image', 'myimg',
                 '--resource-class', 'compute']
-        _cmd.main(args)
-        mock_pr.assert_called_once_with(
-            cloud_region=mock_os_conf.return_value.get_one.return_value,
-            dry_run=False)
-        mock_pr.return_value.reserve_node.assert_called_once_with(
-            resource_class='compute',
-            conductor_group=None,
-            capabilities={},
-            traits=[],
-            candidates=None
-        )
-        mock_pr.return_value.provision_node.assert_called_once_with(
-            mock_pr.return_value.reserve_node.return_value,
-            image='myimg',
-            nics=[{'network': 'mynet'}],
-            root_disk_size=None,
-            config=mock.ANY,
-            hostname=None,
-            netboot=False,
-            wait=1800)
+        self._check(mock_pr, args, {}, {})
 
         mock_log.basicConfig.assert_called_once_with(level=mock_log.INFO,
                                                      format=mock.ANY)
@@ -329,29 +229,10 @@ class TestDeploy(testtools.TestCase):
             mock_log.getLogger.mock_calls)
 
     @mock.patch.object(_cmd, 'logging', autospec=True)
-    def test_args_verbose_3(self, mock_log, mock_os_conf, mock_pr):
+    def test_args_verbose_3(self, mock_log, mock_pr):
         args = ['-vvv', 'deploy', '--network', 'mynet', '--image', 'myimg',
                 '--resource-class', 'compute']
-        _cmd.main(args)
-        mock_pr.assert_called_once_with(
-            cloud_region=mock_os_conf.return_value.get_one.return_value,
-            dry_run=False)
-        mock_pr.return_value.reserve_node.assert_called_once_with(
-            resource_class='compute',
-            conductor_group=None,
-            capabilities={},
-            traits=[],
-            candidates=None
-        )
-        mock_pr.return_value.provision_node.assert_called_once_with(
-            mock_pr.return_value.reserve_node.return_value,
-            image='myimg',
-            nics=[{'network': 'mynet'}],
-            root_disk_size=None,
-            config=mock.ANY,
-            hostname=None,
-            netboot=False,
-            wait=1800)
+        self._check(mock_pr, args, {}, {})
 
         mock_log.basicConfig.assert_called_once_with(level=mock_log.DEBUG,
                                                      format=mock.ANY)
@@ -362,7 +243,7 @@ class TestDeploy(testtools.TestCase):
             mock_log.getLogger.mock_calls)
 
     @mock.patch.object(_cmd.LOG, 'critical', autospec=True)
-    def test_reservation_failure(self, mock_log, mock_os_conf, mock_pr):
+    def test_reservation_failure(self, mock_log, mock_pr):
         args = ['deploy', '--network', 'mynet', '--image', 'myimg',
                 '--resource-class', 'compute']
         failure = RuntimeError('boom')
@@ -371,7 +252,7 @@ class TestDeploy(testtools.TestCase):
         mock_log.assert_called_once_with('%s', failure, exc_info=False)
 
     @mock.patch.object(_cmd.LOG, 'critical', autospec=True)
-    def test_deploy_failure(self, mock_log, mock_os_conf, mock_pr):
+    def test_deploy_failure(self, mock_log, mock_pr):
         args = ['deploy', '--network', 'mynet', '--image', 'myimg',
                 '--resource-class', 'compute']
         failure = RuntimeError('boom')
@@ -380,356 +261,116 @@ class TestDeploy(testtools.TestCase):
         mock_log.assert_called_once_with('%s', failure, exc_info=False)
 
     @mock.patch.object(_cmd.LOG, 'critical', autospec=True)
-    def test_invalid_hostname(self, mock_log, mock_os_conf, mock_pr):
+    def test_invalid_hostname(self, mock_log, mock_pr):
         args = ['deploy', '--hostname', 'n_1', '--image', 'myimg',
                 '--resource-class', 'compute']
         self.assertRaises(SystemExit, _cmd.main, args)
         self.assertTrue(mock_log.called)
 
-    def test_args_capabilities(self, mock_os_conf, mock_pr):
+    def test_args_capabilities(self, mock_pr):
         args = ['deploy', '--network', 'mynet', '--image', 'myimg',
                 '--capability', 'foo=bar', '--capability', 'answer=42',
                 '--resource-class', 'compute']
-        _cmd.main(args)
-        mock_pr.assert_called_once_with(
-            cloud_region=mock_os_conf.return_value.get_one.return_value,
-            dry_run=False)
-        mock_pr.return_value.reserve_node.assert_called_once_with(
-            resource_class='compute',
-            conductor_group=None,
-            capabilities={'foo': 'bar', 'answer': '42'},
-            traits=[],
-            candidates=None
-        )
-        mock_pr.return_value.provision_node.assert_called_once_with(
-            mock_pr.return_value.reserve_node.return_value,
-            image='myimg',
-            nics=[{'network': 'mynet'}],
-            root_disk_size=None,
-            config=mock.ANY,
-            hostname=None,
-            netboot=False,
-            wait=1800)
+        self._check(mock_pr, args,
+                    {'capabilities': {'foo': 'bar', 'answer': '42'}}, {})
 
-    def test_args_traits(self, mock_os_conf, mock_pr):
+    def test_args_traits(self, mock_pr):
         args = ['deploy', '--network', 'mynet', '--image', 'myimg',
                 '--trait', 'foo:bar', '--trait', 'answer:42',
                 '--resource-class', 'compute']
-        _cmd.main(args)
-        mock_pr.assert_called_once_with(
-            cloud_region=mock_os_conf.return_value.get_one.return_value,
-            dry_run=False)
-        mock_pr.return_value.reserve_node.assert_called_once_with(
-            resource_class='compute',
-            conductor_group=None,
-            capabilities={},
-            traits=['foo:bar', 'answer:42'],
-            candidates=None
-        )
-        mock_pr.return_value.provision_node.assert_called_once_with(
-            mock_pr.return_value.reserve_node.return_value,
-            image='myimg',
-            nics=[{'network': 'mynet'}],
-            root_disk_size=None,
-            config=mock.ANY,
-            hostname=None,
-            netboot=False,
-            wait=1800)
+        self._check(mock_pr, args,
+                    {'traits': ['foo:bar', 'answer:42']}, {})
 
-    def test_args_configdrive(self, mock_os_conf, mock_pr):
+    def test_args_configdrive(self, mock_pr):
         with tempfile.NamedTemporaryFile() as fp:
             fp.write(b'foo\n')
             fp.flush()
 
             args = ['deploy', '--network', 'mynet', '--image', 'myimg',
                     '--ssh-public-key', fp.name, '--resource-class', 'compute']
-            _cmd.main(args)
-            mock_pr.assert_called_once_with(
-                cloud_region=mock_os_conf.return_value.get_one.return_value,
-                dry_run=False)
-            mock_pr.return_value.reserve_node.assert_called_once_with(
-                resource_class='compute',
-                conductor_group=None,
-                capabilities={},
-                traits=[],
-                candidates=None
-            )
-            mock_pr.return_value.provision_node.assert_called_once_with(
-                mock_pr.return_value.reserve_node.return_value,
-                image='myimg',
-                nics=[{'network': 'mynet'}],
-                root_disk_size=None,
-                config=mock.ANY,
-                hostname=None,
-                netboot=False,
-                wait=1800)
+            self._check(mock_pr, args, {}, {})
+
         config = mock_pr.return_value.provision_node.call_args[1]['config']
         self.assertEqual(['foo'], config.ssh_keys)
 
     @mock.patch.object(_config.InstanceConfig, 'add_user', autospec=True)
-    def test_args_user_name(self, mock_add_user, mock_os_conf, mock_pr):
+    def test_args_user_name(self, mock_add_user, mock_pr):
         args = ['deploy', '--network', 'mynet', '--image', 'myimg',
                 '--user-name', 'banana', '--resource-class', 'compute']
-        _cmd.main(args)
-        mock_pr.assert_called_once_with(
-            cloud_region=mock_os_conf.return_value.get_one.return_value,
-            dry_run=False)
-        mock_pr.return_value.reserve_node.assert_called_once_with(
-            resource_class='compute',
-            conductor_group=None,
-            capabilities={},
-            traits=[],
-            candidates=None
-        )
-        mock_pr.return_value.provision_node.assert_called_once_with(
-            mock_pr.return_value.reserve_node.return_value,
-            image='myimg',
-            nics=[{'network': 'mynet'}],
-            root_disk_size=None,
-            config=mock.ANY,
-            hostname=None,
-            netboot=False,
-            wait=1800)
+        self._check(mock_pr, args, {}, {})
+
         config = mock_pr.return_value.provision_node.call_args[1]['config']
         self.assertEqual([], config.ssh_keys)
         mock_add_user.assert_called_once_with(config, 'banana', sudo=False)
 
     @mock.patch.object(_config.InstanceConfig, 'add_user', autospec=True)
-    def test_args_user_name_with_sudo(self, mock_add_user, mock_os_conf,
-                                      mock_pr):
+    def test_args_user_name_with_sudo(self, mock_add_user, mock_pr):
         args = ['deploy', '--network', 'mynet', '--image', 'myimg',
                 '--user-name', 'banana', '--resource-class', 'compute',
                 '--passwordless-sudo']
-        _cmd.main(args)
-        mock_pr.assert_called_once_with(
-            cloud_region=mock_os_conf.return_value.get_one.return_value,
-            dry_run=False)
-        mock_pr.return_value.reserve_node.assert_called_once_with(
-            resource_class='compute',
-            conductor_group=None,
-            capabilities={},
-            traits=[],
-            candidates=None
-        )
-        mock_pr.return_value.provision_node.assert_called_once_with(
-            mock_pr.return_value.reserve_node.return_value,
-            image='myimg',
-            nics=[{'network': 'mynet'}],
-            root_disk_size=None,
-            config=mock.ANY,
-            hostname=None,
-            netboot=False,
-            wait=1800)
+        self._check(mock_pr, args, {}, {})
+
         config = mock_pr.return_value.provision_node.call_args[1]['config']
         self.assertEqual([], config.ssh_keys)
         mock_add_user.assert_called_once_with(config, 'banana', sudo=True)
 
-    def test_args_port(self, mock_os_conf, mock_pr):
+    def test_args_port(self, mock_pr):
         args = ['deploy', '--port', 'myport', '--image', 'myimg',
                 '--resource-class', 'compute']
-        _cmd.main(args)
-        mock_pr.assert_called_once_with(
-            cloud_region=mock_os_conf.return_value.get_one.return_value,
-            dry_run=False)
-        mock_pr.return_value.reserve_node.assert_called_once_with(
-            resource_class='compute',
-            conductor_group=None,
-            capabilities={},
-            traits=[],
-            candidates=None
-        )
-        mock_pr.return_value.provision_node.assert_called_once_with(
-            mock_pr.return_value.reserve_node.return_value,
-            image='myimg',
-            nics=[{'port': 'myport'}],
-            root_disk_size=None,
-            config=mock.ANY,
-            hostname=None,
-            netboot=False,
-            wait=1800)
+        self._check(mock_pr, args, {}, {'nics': [{'port': 'myport'}]})
 
-    def test_args_no_nics(self, mock_os_conf, mock_pr):
+    def test_args_no_nics(self, mock_pr):
         args = ['deploy', '--image', 'myimg', '--resource-class', 'compute']
-        _cmd.main(args)
-        mock_pr.assert_called_once_with(
-            cloud_region=mock_os_conf.return_value.get_one.return_value,
-            dry_run=False)
-        mock_pr.return_value.reserve_node.assert_called_once_with(
-            resource_class='compute',
-            conductor_group=None,
-            capabilities={},
-            traits=[],
-            candidates=None
-        )
-        mock_pr.return_value.provision_node.assert_called_once_with(
-            mock_pr.return_value.reserve_node.return_value,
-            image='myimg',
-            nics=None,
-            root_disk_size=None,
-            config=mock.ANY,
-            hostname=None,
-            netboot=False,
-            wait=1800)
+        self._check(mock_pr, args, {}, {'nics': None})
 
-    def test_args_networks_and_ports(self, mock_os_conf, mock_pr):
+    def test_args_networks_and_ports(self, mock_pr):
         args = ['deploy', '--network', 'net1', '--port', 'port1',
                 '--port', 'port2', '--network', 'net2',
                 '--image', 'myimg', '--resource-class', 'compute']
-        _cmd.main(args)
-        mock_pr.assert_called_once_with(
-            cloud_region=mock_os_conf.return_value.get_one.return_value,
-            dry_run=False)
-        mock_pr.return_value.reserve_node.assert_called_once_with(
-            resource_class='compute',
-            conductor_group=None,
-            capabilities={},
-            traits=[],
-            candidates=None
-        )
-        mock_pr.return_value.provision_node.assert_called_once_with(
-            mock_pr.return_value.reserve_node.return_value,
-            image='myimg',
-            nics=[{'network': 'net1'}, {'port': 'port1'},
-                  {'port': 'port2'}, {'network': 'net2'}],
-            root_disk_size=None,
-            config=mock.ANY,
-            hostname=None,
-            netboot=False,
-            wait=1800)
+        self._check(mock_pr, args, {},
+                    {'nics': [{'network': 'net1'}, {'port': 'port1'},
+                              {'port': 'port2'}, {'network': 'net2'}]})
 
-    def test_args_hostname(self, mock_os_conf, mock_pr):
-        args = ['deploy', '--hostname', 'host', '--image', 'myimg',
+    def test_args_hostname(self, mock_pr):
+        args = ['deploy', '--network', 'mynet', '--image', 'myimg',
+                '--hostname', 'host', '--resource-class', 'compute']
+        self._check(mock_pr, args, {}, {'hostname': 'host'})
+
+    def test_args_with_candidates(self, mock_pr):
+        args = ['deploy', '--network', 'mynet', '--image', 'myimg',
+                '--candidate', 'node1', '--candidate', 'node2',
                 '--resource-class', 'compute']
-        _cmd.main(args)
-        mock_pr.assert_called_once_with(
-            cloud_region=mock_os_conf.return_value.get_one.return_value,
-            dry_run=False)
-        mock_pr.return_value.reserve_node.assert_called_once_with(
-            resource_class='compute',
-            conductor_group=None,
-            capabilities={},
-            traits=[],
-            candidates=None
-        )
-        mock_pr.return_value.provision_node.assert_called_once_with(
-            mock_pr.return_value.reserve_node.return_value,
-            image='myimg',
-            nics=None,
-            root_disk_size=None,
-            config=mock.ANY,
-            hostname='host',
-            netboot=False,
-            wait=1800)
+        self._check(mock_pr, args, {'candidates': ['node1', 'node2']}, {})
 
-    def test_args_with_candidates(self, mock_os_conf, mock_pr):
-        args = ['deploy', '--hostname', 'host', '--image', 'myimg',
-                '--candidate', 'node1', '--candidate', 'node2']
-        _cmd.main(args)
-        mock_pr.assert_called_once_with(
-            cloud_region=mock_os_conf.return_value.get_one.return_value,
-            dry_run=False)
-        mock_pr.return_value.reserve_node.assert_called_once_with(
-            resource_class=None,
-            conductor_group=None,
-            capabilities={},
-            traits=[],
-            candidates=['node1', 'node2']
-        )
-        mock_pr.return_value.provision_node.assert_called_once_with(
-            mock_pr.return_value.reserve_node.return_value,
-            image='myimg',
-            nics=None,
-            root_disk_size=None,
-            config=mock.ANY,
-            hostname='host',
-            netboot=False,
-            wait=1800)
+    def test_args_conductor_group(self, mock_pr):
+        args = ['deploy', '--network', 'mynet', '--image', 'myimg',
+                '--conductor-group', 'loc1', '--resource-class', 'compute']
+        self._check(mock_pr, args, {'conductor_group': 'loc1'}, {})
 
-    def test_args_conductor_group(self, mock_os_conf, mock_pr):
-        args = ['deploy', '--conductor-group', 'loc1', '--image', 'myimg',
-                '--resource-class', 'compute']
-        _cmd.main(args)
-        mock_pr.assert_called_once_with(
-            cloud_region=mock_os_conf.return_value.get_one.return_value,
-            dry_run=False)
-        mock_pr.return_value.reserve_node.assert_called_once_with(
-            resource_class='compute',
-            conductor_group='loc1',
-            capabilities={},
-            traits=[],
-            candidates=None
-        )
-        mock_pr.return_value.provision_node.assert_called_once_with(
-            mock_pr.return_value.reserve_node.return_value,
-            image='myimg',
-            nics=None,
-            root_disk_size=None,
-            config=mock.ANY,
-            hostname=None,
-            netboot=False,
-            wait=1800)
-
-    def test_args_http_image_with_checksum(self, mock_os_conf, mock_pr):
+    def test_args_http_image_with_checksum(self, mock_pr):
         args = ['deploy', '--image', 'https://example.com/image.img',
                 '--image-checksum', '95e750180c7921ea0d545c7165db66b8',
-                '--resource-class', 'compute']
-        _cmd.main(args)
-        mock_pr.assert_called_once_with(
-            cloud_region=mock_os_conf.return_value.get_one.return_value,
-            dry_run=False)
-        mock_pr.return_value.reserve_node.assert_called_once_with(
-            resource_class='compute',
-            conductor_group=None,
-            capabilities={},
-            traits=[],
-            candidates=None
-        )
-        mock_pr.return_value.provision_node.assert_called_once_with(
-            mock_pr.return_value.reserve_node.return_value,
-            image=mock.ANY,
-            nics=None,
-            root_disk_size=None,
-            config=mock.ANY,
-            hostname=None,
-            netboot=False,
-            wait=1800)
+                '--network', 'mynet', '--resource-class', 'compute']
+        self._check(mock_pr, args, {}, {'image': mock.ANY})
+
         source = mock_pr.return_value.provision_node.call_args[1]['image']
         self.assertIsInstance(source, sources.HttpWholeDiskImage)
         self.assertEqual('https://example.com/image.img', source.url)
         self.assertEqual('95e750180c7921ea0d545c7165db66b8', source.checksum)
 
-    def test_args_http_image_with_checksum_url(self, mock_os_conf, mock_pr):
+    def test_args_http_image_with_checksum_url(self, mock_pr):
         args = ['deploy', '--image', 'http://example.com/image.img',
                 '--image-checksum', 'http://example.com/CHECKSUMS',
-                '--resource-class', 'compute']
-        _cmd.main(args)
-        mock_pr.assert_called_once_with(
-            cloud_region=mock_os_conf.return_value.get_one.return_value,
-            dry_run=False)
-        mock_pr.return_value.reserve_node.assert_called_once_with(
-            resource_class='compute',
-            conductor_group=None,
-            capabilities={},
-            traits=[],
-            candidates=None
-        )
-        mock_pr.return_value.provision_node.assert_called_once_with(
-            mock_pr.return_value.reserve_node.return_value,
-            image=mock.ANY,
-            nics=None,
-            root_disk_size=None,
-            config=mock.ANY,
-            hostname=None,
-            netboot=False,
-            wait=1800)
+                '--network', 'mynet', '--resource-class', 'compute']
+        self._check(mock_pr, args, {}, {'image': mock.ANY})
+
         source = mock_pr.return_value.provision_node.call_args[1]['image']
         self.assertIsInstance(source, sources.HttpWholeDiskImage)
         self.assertEqual('http://example.com/image.img', source.url)
         self.assertEqual('http://example.com/CHECKSUMS', source.checksum_url)
 
     @mock.patch.object(_cmd.LOG, 'critical', autospec=True)
-    def test_args_http_image_without_checksum(self, mock_log, mock_os_conf,
-                                              mock_pr):
+    def test_args_http_image_without_checksum(self, mock_log, mock_pr):
         args = ['deploy', '--image', 'http://example.com/image.img',
                 '--resource-class', 'compute']
         self.assertRaises(SystemExit, _cmd.main, args)
@@ -737,53 +378,25 @@ class TestDeploy(testtools.TestCase):
         self.assertFalse(mock_pr.return_value.reserve_node.called)
         self.assertFalse(mock_pr.return_value.provision_node.called)
 
-    def test_args_custom_wait(self, mock_os_conf, mock_pr):
+    def test_args_custom_wait(self, mock_pr):
         args = ['deploy', '--network', 'mynet', '--image', 'myimg',
                 '--wait', '3600', '--resource-class', 'compute']
-        _cmd.main(args)
-        mock_pr.assert_called_once_with(
-            cloud_region=mock_os_conf.return_value.get_one.return_value,
-            dry_run=False)
-        mock_pr.return_value.reserve_node.assert_called_once_with(
-            resource_class='compute',
-            conductor_group=None,
-            capabilities={},
-            traits=[],
-            candidates=None
-        )
-        mock_pr.return_value.provision_node.assert_called_once_with(
-            mock_pr.return_value.reserve_node.return_value,
-            image='myimg',
-            nics=[{'network': 'mynet'}],
-            root_disk_size=None,
-            config=mock.ANY,
-            hostname=None,
-            netboot=False,
-            wait=3600)
+        self._check(mock_pr, args, {}, {'wait': 3600})
 
-    def test_args_no_wait(self, mock_os_conf, mock_pr):
+    def test_args_no_wait(self, mock_pr):
         args = ['deploy', '--network', 'mynet', '--image', 'myimg',
                 '--no-wait', '--resource-class', 'compute']
-        _cmd.main(args)
-        mock_pr.assert_called_once_with(
-            cloud_region=mock_os_conf.return_value.get_one.return_value,
-            dry_run=False)
-        mock_pr.return_value.reserve_node.assert_called_once_with(
-            resource_class='compute',
-            conductor_group=None,
-            capabilities={},
-            traits=[],
-            candidates=None
-        )
-        mock_pr.return_value.provision_node.assert_called_once_with(
-            mock_pr.return_value.reserve_node.return_value,
-            image='myimg',
-            nics=[{'network': 'mynet'}],
-            root_disk_size=None,
-            config=mock.ANY,
-            hostname=None,
-            netboot=False,
-            wait=None)
+        self._check(mock_pr, args, {}, {'wait': None})
+
+    def test_with_root_size(self, mock_pr):
+        args = ['deploy', '--network', 'mynet', '--image', 'myimg',
+                '--root-size', '100', '--resource-class', 'compute']
+        self._check(mock_pr, args, {}, {'root_size_gb': 100})
+
+    def test_with_swap_size(self, mock_pr):
+        args = ['deploy', '--network', 'mynet', '--image', 'myimg',
+                '--swap-size', '4096', '--resource-class', 'compute']
+        self._check(mock_pr, args, {}, {'swap_size_mb': 4096})
 
 
 @mock.patch.object(_provisioner, 'Provisioner', autospec=True)

@@ -17,6 +17,7 @@ import logging
 import random
 import sys
 import time
+import warnings
 
 from openstack import connection
 import six
@@ -194,9 +195,10 @@ class Provisioner(object):
 
         return hostname
 
-    def provision_node(self, node, image, nics=None, root_disk_size=None,
-                       config=None, hostname=None, netboot=False,
-                       capabilities=None, traits=None, wait=None):
+    def provision_node(self, node, image, nics=None, root_size_gb=None,
+                       swap_size_mb=None, config=None, hostname=None,
+                       netboot=False, capabilities=None, traits=None,
+                       wait=None, root_disk_size=None):
         """Provision the node with the given image.
 
         Example::
@@ -204,7 +206,7 @@ class Provisioner(object):
          provisioner.provision_node("compute-1", "centos",
                                     nics=[{"network": "private"},
                                           {"network": "external"}],
-                                    root_disk_size=50,
+                                    root_size_gb=50,
                                     wait=3600)
 
         :param node: Node object, UUID or name. Will be reserved first, if
@@ -216,8 +218,10 @@ class Provisioner(object):
             Each item is a dict with a key describing the type of the NIC:
             either a port (``{"port": "<port name or ID>"}``) or a network
             to create a port on (``{"network": "<network name or ID>"}``).
-        :param root_disk_size: The size of the root partition. By default
+        :param root_size_gb: The size of the root partition. By default
             the value of the local_gb property is used.
+        :param swap_size_mb: The size of the swap partition. It's an error
+            to specify it for a whole disk image.
         :param config: :py:class:`metalsmith.InstanceConfig` object with
             the configuration to pass to the instance.
         :param hostname: Hostname to assign to the instance. Defaults to the
@@ -233,6 +237,7 @@ class Provisioner(object):
             :meth:`reserve_node` for that.
         :param wait: How many seconds to wait for the deployment to finish,
             None to return immediately.
+        :param root_disk_size: DEPRECATED, use ``root_size_gb``.
         :return: :py:class:`metalsmith.Instance` object with the current
             status of provisioning. If ``wait`` is not ``None``, provisioning
             is already finished.
@@ -242,6 +247,10 @@ class Provisioner(object):
             config = _config.InstanceConfig()
         if isinstance(image, six.string_types):
             image = sources.GlanceImage(image)
+        if root_disk_size is not None:
+            warnings.warn("root_disk_size is deprecated, use root_size_gb "
+                          "instead", DeprecationWarning)
+            root_size_gb = root_disk_size
 
         node = self._check_node_for_deploy(node)
         created_ports = []
@@ -249,7 +258,7 @@ class Provisioner(object):
 
         try:
             hostname = self._check_hostname(node, hostname)
-            root_disk_size = _utils.get_root_disk(root_disk_size, node)
+            root_size_gb = _utils.get_root_disk(root_size_gb, node)
 
             image._validate(self.connection)
 
@@ -268,7 +277,7 @@ class Provisioner(object):
 
             capabilities['boot_option'] = 'netboot' if netboot else 'local'
 
-            updates = {'/instance_info/root_gb': root_disk_size,
+            updates = {'/instance_info/root_gb': root_size_gb,
                        '/instance_info/capabilities': capabilities,
                        '/extra/%s' % _CREATED_PORTS: created_ports,
                        '/extra/%s' % _ATTACHED_PORTS: attached_ports,
@@ -276,6 +285,8 @@ class Provisioner(object):
             updates.update(image._node_updates(self.connection))
             if traits is not None:
                 updates['/instance_info/traits'] = traits
+            if swap_size_mb is not None:
+                updates['/instance_info/swap_mb'] = swap_size_mb
 
             LOG.debug('Updating node %(node)s with %(updates)s',
                       {'node': _utils.log_node(node), 'updates': updates})

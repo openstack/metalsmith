@@ -35,6 +35,8 @@ The following optional variables provide the defaults for Instance_ attributes:
     the default for ``root_size``.
 ``metalsmith_ssh_public_keys``
     the default for ``ssh_public_keys``.
+``metalsmith_swap_size``
+    the default for ``swap_size``.
 ``metalsmith_traits``
     the default for ``traits``.
 ``metalsmith_user_name``
@@ -87,7 +89,7 @@ Each instances has the following attributes:
 ``resource_class`` (defaults to ``metalsmith_resource_class``)
     requested node's resource class.
 ``root_size`` (defaults to ``metalsmith_root_size``)
-    size of the root partition, if partition images are used.
+    size of the root partition (in GiB), if partition images are used.
 
     .. note::
         Also required for whole-disk images due to how the Bare Metal service
@@ -95,6 +97,9 @@ Each instances has the following attributes:
 
 ``ssh_public_keys`` (defaults to ``metalsmith_ssh_public_keys``)
     list of file names with SSH public keys to put to the node.
+``swap_size`` (defaults to ``metalsmith_swap_size``)
+    size of the swap partition (in MiB), if partition images are used
+    (it's an error to set it for a whole disk image).
 ``traits``
     list of traits the node should have.
 ``user_name`` (defaults to ``metalsmith_user_name``)
@@ -123,6 +128,7 @@ Example
               - hostname: compute-0
                 resource_class: compute
                 root_size: 100
+                swap_size: 4096
                 capabilities:
                   boot_mode: uefi
                 traits:
@@ -130,6 +136,7 @@ Example
               - hostname: compute-1
                 resource_class: compute
                 root_size: 100
+                swap_size: 4096
                 capabilities:
                   boot_mode: uefi
                 user_name: heat-admin

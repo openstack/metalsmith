@@ -8,8 +8,9 @@ metalsmith_netboot: false
 metalsmith_nics: []
 metalsmith_resource_class:
 metalsmith_root_size:
-metalsmith_traits: []
 metalsmith_ssh_public_keys: []
+metalsmith_swap_size:
+metalsmith_traits: []
 metalsmith_user_name: metalsmith
 
 # Wait parameters

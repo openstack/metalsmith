@@ -13,6 +13,8 @@
       vars:
         image: "{{ metalsmith_whole_disk_image }}"
         image_checksum: "{{ metalsmith_whole_disk_checksum | default('') }}"
+        # NOTE(dtantsur): cannot specify swap with whole disk images
+        metalsmith_swap_size:
 
     - name: Test a partition image
       include: exercise.yaml

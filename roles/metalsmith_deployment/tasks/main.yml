@@ -15,7 +15,10 @@
       {% endfor %}
     {% endfor %}
     {% if root_size %}
-      --root-disk-size {{ root_size }}
+      --root-size {{ root_size }}
+    {% endif %}
+    {% if swap_size %}
+      --swap-size {{ swap_size }}
     {% endif %}
     {% for ssh_key in ssh_public_keys %}
       --ssh-public-key {{ ssh_key }}
@@ -54,6 +57,7 @@
     root_size: "{{ instance.root_size | default(metalsmith_root_size) }}"
     ssh_public_keys: "{{ instance.ssh_public_keys | default(metalsmith_ssh_public_keys) }}"
     state: "{{ instance.state | default('present') }}"
+    swap_size: "{{ instance.swap_size | default(metalsmith_swap_size) }}"
     traits: "{{ instance.traits | default(metalsmith_traits) }}"
     user_name: "{{ instance.user_name | default(metalsmith_user_name) }}"
   with_items: "{{ metalsmith_instances }}"

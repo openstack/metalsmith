@@ -42,22 +42,22 @@ def get_capabilities(node):
     return caps
 
 
-def get_root_disk(root_disk_size, node):
+def get_root_disk(root_size_gb, node):
     """Validate and calculate the root disk size."""
-    if root_disk_size is not None:
-        if not isinstance(root_disk_size, int):
-            raise TypeError("The root_disk_size argument must be "
-                            "a positive integer, got %r" % root_disk_size)
-        elif root_disk_size <= 0:
-            raise ValueError("The root_disk_size argument must be "
-                             "a positive integer, got %d" % root_disk_size)
+    if root_size_gb is not None:
+        if not isinstance(root_size_gb, int):
+            raise TypeError("The root_size_gb argument must be "
+                            "a positive integer, got %r" % root_size_gb)
+        elif root_size_gb <= 0:
+            raise ValueError("The root_size_gb argument must be "
+                             "a positive integer, got %d" % root_size_gb)
     else:
         try:
             assert int(node.properties['local_gb']) > 0
         except KeyError:
             raise exceptions.UnknownRootDiskSize(
-                'No local_gb for node %s and no root disk size requested' %
-                log_node(node))
+                'No local_gb for node %s and no root partition size '
+                'specified' % log_node(node))
         except (TypeError, ValueError, AssertionError):
             raise exceptions.UnknownRootDiskSize(
                 'The local_gb for node %(node)s is invalid: '
@@ -66,9 +66,9 @@ def get_root_disk(root_disk_size, node):
                  'value': node.properties['local_gb']})
 
         # allow for partitioning and config drive
-        root_disk_size = int(node.properties['local_gb']) - 1
+        root_size_gb = int(node.properties['local_gb']) - 1
 
-    return root_disk_size
+    return root_size_gb
 
 
 _HOSTNAME_RE = re.compile(r"""^

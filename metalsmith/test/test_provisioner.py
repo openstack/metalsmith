@@ -585,11 +585,49 @@ abcd  image
         self.assertFalse(self.api.release_node.called)
         self.assertFalse(self.conn.network.delete_port.called)
 
-    def test_with_root_disk_size(self):
+    def test_with_root_size(self):
+        self.updates['/instance_info/root_gb'] = 50
+
+        self.pr.provision_node(self.node, 'image', [{'network': 'network'}],
+                               root_size_gb=50)
+
+        self.conn.network.create_port.assert_called_once_with(
+            network_id=self.conn.network.find_network.return_value.id)
+        self.api.attach_port_to_node.assert_called_once_with(
+            self.node.uuid, self.conn.network.create_port.return_value.id)
+        self.api.update_node.assert_called_once_with(self.node, self.updates)
+        self.api.validate_node.assert_called_once_with(self.node,
+                                                       validate_deploy=True)
+        self.api.node_action.assert_called_once_with(self.node, 'active',
+                                                     configdrive=mock.ANY)
+        self.assertFalse(self.wait_mock.called)
+        self.assertFalse(self.api.release_node.called)
+        self.assertFalse(self.conn.network.delete_port.called)
+
+    def test_with_deprecated_root_size(self):
         self.updates['/instance_info/root_gb'] = 50
 
         self.pr.provision_node(self.node, 'image', [{'network': 'network'}],
                                root_disk_size=50)
+
+        self.conn.network.create_port.assert_called_once_with(
+            network_id=self.conn.network.find_network.return_value.id)
+        self.api.attach_port_to_node.assert_called_once_with(
+            self.node.uuid, self.conn.network.create_port.return_value.id)
+        self.api.update_node.assert_called_once_with(self.node, self.updates)
+        self.api.validate_node.assert_called_once_with(self.node,
+                                                       validate_deploy=True)
+        self.api.node_action.assert_called_once_with(self.node, 'active',
+                                                     configdrive=mock.ANY)
+        self.assertFalse(self.wait_mock.called)
+        self.assertFalse(self.api.release_node.called)
+        self.assertFalse(self.conn.network.delete_port.called)
+
+    def test_with_swap_size(self):
+        self.updates['/instance_info/swap_mb'] = 4096
+
+        self.pr.provision_node(self.node, 'image', [{'network': 'network'}],
+                               swap_size_mb=4096)
 
         self.conn.network.create_port.assert_called_once_with(
             network_id=self.conn.network.find_network.return_value.id)

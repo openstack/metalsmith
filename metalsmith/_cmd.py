@@ -81,7 +81,8 @@ def _do_deploy(api, args, formatter):
     instance = api.provision_node(node,
                                   image=source,
                                   nics=args.nics,
-                                  root_disk_size=args.root_disk_size,
+                                  root_size_gb=args.root_size,
+                                  swap_size_mb=args.swap_size,
                                   config=config,
                                   hostname=args.hostname,
                                   netboot=args.netboot,
@@ -150,9 +151,12 @@ def _parse_args(args, config):
                         dest='nics', action=NICAction)
     deploy.add_argument('--netboot', action='store_true',
                         help='boot from network instead of local disk')
-    deploy.add_argument('--root-disk-size', type=int,
-                        help='root disk size (in GiB), defaults to (local_gb '
-                        '- 2)')
+    deploy.add_argument('--root-size', type=int,
+                        help='root partition size (in GiB), defaults to '
+                        '(local_gb - 1)')
+    deploy.add_argument('--swap-size', type=int,
+                        help='swap partition size (in MiB), defaults to '
+                        'no swap')
     deploy.add_argument('--capability', action='append', metavar='NAME=VALUE',
                         default=[], help='capabilities the node should have')
     deploy.add_argument('--trait', action='append',
