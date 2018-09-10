@@ -24,7 +24,7 @@ develop-eggs
 # Other
 *.DS_Store
 .idea
-.testrepository
+.stestr
 .tox
 .venv
 .*.swp
