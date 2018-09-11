@@ -11,15 +11,15 @@
     - name: Test a whole-disk image
       include: exercise.yaml
       vars:
-        image: "{{ metalsmith_whole_disk_image }}"
-        image_checksum: "{{ metalsmith_whole_disk_checksum | default('') }}"
+        metalsmith_image: "{{ metalsmith_whole_disk_image }}"
+        metalsmith_image_checksum: "{{ metalsmith_whole_disk_checksum | default('') }}"
         # NOTE(dtantsur): cannot specify swap with whole disk images
         metalsmith_swap_size:
 
     - name: Test a partition image
       include: exercise.yaml
       vars:
-        image: "{{ metalsmith_partition_image }}"
-        image_checksum: "{{ metalsmith_partition_checksum | default('') }}"
-      # FIXME(dtantsur): cover partition images
-      when: not (metalsmith_use_http | default(false))
+        metalsmith_image: "{{ metalsmith_partition_image }}"
+        metalsmith_image_checksum: "{{ metalsmith_partition_checksum | default('') }}"
+        metalsmith_image_kernel: "{{ metalsmith_partition_kernel_image | default('') }}"
+        metalsmith_image_ramdisk: "{{ metalsmith_partition_ramdisk_image | default('') }}"

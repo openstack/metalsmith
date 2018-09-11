@@ -24,6 +24,29 @@
       register: baremetal_endpoint_result
       failed_when: baremetal_endpoint_result.stdout == ""
 
+    - name: Copy partition images directory
+      command: >
+        cp -r /opt/stack/devstack/files/images/{{ cirros_uec_image_result.stdout }}
+            /opt/stack/data/ironic/httpboot/metalsmith
+      args:
+        creates: /opt/stack/data/ironic/httpboot/metalsmith
+      become: yes
+
+    - name: Create MD5 checksums file for partition images
+      shell: md5sum cirros-* > CHECKSUMS
+      args:
+        chdir: /opt/stack/data/ironic/httpboot/metalsmith
+      become: yes
+
+    - name: Change ownership of image files
+      file:
+        path: /opt/stack/data/ironic/httpboot/metalsmith
+        state: directory
+        owner: "{{ ansible_user }}"
+        recurse: yes
+        mode: a+r
+      become: yes
+
     - name: Calculate MD5 checksum for HTTP disk image
       shell: |
           md5sum /opt/stack/devstack/files/{{ cirros_disk_image_result.stdout }}.img \
@@ -33,6 +56,10 @@
 
     - name: Set facts for HTTP image
       set_fact:
+        metalsmith_partition_image: "{{ baremetal_endpoint_result.stdout}}/metalsmith/{{ cirros_uec_image_result.stdout | replace('-uec', '-blank') }}.img"
+        metalsmith_partition_kernel_image: "{{ baremetal_endpoint_result.stdout}}/metalsmith/{{ cirros_uec_image_result.stdout | replace('-uec', '-vmlinuz') }}"
+        metalsmith_partition_ramdisk_image: "{{ baremetal_endpoint_result.stdout}}/metalsmith/{{ cirros_uec_image_result.stdout | replace('-uec', '-initrd') }}"
+        metalsmith_partition_checksum: "{{ baremetal_endpoint_result.stdout}}/metalsmith/CHECKSUMS"
         metalsmith_whole_disk_image: "{{ baremetal_endpoint_result.stdout}}/{{ cirros_disk_image_result.stdout }}.img"
         metalsmith_whole_disk_checksum: "{{ cirros_disk_image_checksum_result.stdout }}"
 

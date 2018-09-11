@@ -25,6 +25,10 @@ The following optional variables provide the defaults for Instance_ attributes:
     the default for ``image``.
 ``metalsmith_image_checksum``
     the default for ``image_checksum``.
+``metalsmith_image_kernel``
+    the default for ``image_kernel``.
+``metalsmith_image_ramdisk``
+    the default for ``image_ramdisk``.
 ``metalsmith_netboot``
     the default for ``netboot``
 ``metalsmith_nics``
@@ -62,6 +66,12 @@ Each instances has the following attributes:
     UUID, name or HTTP(s) URL of the image to use for deployment. Mandatory.
 ``image_checksum`` (defaults to ``metalsmith_image_checksum``)
     MD5 checksum or checksum file URL for an HTTP(s) image.
+``image_kernel`` (defaults to ``metalsmith_image_kernel``)
+    URL of the kernel image if and only if the ``image`` is a URL of
+    a partition image.
+``image_ramdisk`` (defaults to ``metalsmith_image_ramdisk``)
+    URL of the ramdisk image if and only if the ``image`` is a URL of
+    a partition image.
 ``netboot``
     whether to boot the deployed instance from network (PXE, iPXE, etc).
     The default is to use local boot (requires a bootloader on the image).
@@ -152,3 +162,13 @@ Example
                 nics:
                   - network: ctlplane
                   - port: 1899af15-149d-47dc-b0dc-a68614eeb5c4
+              - hostname: custom-partition-image
+                resource_class: custom
+                image: https://example.com/images/custom-1.0.root.img
+                image_kernel: https://example.com/images/custom-1.0.vmlinuz
+                image_ramdisk: https://example.com/images/custom-1.0.initrd
+                image_checksum: https://example.com/images/MD5SUMS
+              - hostname: custom-whole-disk-image
+                resource_class: custom
+                image: https://example.com/images/custom-1.0.qcow2
+                image_checksum: https://example.com/images/MD5SUMS

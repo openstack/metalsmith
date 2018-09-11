@@ -58,14 +58,21 @@ def _do_deploy(api, args, formatter):
         raise RuntimeError("%s cannot be used as a hostname" % args.hostname)
 
     if _is_http(args.image):
+        kwargs = {}
         if not args.image_checksum:
             raise RuntimeError("HTTP(s) images require --image-checksum")
         elif _is_http(args.image_checksum):
-            source = sources.HttpWholeDiskImage(
-                args.image, checksum_url=args.image_checksum)
+            kwargs['checksum_url'] = args.image_checksum
         else:
-            source = sources.HttpWholeDiskImage(
-                args.image, checksum=args.image_checksum)
+            kwargs['checksum'] = args.image_checksum
+
+        if args.image_kernel or args.image_ramdisk:
+            source = sources.HttpPartitionImage(args.image,
+                                                args.image_kernel,
+                                                args.image_ramdisk,
+                                                **kwargs)
+        else:
+            source = sources.HttpWholeDiskImage(args.image, **kwargs)
     else:
         source = args.image
 
@@ -145,6 +152,8 @@ def _parse_args(args, config):
                         required=True)
     deploy.add_argument('--image-checksum',
                         help='image MD5 checksum or URL with checksums')
+    deploy.add_argument('--image-kernel', help='URL of the image\'s kernel')
+    deploy.add_argument('--image-ramdisk', help='URL of the image\'s ramdisk')
     deploy.add_argument('--network', help='network to use (name or UUID)',
                         dest='nics', action=NICAction)
     deploy.add_argument('--port', help='port to attach (name or UUID)',

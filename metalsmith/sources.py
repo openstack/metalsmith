@@ -90,8 +90,7 @@ class HttpWholeDiskImage(_Source):
     specifically, by **ironic-conductor** processes).
     """
 
-    def __init__(self, url, checksum=None, checksum_url=None,
-                 kernel_url=None, ramdisk_url=None):
+    def __init__(self, url, checksum=None, checksum_url=None):
         """Create an HTTP source.
 
         :param url: URL of the image.
@@ -108,8 +107,6 @@ class HttpWholeDiskImage(_Source):
         self.url = url
         self.checksum = checksum
         self.checksum_url = checksum_url
-        self.kernel_url = kernel_url
-        self.ramdisk_url = ramdisk_url
 
     def _validate(self, connection):
         # TODO(dtantsur): should we validate image URLs here? Ironic will do it
@@ -177,4 +174,71 @@ class HttpPartitionImage(HttpWholeDiskImage):
         updates = super(HttpPartitionImage, self)._node_updates(connection)
         updates['/instance_info/kernel'] = self.kernel_url
         updates['/instance_info/ramdisk'] = self.ramdisk_url
+        return updates
+
+
+class FileWholeDiskImage(_Source):
+    """A whole-disk image from a local file location.
+
+    .. warning::
+        The location must be local to the **ironic-conductor** process handling
+        the node, not to metalsmith itself! Since there is no easy way to
+        determine which conductor handles a node, the same file must be
+        available at the same location to all conductors in the same group.
+    """
+
+    def __init__(self, location, checksum):
+        """Create a local file source.
+
+        :param location: Location of the image, optionally starting with
+            ``file://``.
+        :param checksum: MD5 checksum of the image.
+        """
+        if not location.startswith('file://'):
+            location = 'file://' + location
+        self.location = location
+        self.checksum = checksum
+
+    def _node_updates(self, connection):
+        LOG.debug('Image: %(image)s, checksum %(checksum)s',
+                  {'image': self.location, 'checksum': self.checksum})
+        return {
+            '/instance_info/image_source': self.location,
+            '/instance_info/image_checksum': self.checksum,
+        }
+
+
+class FilePartitionImage(_Source):
+    """A partition image from a local file location.
+
+    .. warning::
+        The location must be local to the **ironic-conductor** process handling
+        the node, not to metalsmith itself! Since there is no easy way to
+        determine which conductor handles a node, the same file must be
+        available at the same location to all conductors in the same group.
+    """
+
+    def __init__(self, location, kernel_location, ramdisk_location, checksum):
+        """Create a local file source.
+
+        :param location: Location of the image, optionally starting with
+            ``file://``.
+        :param kernel_location: Location of the kernel of the image,
+            optionally starting with ``file://``.
+        :param ramdisk_location: Location of the ramdisk of the image,
+            optionally starting with ``file://``.
+        :param checksum: MD5 checksum of the image.
+        """
+        super(FilePartitionImage, self).__init__(location, checksum)
+        if not kernel_location.startswith('file://'):
+            kernel_location = 'file://' + kernel_location
+        if not ramdisk_location.startswith('file://'):
+            ramdisk_location = 'file://' + ramdisk_location
+        self.kernel_location = kernel_location
+        self.ramdisk_location = ramdisk_location
+
+    def _node_updates(self, connection):
+        updates = super(FilePartitionImage, self)._node_updates(connection)
+        updates['/instance_info/kernel'] = self.kernel_location
+        updates['/instance_info/ramdisk'] = self.ramdisk_location
         return updates

@@ -4,6 +4,8 @@ metalsmith_capabilities: {}
 metalsmith_conductor_group:
 metalsmith_extra_args:
 metalsmith_image_checksum:
+metalsmith_image_kernel:
+metalsmith_image_ramdisk:
 metalsmith_netboot: false
 metalsmith_nics: []
 metalsmith_resource_class:

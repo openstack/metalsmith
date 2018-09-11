@@ -378,6 +378,21 @@ class TestDeploy(testtools.TestCase):
         self.assertFalse(mock_pr.return_value.reserve_node.called)
         self.assertFalse(mock_pr.return_value.provision_node.called)
 
+    def test_args_http_partition_image(self, mock_pr):
+        args = ['deploy', '--image', 'https://example.com/image.img',
+                '--image-kernel', 'https://example.com/kernel',
+                '--image-ramdisk', 'https://example.com/ramdisk',
+                '--image-checksum', '95e750180c7921ea0d545c7165db66b8',
+                '--network', 'mynet', '--resource-class', 'compute']
+        self._check(mock_pr, args, {}, {'image': mock.ANY})
+
+        source = mock_pr.return_value.provision_node.call_args[1]['image']
+        self.assertIsInstance(source, sources.HttpPartitionImage)
+        self.assertEqual('https://example.com/image.img', source.url)
+        self.assertEqual('https://example.com/kernel', source.kernel_url)
+        self.assertEqual('https://example.com/ramdisk', source.ramdisk_url)
+        self.assertEqual('95e750180c7921ea0d545c7165db66b8', source.checksum)
+
     def test_args_custom_wait(self, mock_pr):
         args = ['deploy', '--network', 'mynet', '--image', 'myimg',
                 '--wait', '3600', '--resource-class', 'compute']
