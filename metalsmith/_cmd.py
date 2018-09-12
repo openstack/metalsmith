@@ -73,6 +73,23 @@ def _do_deploy(api, args, formatter):
                                                 **kwargs)
         else:
             source = sources.HttpWholeDiskImage(args.image, **kwargs)
+    elif args.image.startswith('file://'):
+        if not args.image_checksum:
+            raise RuntimeError("File images require --image-checksum")
+
+        if args.image_kernel or args.image_ramdisk:
+            if not (args.image_kernel.startswith('file://') and
+                    args.image_ramdisk.startswith('file://')):
+                raise RuntimeError('Images with the file:// schema require '
+                                   'kernel and ramdisk images to also use '
+                                   'the file:// schema')
+            source = sources.FilePartitionImage(args.image,
+                                                args.image_kernel,
+                                                args.image_ramdisk,
+                                                args.image_checksum)
+        else:
+            source = sources.FileWholeDiskImage(args.image,
+                                                args.image_checksum)
     else:
         source = args.image
 
@@ -152,8 +169,10 @@ def _parse_args(args, config):
                         required=True)
     deploy.add_argument('--image-checksum',
                         help='image MD5 checksum or URL with checksums')
-    deploy.add_argument('--image-kernel', help='URL of the image\'s kernel')
-    deploy.add_argument('--image-ramdisk', help='URL of the image\'s ramdisk')
+    deploy.add_argument('--image-kernel', help='URL of the image\'s kernel',
+                        default='')
+    deploy.add_argument('--image-ramdisk', help='URL of the image\'s ramdisk',
+                        default='')
     deploy.add_argument('--network', help='network to use (name or UUID)',
                         dest='nics', action=NICAction)
     deploy.add_argument('--port', help='port to attach (name or UUID)',

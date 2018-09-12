@@ -393,6 +393,54 @@ class TestDeploy(testtools.TestCase):
         self.assertEqual('https://example.com/ramdisk', source.ramdisk_url)
         self.assertEqual('95e750180c7921ea0d545c7165db66b8', source.checksum)
 
+    def test_args_file_whole_disk_image(self, mock_pr):
+        args = ['deploy', '--image', 'file:///var/lib/ironic/image.img',
+                '--image-checksum', '95e750180c7921ea0d545c7165db66b8',
+                '--network', 'mynet', '--resource-class', 'compute']
+        self._check(mock_pr, args, {}, {'image': mock.ANY})
+
+        source = mock_pr.return_value.provision_node.call_args[1]['image']
+        self.assertIsInstance(source, sources.FileWholeDiskImage)
+        self.assertEqual('file:///var/lib/ironic/image.img', source.location)
+        self.assertEqual('95e750180c7921ea0d545c7165db66b8', source.checksum)
+
+    def test_args_file_partition_disk_image(self, mock_pr):
+        args = ['deploy', '--image', 'file:///var/lib/ironic/image.img',
+                '--image-kernel', 'file:///var/lib/ironic/image.vmlinuz',
+                '--image-ramdisk', 'file:///var/lib/ironic/image.initrd',
+                '--image-checksum', '95e750180c7921ea0d545c7165db66b8',
+                '--network', 'mynet', '--resource-class', 'compute']
+        self._check(mock_pr, args, {}, {'image': mock.ANY})
+
+        source = mock_pr.return_value.provision_node.call_args[1]['image']
+        self.assertIsInstance(source, sources.FilePartitionImage)
+        self.assertEqual('file:///var/lib/ironic/image.img', source.location)
+        self.assertEqual('file:///var/lib/ironic/image.vmlinuz',
+                         source.kernel_location)
+        self.assertEqual('file:///var/lib/ironic/image.initrd',
+                         source.ramdisk_location)
+        self.assertEqual('95e750180c7921ea0d545c7165db66b8', source.checksum)
+
+    @mock.patch.object(_cmd.LOG, 'critical', autospec=True)
+    def test_args_file_image_without_checksum(self, mock_log, mock_pr):
+        args = ['deploy', '--image', 'file:///var/lib/ironic/image.img',
+                '--resource-class', 'compute']
+        self.assertRaises(SystemExit, _cmd.main, args)
+        self.assertTrue(mock_log.called)
+        self.assertFalse(mock_pr.return_value.reserve_node.called)
+        self.assertFalse(mock_pr.return_value.provision_node.called)
+
+    @mock.patch.object(_cmd.LOG, 'critical', autospec=True)
+    def test_args_file_image_with_incorrect_kernel(self, mock_log, mock_pr):
+        args = ['deploy', '--image', 'file:///var/lib/ironic/image.img',
+                '--image-kernel', 'http://example.com/image.vmlinuz',
+                '--image-checksum', '95e750180c7921ea0d545c7165db66b8',
+                '--resource-class', 'compute']
+        self.assertRaises(SystemExit, _cmd.main, args)
+        self.assertTrue(mock_log.called)
+        self.assertFalse(mock_pr.return_value.reserve_node.called)
+        self.assertFalse(mock_pr.return_value.provision_node.called)
+
     def test_args_custom_wait(self, mock_pr):
         args = ['deploy', '--network', 'mynet', '--image', 'myimg',
                 '--wait', '3600', '--resource-class', 'compute']

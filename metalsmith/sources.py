@@ -208,7 +208,7 @@ class FileWholeDiskImage(_Source):
         }
 
 
-class FilePartitionImage(_Source):
+class FilePartitionImage(FileWholeDiskImage):
     """A partition image from a local file location.
 
     .. warning::

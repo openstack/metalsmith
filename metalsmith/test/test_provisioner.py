@@ -585,6 +585,65 @@ abcd  image
         self.assertFalse(self.api.release_node.called)
         self.assertFalse(self.conn.network.delete_port.called)
 
+    def test_with_file_whole_disk(self):
+        self.updates['/instance_info/image_source'] = 'file:///foo/img'
+        self.updates['/instance_info/image_checksum'] = 'abcd'
+        del self.updates['/instance_info/kernel']
+        del self.updates['/instance_info/ramdisk']
+
+        inst = self.pr.provision_node(
+            self.node,
+            sources.FileWholeDiskImage('file:///foo/img', checksum='abcd'),
+            [{'network': 'network'}])
+
+        self.assertEqual(inst.uuid, self.node.uuid)
+        self.assertEqual(inst.node, self.node)
+
+        self.assertFalse(self.conn.image.find_image.called)
+        self.conn.network.create_port.assert_called_once_with(
+            network_id=self.conn.network.find_network.return_value.id)
+        self.api.attach_port_to_node.assert_called_once_with(
+            self.node.uuid, self.conn.network.create_port.return_value.id)
+        self.api.update_node.assert_called_once_with(self.node, self.updates)
+        self.api.validate_node.assert_called_once_with(self.node,
+                                                       validate_deploy=True)
+        self.api.node_action.assert_called_once_with(self.node, 'active',
+                                                     configdrive=mock.ANY)
+        self.assertFalse(self.wait_mock.called)
+        self.assertFalse(self.api.release_node.called)
+        self.assertFalse(self.conn.network.delete_port.called)
+
+    def test_with_file_partition(self):
+        self.updates['/instance_info/image_source'] = 'file:///foo/img'
+        self.updates['/instance_info/image_checksum'] = 'abcd'
+        self.updates['/instance_info/kernel'] = 'file:///foo/vmlinuz'
+        self.updates['/instance_info/ramdisk'] = 'file:///foo/initrd'
+
+        inst = self.pr.provision_node(
+            self.node,
+            sources.FilePartitionImage('/foo/img',
+                                       '/foo/vmlinuz',
+                                       '/foo/initrd',
+                                       checksum='abcd'),
+            [{'network': 'network'}])
+
+        self.assertEqual(inst.uuid, self.node.uuid)
+        self.assertEqual(inst.node, self.node)
+
+        self.assertFalse(self.conn.image.find_image.called)
+        self.conn.network.create_port.assert_called_once_with(
+            network_id=self.conn.network.find_network.return_value.id)
+        self.api.attach_port_to_node.assert_called_once_with(
+            self.node.uuid, self.conn.network.create_port.return_value.id)
+        self.api.update_node.assert_called_once_with(self.node, self.updates)
+        self.api.validate_node.assert_called_once_with(self.node,
+                                                       validate_deploy=True)
+        self.api.node_action.assert_called_once_with(self.node, 'active',
+                                                     configdrive=mock.ANY)
+        self.assertFalse(self.wait_mock.called)
+        self.assertFalse(self.api.release_node.called)
+        self.assertFalse(self.conn.network.delete_port.called)
+
     def test_with_root_size(self):
         self.updates['/instance_info/root_gb'] = 50
 
