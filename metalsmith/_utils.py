@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import collections
 import re
 
 import six
@@ -92,26 +91,6 @@ def is_hostname_safe(hostname):
         return False
 
     return _HOSTNAME_RE.match(hostname) is not None
-
-
-def validate_nics(nics):
-    """Validate NICs."""
-    if not isinstance(nics, collections.Sequence):
-        raise TypeError("NICs must be a list of dicts")
-
-    unknown_nic_types = set()
-    for nic in nics:
-        if not isinstance(nic, collections.Mapping) or len(nic) != 1:
-            raise TypeError("Each NIC must be a dict with one item, "
-                            "got %s" % nic)
-
-        nic_type = next(iter(nic))
-        if nic_type not in ('port', 'network'):
-            unknown_nic_types.add(nic_type)
-
-    if unknown_nic_types:
-        raise ValueError("Unexpected NIC type(s) %s, supported values are "
-                         "'port' and 'network'" % ', '.join(unknown_nic_types))
 
 
 def parse_checksums(checksums):

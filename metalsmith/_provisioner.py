@@ -24,6 +24,7 @@ import six
 
 from metalsmith import _config
 from metalsmith import _instance
+from metalsmith import _nics
 from metalsmith import _os_api
 from metalsmith import _scheduler
 from metalsmith import _utils
@@ -218,6 +219,8 @@ class Provisioner(object):
             Each item is a dict with a key describing the type of the NIC:
             either a port (``{"port": "<port name or ID>"}``) or a network
             to create a port on (``{"network": "<network name or ID>"}``).
+            A network record can optionally feature a ``fixed_ip`` argument
+            to use this specific fixed IP from a suitable subnet.
         :param root_size_gb: The size of the root partition. By default
             the value of the local_gb property is used.
         :param swap_size_mb: The size of the swap partition. It's an error
@@ -253,8 +256,7 @@ class Provisioner(object):
             root_size_gb = root_disk_size
 
         node = self._check_node_for_deploy(node)
-        created_ports = []
-        attached_ports = []
+        nics = _nics.NICs(self._api, node, nics)
 
         try:
             hostname = self._check_hostname(node, hostname)
@@ -262,7 +264,7 @@ class Provisioner(object):
 
             image._validate(self.connection)
 
-            nics = self._get_nics(nics or [])
+            nics.validate()
 
             if capabilities is None:
                 capabilities = node.instance_info.get('capabilities') or {}
@@ -272,15 +274,14 @@ class Provisioner(object):
                             _utils.log_node(node))
                 return node
 
-            self._create_and_attach_ports(node, nics,
-                                          created_ports, attached_ports)
+            nics.create_and_attach_ports()
 
             capabilities['boot_option'] = 'netboot' if netboot else 'local'
 
             updates = {'/instance_info/root_gb': root_size_gb,
                        '/instance_info/capabilities': capabilities,
-                       '/extra/%s' % _CREATED_PORTS: created_ports,
-                       '/extra/%s' % _ATTACHED_PORTS: attached_ports,
+                       '/extra/%s' % _CREATED_PORTS: nics.created_ports,
+                       '/extra/%s' % _ATTACHED_PORTS: nics.attached_ports,
                        '/instance_info/%s' % _os_api.HOSTNAME_FIELD: hostname}
             updates.update(image._node_updates(self.connection))
             if traits is not None:
@@ -304,8 +305,7 @@ class Provisioner(object):
             try:
                 LOG.error('Deploy attempt failed on node %s, cleaning up',
                           _utils.log_node(node))
-                self._clean_up(node, created_ports=created_ports,
-                               attached_ports=attached_ports)
+                self._clean_up(node, nics=nics)
             except Exception:
                 LOG.exception('Clean up failed')
 
@@ -325,97 +325,6 @@ class Provisioner(object):
             instance = _instance.Instance(self._api, node)
 
         return instance
-
-    def _get_nics(self, nics):
-        """Validate and get the NICs."""
-        _utils.validate_nics(nics)
-
-        result = []
-        for nic in nics:
-            nic_type, nic_id = next(iter(nic.items()))
-            if nic_type == 'network':
-                try:
-                    network = self.connection.network.find_network(
-                        nic_id, ignore_missing=False)
-                except Exception as exc:
-                    raise exceptions.InvalidNIC(
-                        'Cannot find network %(net)s: %(error)s' %
-                        {'net': nic_id, 'error': exc})
-                else:
-                    result.append((nic_type, network))
-            else:
-                try:
-                    port = self.connection.network.find_port(
-                        nic_id, ignore_missing=False)
-                except Exception as exc:
-                    raise exceptions.InvalidNIC(
-                        'Cannot find port %(port)s: %(error)s' %
-                        {'port': nic_id, 'error': exc})
-                else:
-                    result.append((nic_type, port))
-
-        return result
-
-    def _create_and_attach_ports(self, node, nics, created_ports,
-                                 attached_ports):
-        """Create and attach ports on given networks."""
-        for nic_type, nic in nics:
-            if nic_type == 'network':
-                port = self.connection.network.create_port(network_id=nic.id)
-                created_ports.append(port.id)
-                LOG.info('Created port %(port)s for node %(node)s on '
-                         'network %(net)s',
-                         {'port': _utils.log_res(port),
-                          'node': _utils.log_node(node),
-                          'net': _utils.log_res(nic)})
-            else:
-                port = nic
-
-            self._api.attach_port_to_node(node.uuid, port.id)
-            LOG.info('Attached port %(port)s to node %(node)s',
-                     {'port': _utils.log_res(port),
-                      'node': _utils.log_node(node)})
-            attached_ports.append(port.id)
-
-    def _delete_ports(self, node, created_ports=None, attached_ports=None):
-        if created_ports is None:
-            created_ports = node.extra.get(_CREATED_PORTS, [])
-        if attached_ports is None:
-            attached_ports = node.extra.get(_ATTACHED_PORTS, [])
-
-        for port_id in set(attached_ports + created_ports):
-            LOG.debug('Detaching port %(port)s from node %(node)s',
-                      {'port': port_id, 'node': node.uuid})
-            try:
-                self._api.detach_port_from_node(node, port_id)
-            except Exception as exc:
-                LOG.debug('Failed to remove VIF %(vif)s from node %(node)s, '
-                          'assuming already removed: %(exc)s',
-                          {'vif': port_id, 'node': _utils.log_node(node),
-                           'exc': exc})
-
-        for port_id in created_ports:
-            LOG.debug('Deleting port %s', port_id)
-            try:
-                self.connection.network.delete_port(port_id,
-                                                    ignore_missing=False)
-            except Exception as exc:
-                LOG.warning('Failed to delete neutron port %(port)s: %(exc)s',
-                            {'port': port_id, 'exc': exc})
-            else:
-                LOG.info('Deleted port %(port)s for node %(node)s',
-                         {'port': port_id, 'node': _utils.log_node(node)})
-
-        update = {'/extra/%s' % item: _os_api.REMOVE
-                  for item in (_CREATED_PORTS, _ATTACHED_PORTS)}
-        update['/instance_info/%s' % _os_api.HOSTNAME_FIELD] = _os_api.REMOVE
-        LOG.debug('Updating node %(node)s with %(updates)s',
-                  {'node': _utils.log_node(node), 'updates': update})
-        try:
-            self._api.update_node(node, update)
-        except Exception as exc:
-            LOG.debug('Failed to clear node %(node)s extra: %(exc)s',
-                      {'node': _utils.log_node(node), 'exc': exc})
 
     def wait_for_provisioning(self, nodes, timeout=None, delay=15):
         """Wait for nodes to be provisioned.
@@ -495,8 +404,26 @@ class Provisioner(object):
             LOG.debug('All nodes reached state %s', state)
             return finished_nodes
 
-    def _clean_up(self, node, created_ports=None, attached_ports=None):
-        self._delete_ports(node, created_ports, attached_ports)
+    def _clean_up(self, node, nics=None):
+        if nics is None:
+            created_ports = node.extra.get(_CREATED_PORTS, [])
+            attached_ports = node.extra.get(_ATTACHED_PORTS, [])
+            _nics.detach_and_delete_ports(self._api, node, created_ports,
+                                          attached_ports)
+        else:
+            nics.detach_and_delete_ports()
+
+        update = {'/extra/%s' % item: _os_api.REMOVE
+                  for item in (_CREATED_PORTS, _ATTACHED_PORTS)}
+        update['/instance_info/%s' % _os_api.HOSTNAME_FIELD] = _os_api.REMOVE
+        LOG.debug('Updating node %(node)s with %(updates)s',
+                  {'node': _utils.log_node(node), 'updates': update})
+        try:
+            self._api.update_node(node, update)
+        except Exception as exc:
+            LOG.debug('Failed to clear node %(node)s extra: %(exc)s',
+                      {'node': _utils.log_node(node), 'exc': exc})
+
         LOG.debug('Releasing lock on node %s', _utils.log_node(node))
         self._api.release_node(node)
 

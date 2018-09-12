@@ -88,6 +88,16 @@ Each instances has the following attributes:
               - network: private
               - network: ctlplane
 
+        can optionally take a fixed IP to assign:
+
+        .. code-block:: yaml
+
+            nics:
+              - network: private
+                fixed_ip: 10.0.0.2
+              - network: ctlplane
+                fixed_ip: 192.168.42.30
+
     ``port``
         uses the provided pre-created port:
 

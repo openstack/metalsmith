@@ -336,6 +336,26 @@ class TestProvisionNode(Base):
         self.assertFalse(self.api.release_node.called)
         self.assertFalse(self.conn.network.delete_port.called)
 
+    def test_ok_without_nics(self):
+        self.updates['/extra/metalsmith_created_ports'] = []
+        self.updates['/extra/metalsmith_attached_ports'] = []
+        inst = self.pr.provision_node(self.node, 'image')
+
+        self.assertEqual(inst.uuid, self.node.uuid)
+        self.assertEqual(inst.node, self.node)
+
+        self.assertFalse(self.conn.network.create_port.called)
+        self.assertFalse(self.conn.network.find_port.called)
+        self.assertFalse(self.api.attach_port_to_node.called)
+        self.api.update_node.assert_called_once_with(self.node, self.updates)
+        self.api.validate_node.assert_called_once_with(self.node,
+                                                       validate_deploy=True)
+        self.api.node_action.assert_called_once_with(self.node, 'active',
+                                                     configdrive=mock.ANY)
+        self.assertFalse(self.wait_mock.called)
+        self.assertFalse(self.api.release_node.called)
+        self.assertFalse(self.conn.network.delete_port.called)
+
     def test_ok_with_source(self):
         inst = self.pr.provision_node(self.node, sources.GlanceImage('image'),
                                       [{'network': 'network'}])
@@ -461,6 +481,28 @@ class TestProvisionNode(Base):
         self.assertEqual([mock.call('port1', ignore_missing=False),
                           mock.call('port2', ignore_missing=False)],
                          self.conn.network.find_port.call_args_list)
+        self.api.update_node.assert_called_once_with(self.node, self.updates)
+        self.api.validate_node.assert_called_once_with(self.node,
+                                                       validate_deploy=True)
+        self.api.node_action.assert_called_once_with(self.node, 'active',
+                                                     configdrive=mock.ANY)
+        self.assertFalse(self.wait_mock.called)
+        self.assertFalse(self.api.release_node.called)
+        self.assertFalse(self.conn.network.delete_port.called)
+
+    def test_with_ip(self):
+        inst = self.pr.provision_node(self.node, 'image',
+                                      [{'network': 'network',
+                                        'fixed_ip': '10.0.0.2'}])
+
+        self.assertEqual(inst.uuid, self.node.uuid)
+        self.assertEqual(inst.node, self.node)
+
+        self.conn.network.create_port.assert_called_once_with(
+            network_id=self.conn.network.find_network.return_value.id,
+            fixed_ips=[{'ip_address': '10.0.0.2'}])
+        self.api.attach_port_to_node.assert_called_once_with(
+            self.node.uuid, self.conn.network.create_port.return_value.id)
         self.api.update_node.assert_called_once_with(self.node, self.updates)
         self.api.validate_node.assert_called_once_with(self.node,
                                                        validate_deploy=True)
@@ -1128,26 +1170,38 @@ abcd  and-not-image-again
         self.assertFalse(self.conn.network.create_port.called)
         self.assertFalse(self.api.attach_port_to_node.called)
         self.assertFalse(self.api.node_action.called)
-        self.api.release_node.assert_called_once_with(self.node)
 
     def test_invalid_nic(self):
-        for item in ('string', ['string'], [{1: 2, 3: 4}]):
+        for item in ('string', ['string']):
             self.assertRaisesRegex(TypeError, 'must be a dict',
                                    self.pr.provision_node,
                                    self.node, 'image', item)
         self.assertFalse(self.conn.network.create_port.called)
         self.assertFalse(self.api.attach_port_to_node.called)
         self.assertFalse(self.api.node_action.called)
-        self.api.release_node.assert_called_with(self.node)
 
     def test_invalid_nic_type(self):
-        self.assertRaisesRegex(ValueError, r'Unexpected NIC type\(s\) foo',
+        self.assertRaisesRegex(exceptions.InvalidNIC,
+                               'Unknown NIC record type',
                                self.pr.provision_node,
                                self.node, 'image', [{'foo': 'bar'}])
         self.assertFalse(self.conn.network.create_port.called)
         self.assertFalse(self.api.attach_port_to_node.called)
         self.assertFalse(self.api.node_action.called)
         self.api.release_node.assert_called_once_with(self.node)
+
+    def test_invalid_nic_type_fields(self):
+        for item in ({'port': '1234', 'foo': 'bar'},
+                     {'port': '1234', 'network': '4321'},
+                     {'network': '4321', 'foo': 'bar'}):
+            self.assertRaisesRegex(exceptions.InvalidNIC,
+                                   'Unexpected fields',
+                                   self.pr.provision_node,
+                                   self.node, 'image', [item])
+        self.assertFalse(self.conn.network.create_port.called)
+        self.assertFalse(self.api.attach_port_to_node.called)
+        self.assertFalse(self.api.node_action.called)
+        self.api.release_node.assert_called_with(self.node)
 
     def test_invalid_hostname(self):
         self.assertRaisesRegex(ValueError, 'n_1 cannot be used as a hostname',

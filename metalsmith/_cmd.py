@@ -35,10 +35,17 @@ def _is_http(smth):
 
 class NICAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
-        assert option_string in ('--port', '--network')
+        assert option_string in ('--port', '--network', '--ip')
         nics = getattr(namespace, self.dest, None) or []
         if option_string == '--network':
             nics.append({'network': values})
+        elif option_string == '--ip':
+            try:
+                network, ip = values.split(':', 1)
+            except ValueError:
+                raise argparse.ArgumentError(
+                    self, '--ip format is NETWORK:IP, got %s' % values)
+            nics.append({'network': network, 'fixed_ip': ip})
         else:
             nics.append({'port': values})
         setattr(namespace, self.dest, nics)
@@ -177,6 +184,8 @@ def _parse_args(args, config):
                         dest='nics', action=NICAction)
     deploy.add_argument('--port', help='port to attach (name or UUID)',
                         dest='nics', action=NICAction)
+    deploy.add_argument('--ip', help='attach IP from the network',
+                        dest='nics', metavar='NETWORK:IP', action=NICAction)
     deploy.add_argument('--netboot', action='store_true',
                         help='boot from network instead of local disk')
     deploy.add_argument('--root-size', type=int,

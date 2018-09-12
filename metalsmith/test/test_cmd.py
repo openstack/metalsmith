@@ -331,6 +331,20 @@ class TestDeploy(testtools.TestCase):
                     {'nics': [{'network': 'net1'}, {'port': 'port1'},
                               {'port': 'port2'}, {'network': 'net2'}]})
 
+    def test_args_ips(self, mock_pr):
+        args = ['deploy', '--image', 'myimg', '--resource-class', 'compute',
+                '--ip', 'private:10.0.0.2', '--ip', 'public:8.0.8.0']
+        self._check(mock_pr, args, {},
+                    {'nics': [{'network': 'private', 'fixed_ip': '10.0.0.2'},
+                              {'network': 'public', 'fixed_ip': '8.0.8.0'}]})
+
+    def test_args_bad_ip(self, mock_pr):
+        args = ['deploy', '--image', 'myimg', '--resource-class', 'compute',
+                '--ip', 'private:10.0.0.2', '--ip', 'public']
+        self.assertRaises(SystemExit, _cmd.main, args)
+        self.assertFalse(mock_pr.return_value.reserve_node.called)
+        self.assertFalse(mock_pr.return_value.provision_node.called)
+
     def test_args_hostname(self, mock_pr):
         args = ['deploy', '--network', 'mynet', '--image', 'myimg',
                 '--hostname', 'host', '--resource-class', 'compute']
