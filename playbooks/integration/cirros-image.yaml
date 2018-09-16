@@ -1,3 +1,4 @@
+---
 - name: Find Cirros UEC image
   shell: openstack image list -f value -c Name | grep 'cirros-.*-uec$'
   register: cirros_uec_image_result

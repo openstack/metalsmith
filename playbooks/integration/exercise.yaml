@@ -1,3 +1,4 @@
+---
 - name: Create a port
   command: openstack port create --network private test-port
   when: metalsmith_precreate_port

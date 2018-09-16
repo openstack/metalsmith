@@ -1,3 +1,4 @@
+---
 - name: Find a public SSH key file
   find:
     path: ~/.ssh/
