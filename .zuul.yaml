@@ -174,9 +174,7 @@
       - openstack-python36-jobs
       - openstack-lower-constraints-jobs
       - openstack-cover-jobs
-      - docs-on-readthedocs
-    vars:
-      rtd_webhook_id: '37378'
+      - publish-openstack-docs-pti
     check:
       jobs:
         - metalsmith-integration-glance-localboot-centos7

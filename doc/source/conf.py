@@ -23,9 +23,15 @@ extensions = [
     'sphinxcontrib.apidoc',
 ]
 
+try:
+    import openstackdocstheme
+    extensions.append('openstackdocstheme')
+except ImportError:
+    openstackdocstheme = None
+
 autoclass_content = 'both'
 apidoc_module_dir = '../../metalsmith'
-apidoc_output_dir = 'api'
+apidoc_output_dir = 'reference/api'
 apidoc_excluded_paths = ['test']
 apidoc_separate_modules = True
 
@@ -70,6 +76,11 @@ pygments_style = 'sphinx'
 # html_theme_path = ["."]
 # html_theme = '_theme'
 # html_static_path = ['static']
+
+if openstackdocstheme is not None:
+    html_theme = 'openstackdocs'
+else:
+    html_theme = 'default'
 
 # Output file base name for HTML help builder.
 htmlhelp_basename = '%sdoc' % project

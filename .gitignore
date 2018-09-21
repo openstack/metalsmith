@@ -6,7 +6,8 @@
 
 # Sphinx
 _build
-doc/source/api/
+doc/source/reference/api/
+doc/source/.doctrees/
 
 # Packages/installer info
 *.egg

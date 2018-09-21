@@ -1,19 +1,22 @@
 Deployment and Scheduling tool for Bare Metal
 =============================================
 
+.. image:: https://governance.openstack.org/badges/metalsmith.svg
+    :target: https://governance.openstack.org/reference/tags/index.html
+
 Overview
 --------
 
 This is a simple tool to provision bare metal machines using `OpenStack Bare
-Metal Service (ironic) <https://docs.openstack.org/ironic/latest/>`_,
-`OpenStack Image Service (glance) <https://docs.openstack.org/glance/latest/>`_
-and `OpenStack Networking Service (neutron)
-<https://docs.openstack.org/neutron/latest/>`_.
+Metal Service (ironic) <https://docs.openstack.org/ironic/latest/>`_ and,
+optionally, `OpenStack Image Service (glance)
+<https://docs.openstack.org/glance/latest/>`_ and `OpenStack Networking
+Service (neutron) <https://docs.openstack.org/neutron/latest/>`_.
 
 * License: Apache License, Version 2.0
-* Documentation: https://metalsmith.readthedocs.io
+* Documentation: https://docs.openstack.org/metalsmith/
 * Source: https://git.openstack.org/cgit/openstack/metalsmith
-* Bugs: https://storyboard.openstack.org/#!/project/1000
+* Bugs: https://storyboard.openstack.org/#!/project/openstack/metalsmith
 
 Installation
 ------------
@@ -22,30 +25,6 @@ Installation
 
     pip install --user metalsmith
 
-CLI Usage
----------
-
-Generic usage is as follows::
-
-    metalsmith --os-cloud <CLOUD NAME> deploy --image <GLANCE IMAGE> \
-        --network <NEUTRON NET> --ssh-public-key <PATH TO SSH PUBLIC KEY> \
-        --resource-class <RESOURCE CLASS>
-
-This is an example suitable for TripleO (replace ``compute`` with the profile
-you want to deploy)::
-
-    source ~/stackrc
-    metalsmith deploy --image overcloud-full --network ctlplane \
-        --capability profile=compute --ssh-public-key ~/.ssh/id_rsa.pub \
-        --resource-class baremetal
-
-To remove the deployed instance::
-
-    metalsmith --os-cloud <CLOUD NAME> undeploy <NODE UUID>
-
-For all possible options see the built-in help::
-
-    metalsmith --help
 
 Contributing
 ------------
@@ -55,5 +34,5 @@ Contributing
   (see `developer's guide
   <https://docs.openstack.org/infra/manual/developers.html>`_)
 * Bugs and RFEs:  `StoryBoard
-  <https://storyboard.openstack.org/#!/project/1000>`_
+  <https://storyboard.openstack.org/#!/project/openstack/metalsmith>`_
   (please do NOT report bugs to Github)
