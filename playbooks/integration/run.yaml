@@ -4,13 +4,13 @@
     OS_CLOUD: devstack-admin
 
   tasks:
-    - include: ssh-key.yaml
+    - include_tasks: ssh-key.yaml
 
-    - include: cirros-image.yaml
+    - include_tasks: cirros-image.yaml
       when: metalsmith_whole_disk_image is not defined
 
     - name: Test a whole-disk image
-      include: exercise.yaml
+      include_tasks: exercise.yaml
       vars:
         metalsmith_image: "{{ metalsmith_whole_disk_image }}"
         metalsmith_image_checksum: "{{ metalsmith_whole_disk_checksum | default('') }}"
@@ -18,7 +18,7 @@
         metalsmith_swap_size:
 
     - name: Test a partition image
-      include: exercise.yaml
+      include_tasks: exercise.yaml
       vars:
         metalsmith_image: "{{ metalsmith_partition_image }}"
         metalsmith_image_checksum: "{{ metalsmith_partition_checksum | default('') }}"
