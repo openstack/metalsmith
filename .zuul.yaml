@@ -170,8 +170,8 @@
     templates:
       - check-requirements
       - openstack-python-jobs
-      - openstack-python35-jobs
       - openstack-python36-jobs
+      - openstack-python37-jobs
       - openstack-lower-constraints-jobs
       - openstack-cover-jobs
       - publish-openstack-docs-pti
