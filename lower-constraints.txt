@@ -49,6 +49,7 @@ python-ironicclient==1.14.0
 python-mimeparse==1.6.0
 pytz==2018.4
 PyYAML==3.12
+reno==2.5.0
 requests==2.18.4
 requestsexceptions==1.4.0
 restructuredtext-lint==1.1.3

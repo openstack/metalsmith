@@ -8,6 +8,7 @@
 _build
 doc/source/reference/api/
 doc/source/.doctrees/
+releasenotes/build/
 
 # Packages/installer info
 *.egg
