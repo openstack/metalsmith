@@ -50,6 +50,8 @@ class TestInit(testtools.TestCase):
     @mock.patch.object(_provisioner.connection, 'Connection', autospec=True)
     def test_cloud_region_only(self, mock_conn):
         region = mock.Mock()
+        mock_conn.return_value.baremetal = mock.Mock(spec=['get_endpoint'])
+        mock_conn.return_value.baremetal.get_endpoint.return_value = 'http://'
         _provisioner.Provisioner(cloud_region=region)
         mock_conn.assert_called_once_with(config=region)
 

@@ -62,8 +62,10 @@ class Provisioner(object):
             raise TypeError('Either session or cloud_region must be provided, '
                             'but not both')
         else:
-            session = cloud_region.get_session()
             self.connection = connection.Connection(config=cloud_region)
+            # NOTE(dtantsur): Connection.baremetal is a keystoneauth Adapter
+            # for baremetal API.
+            session = self.connection.baremetal
 
         self._api = _os_api.API(session, self.connection)
         self._dry_run = dry_run
