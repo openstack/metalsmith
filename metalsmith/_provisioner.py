@@ -80,8 +80,7 @@ class Provisioner(object):
          node = provisioner.reserve_node("compute",
                                          capabilities={"boot_mode": "uefi"})
 
-        :param resource_class: Requested resource class. If ``None``, a node
-            with any resource class can be chosen.
+        :param resource_class: Requested resource class.
         :param conductor_group: Conductor group to pick the nodes from.
             Value ``None`` means any group, use empty string "" for nodes
             from the default group.
@@ -98,6 +97,10 @@ class Provisioner(object):
         :raises: :py:class:`metalsmith.exceptions.ReservationFailed`
         """
         capabilities = capabilities or {}
+        if resource_class is None:
+            warnings.warn("Not providing resource_class is deprecated as it's "
+                          "not compatible with the proposed allocation API",
+                          DeprecationWarning)
 
         if candidates:
             nodes = [self._api.get_node(node) for node in candidates]
