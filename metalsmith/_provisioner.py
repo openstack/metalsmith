@@ -204,7 +204,7 @@ class Provisioner(object):
     def provision_node(self, node, image, nics=None, root_size_gb=None,
                        swap_size_mb=None, config=None, hostname=None,
                        netboot=False, capabilities=None, traits=None,
-                       wait=None, root_disk_size=None):
+                       wait=None):
         """Provision the node with the given image.
 
         Example::
@@ -245,7 +245,6 @@ class Provisioner(object):
             :meth:`reserve_node` for that.
         :param wait: How many seconds to wait for the deployment to finish,
             None to return immediately.
-        :param root_disk_size: DEPRECATED, use ``root_size_gb``.
         :return: :py:class:`metalsmith.Instance` object with the current
             status of provisioning. If ``wait`` is not ``None``, provisioning
             is already finished.
@@ -255,10 +254,6 @@ class Provisioner(object):
             config = _config.InstanceConfig()
         if isinstance(image, six.string_types):
             image = sources.GlanceImage(image)
-        if root_disk_size is not None:
-            warnings.warn("root_disk_size is deprecated, use root_size_gb "
-                          "instead", DeprecationWarning)
-            root_size_gb = root_disk_size
 
         node = self._check_node_for_deploy(node)
         nics = _nics.NICs(self._api, node, nics)
