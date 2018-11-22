@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from metalsmith import _os_api
+from metalsmith import _utils
 
 
 _PROGRESS_STATES = frozenset(['deploying', 'wait call-back',
@@ -30,15 +30,15 @@ _HEALTHY_STATES = _PROGRESS_STATES | _ACTIVE_STATES
 class Instance(object):
     """Instance status in metalsmith."""
 
-    def __init__(self, api, node):
-        self._api = api
-        self._uuid = node.uuid
+    def __init__(self, connection, node):
+        self._connection = connection
+        self._uuid = node.id
         self._node = node
 
     @property
     def hostname(self):
         """Node's hostname."""
-        return self._node.instance_info.get(_os_api.HOSTNAME_FIELD)
+        return self._node.instance_info.get(_utils.GetNodeMixin.HOSTNAME_FIELD)
 
     def ip_addresses(self):
         """Returns IP addresses for this instance.
@@ -61,12 +61,12 @@ class Instance(object):
 
     @property
     def _is_deployed_by_metalsmith(self):
-        return _os_api.HOSTNAME_FIELD in self._node.instance_info
+        return _utils.GetNodeMixin.HOSTNAME_FIELD in self._node.instance_info
 
     @property
     def is_healthy(self):
         """Whether the node is not at fault or maintenance."""
-        return self.state in _HEALTHY_STATES and not self._node.maintenance
+        return self.state in _HEALTHY_STATES and not self._node.is_maintenance
 
     def nics(self):
         """List NICs for this instance.
@@ -75,10 +75,10 @@ class Instance(object):
             with full representations of their networks.
         """
         result = []
-        vifs = self._api.list_node_attached_ports(self.node)
+        vifs = self._connection.baremetal.list_node_vifs(self.node)
         for vif in vifs:
-            port = self._api.connection.network.get_port(vif.id)
-            port.network = self._api.connection.network.get_network(
+            port = self._connection.network.get_port(vif)
+            port.network = self._connection.network.get_network(
                 port.network_id)
             result.append(port)
         return result
@@ -110,7 +110,7 @@ class Instance(object):
         elif prov_state in _ERROR_STATES:
             return 'error'
         elif prov_state in _ACTIVE_STATES:
-            if self._node.maintenance:
+            if self._node.is_maintenance:
                 return 'maintenance'
             else:
                 return 'active'

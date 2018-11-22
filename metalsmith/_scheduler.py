@@ -17,6 +17,7 @@ import abc
 import collections
 import logging
 
+from openstack import exceptions as sdk_exc
 import six
 
 from metalsmith import _utils
@@ -100,13 +101,13 @@ def schedule_node(nodes, filters, reserver, dry_run=False):
     for node in nodes:
         try:
             result = reserver(node)
-        except Exception as exc:
+        except sdk_exc.SDKException as exc:
             LOG.debug('Node %(node)s was not reserved (%(exc)s), moving on '
                       'to the next one',
-                      {'node': _utils.log_node(node), 'exc': exc})
+                      {'node': _utils.log_res(node), 'exc': exc})
         else:
             LOG.info('Node %s reserved for deployment',
-                     _utils.log_node(result))
+                     _utils.log_res(result))
             return result
 
     LOG.debug('No nodes could be reserved')
@@ -149,25 +150,25 @@ class CapabilitiesFilter(Filter):
             caps = _utils.get_capabilities(node)
         except Exception:
             LOG.exception('Malformed capabilities on node %(node)s: %(caps)s',
-                          {'node': _utils.log_node(node),
+                          {'node': _utils.log_res(node),
                            'caps': node.properties.get('capabilities')})
             return False
 
         LOG.debug('Capabilities for node %(node)s: %(caps)s',
-                  {'node': _utils.log_node(node), 'caps': caps})
+                  {'node': _utils.log_res(node), 'caps': caps})
         for key, value in self._capabilities.items():
             try:
                 node_value = caps[key]
             except KeyError:
                 LOG.debug('Node %(node)s does not have capability %(cap)s',
-                          {'node': _utils.log_node(node), 'cap': key})
+                          {'node': _utils.log_res(node), 'cap': key})
                 return False
             else:
                 self._counter["%s=%s" % (key, node_value)] += 1
                 if value != node_value:
                     LOG.debug('Node %(node)s has capability %(cap)s of '
                               'value "%(node_val)s" instead of "%(expected)s"',
-                              {'node': _utils.log_node(node), 'cap': key,
+                              {'node': _utils.log_res(node), 'cap': key,
                                'node_val': node_value, 'expected': value})
                     return False
 
@@ -197,14 +198,14 @@ class TraitsFilter(Filter):
 
         traits = node.traits or []
         LOG.debug('Traits for node %(node)s: %(traits)s',
-                  {'node': _utils.log_node(node), 'traits': traits})
+                  {'node': _utils.log_res(node), 'traits': traits})
         for trait in traits:
             self._counter[trait] += 1
 
         missing = set(self._traits) - set(traits)
         if missing:
             LOG.debug('Node %(node)s does not have traits %(missing)s',
-                      {'node': _utils.log_node(node), 'missing': missing})
+                      {'node': _utils.log_res(node), 'missing': missing})
             return False
 
         return True
@@ -239,24 +240,28 @@ class CustomPredicateFilter(Filter):
 
 class IronicReserver(Reserver):
 
-    def __init__(self, api):
-        self._api = api
+    def __init__(self, connection, instance_info=None):
+        self._connection = connection
         self._failed_nodes = []
+        self._iinfo = instance_info or {}
 
     def validate(self, node):
         try:
-            self._api.validate_node(node)
-        except RuntimeError as exc:
+            self._connection.baremetal.validate_node(
+                node, required=('power', 'management'))
+        except sdk_exc.SDKException as exc:
             message = ('Node %(node)s failed validation: %(err)s' %
-                       {'node': _utils.log_node(node), 'err': exc})
+                       {'node': _utils.log_res(node), 'err': exc})
             LOG.warning(message)
             raise exceptions.ValidationFailed(message)
 
     def __call__(self, node):
         try:
             self.validate(node)
-            return self._api.reserve_node(node, instance_uuid=node.uuid)
-        except Exception:
+            iinfo = dict(node.instance_info or {}, **self._iinfo)
+            return self._connection.baremetal.update_node(
+                node, instance_id=node.id, instance_info=iinfo)
+        except sdk_exc.SDKException:
             self._failed_nodes.append(node)
             raise
 

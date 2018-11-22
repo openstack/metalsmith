@@ -52,12 +52,12 @@ class DefaultFormat(object):
         else:
             message = "Unprovisioning started for node %(node)s"
 
-        _print(message, node=_utils.log_node(node))
+        _print(message, node=_utils.log_res(node))
 
     def show(self, instances):
         for instance in instances:
             _print("Node %(node)s, current state is %(state)s",
-                   node=_utils.log_node(instance.node), state=instance.state)
+                   node=_utils.log_res(instance.node), state=instance.state)
 
             if instance.is_deployed:
                 ips = instance.ip_addresses()

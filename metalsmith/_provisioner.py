@@ -16,7 +16,6 @@
 import logging
 import random
 import sys
-import time
 import warnings
 
 from openstack import connection
@@ -25,7 +24,6 @@ import six
 from metalsmith import _config
 from metalsmith import _instance
 from metalsmith import _nics
-from metalsmith import _os_api
 from metalsmith import _scheduler
 from metalsmith import _utils
 from metalsmith import exceptions
@@ -38,7 +36,7 @@ _CREATED_PORTS = 'metalsmith_created_ports'
 _ATTACHED_PORTS = 'metalsmith_attached_ports'
 
 
-class Provisioner(object):
+class Provisioner(_utils.GetNodeMixin):
     """API to deploy/undeploy nodes with OpenStack.
 
     :param session: `Session` object (from ``keystoneauth``) to use when
@@ -63,11 +61,7 @@ class Provisioner(object):
                             'but not both')
         else:
             self.connection = connection.Connection(config=cloud_region)
-            # NOTE(dtantsur): Connection.baremetal is a keystoneauth Adapter
-            # for baremetal API.
-            session = self.connection.baremetal
 
-        self._api = _os_api.API(session, self.connection)
         self._dry_run = dry_run
 
     def reserve_node(self, resource_class=None, conductor_group=None,
@@ -103,13 +97,15 @@ class Provisioner(object):
                           DeprecationWarning)
 
         if candidates:
-            nodes = [self._api.get_node(node) for node in candidates]
+            nodes = [self._get_node(node) for node in candidates]
             filters = [
                 _scheduler.NodeTypeFilter(resource_class, conductor_group),
             ]
         else:
-            nodes = self._api.list_nodes(resource_class=resource_class,
-                                         conductor_group=conductor_group)
+            nodes = list(self.connection.baremetal.nodes(
+                resource_class=resource_class,
+                conductor_group=conductor_group,
+                details=True))
             if not nodes:
                 raise exceptions.NodesNotFound(resource_class, conductor_group)
             # Ensure parallel executions don't try nodes in the same sequence
@@ -124,18 +120,16 @@ class Provisioner(object):
         if predicate is not None:
             filters.append(_scheduler.CustomPredicateFilter(predicate))
 
-        reserver = _scheduler.IronicReserver(self._api)
+        instance_info = {}
+        if capabilities:
+            instance_info['capabilities'] = capabilities
+        if traits:
+            instance_info['traits'] = traits
+        reserver = _scheduler.IronicReserver(self.connection,
+                                             instance_info)
+
         node = _scheduler.schedule_node(nodes, filters, reserver,
                                         dry_run=self._dry_run)
-
-        update = {}
-        if capabilities:
-            update['/instance_info/capabilities'] = capabilities
-        if traits:
-            update['/instance_info/traits'] = traits
-        if update:
-            node = self._api.update_node(node, update)
-
         LOG.debug('Reserved node: %s', node)
         return node
 
@@ -148,28 +142,29 @@ class Provisioner(object):
         reserved by us or are in maintenance mode.
         """
         try:
-            node = self._api.get_node(node)
+            node = self._get_node(node)
         except Exception as exc:
             raise exceptions.InvalidNode('Cannot find node %(node)s: %(exc)s' %
                                          {'node': node, 'exc': exc})
 
-        if not node.instance_uuid:
+        if not node.instance_id:
             if not self._dry_run:
                 LOG.debug('Node %s not reserved yet, reserving',
-                          _utils.log_node(node))
-                self._api.reserve_node(node, instance_uuid=node.uuid)
-        elif node.instance_uuid != node.uuid:
+                          _utils.log_res(node))
+                self.connection.baremetal.update_node(
+                    node, instance_id=node.id)
+        elif node.instance_id != node.id:
             raise exceptions.InvalidNode('Node %(node)s already reserved '
                                          'by instance %(inst)s outside of '
                                          'metalsmith, cannot deploy on it' %
-                                         {'node': _utils.log_node(node),
-                                          'inst': node.instance_uuid})
+                                         {'node': _utils.log_res(node),
+                                          'inst': node.instance_id})
 
-        if node.maintenance:
+        if node.is_maintenance:
             raise exceptions.InvalidNode('Refusing to deploy on node %(node)s '
                                          'which is in maintenance mode due to '
                                          '%(reason)s' %
-                                         {'node': _utils.log_node(node),
+                                         {'node': _utils.log_res(node),
                                           'reason': node.maintenance_reason})
 
         return node
@@ -187,17 +182,17 @@ class Provisioner(object):
             if node.name and _utils.is_hostname_safe(node.name):
                 return node.name
             else:
-                return node.uuid
+                return node.id
 
         if not _utils.is_hostname_safe(hostname):
             raise ValueError("%s cannot be used as a hostname" % hostname)
 
-        existing = self._api.find_node_by_hostname(hostname)
-        if existing is not None and existing.uuid != node.uuid:
+        existing = self._find_node_by_hostname(hostname)
+        if existing is not None and existing.id != node.id:
             raise ValueError("The following node already uses hostname "
                              "%(host)s: %(node)s" %
                              {'host': hostname,
-                              'node': _utils.log_node(existing)})
+                              'node': _utils.log_res(existing)})
 
         return hostname
 
@@ -256,7 +251,7 @@ class Provisioner(object):
             image = sources.GlanceImage(image)
 
         node = self._check_node_for_deploy(node)
-        nics = _nics.NICs(self._api, node, nics)
+        nics = _nics.NICs(self.connection, node, nics)
 
         try:
             hostname = self._check_hostname(node, hostname)
@@ -271,62 +266,71 @@ class Provisioner(object):
 
             if self._dry_run:
                 LOG.warning('Dry run, not provisioning node %s',
-                            _utils.log_node(node))
+                            _utils.log_res(node))
                 return node
 
             nics.create_and_attach_ports()
 
             capabilities['boot_option'] = 'netboot' if netboot else 'local'
 
-            updates = {'/instance_info/root_gb': root_size_gb,
-                       '/instance_info/capabilities': capabilities,
-                       '/extra/%s' % _CREATED_PORTS: nics.created_ports,
-                       '/extra/%s' % _ATTACHED_PORTS: nics.attached_ports,
-                       '/instance_info/%s' % _os_api.HOSTNAME_FIELD: hostname}
-            updates.update(image._node_updates(self.connection))
+            instance_info = node.instance_info.copy()
+            instance_info['root_gb'] = root_size_gb
+            instance_info['capabilities'] = capabilities
+            instance_info[self.HOSTNAME_FIELD] = hostname
+            extra = node.extra.copy()
+            extra[_CREATED_PORTS] = nics.created_ports
+            extra[_ATTACHED_PORTS] = nics.attached_ports
+            instance_info.update(image._node_updates(self.connection))
             if traits is not None:
-                updates['/instance_info/traits'] = traits
+                instance_info['traits'] = traits
             if swap_size_mb is not None:
-                updates['/instance_info/swap_mb'] = swap_size_mb
+                instance_info['swap_mb'] = swap_size_mb
 
-            LOG.debug('Updating node %(node)s with %(updates)s',
-                      {'node': _utils.log_node(node), 'updates': updates})
-            node = self._api.update_node(node, updates)
-            self._api.validate_node(node, validate_deploy=True)
+            LOG.debug('Updating node %(node)s with instance info %(iinfo)s '
+                      'and extras %(extra)s', {'node': _utils.log_res(node),
+                                               'iinfo': instance_info,
+                                               'extra': extra})
+            node = self.connection.baremetal.update_node(
+                node, instance_info=instance_info, extra=extra)
+            self.connection.baremetal.validate_node(node)
 
             LOG.debug('Generating a configdrive for node %s',
-                      _utils.log_node(node))
-            with config.build_configdrive_directory(node, hostname) as cd:
-                self._api.node_action(node, 'active',
-                                      configdrive=cd)
+                      _utils.log_res(node))
+            cd = config.build_configdrive(node, hostname)
+            # TODO(dtantsur): move this to openstacksdk?
+            if not isinstance(cd, six.string_types):
+                cd = cd.decode('utf-8')
+            LOG.debug('Starting provisioning of node %s', _utils.log_res(node))
+            self.connection.baremetal.set_node_provision_state(
+                node, 'active', config_drive=cd)
         except Exception:
             exc_info = sys.exc_info()
 
             try:
                 LOG.error('Deploy attempt failed on node %s, cleaning up',
-                          _utils.log_node(node))
+                          _utils.log_res(node))
                 self._clean_up(node, nics=nics)
             except Exception:
                 LOG.exception('Clean up failed')
 
             six.reraise(*exc_info)
 
-        LOG.info('Provisioning started on node %s', _utils.log_node(node))
+        LOG.info('Provisioning started on node %s', _utils.log_res(node))
 
         if wait is not None:
             LOG.debug('Waiting for node %(node)s to reach state active '
                       'with timeout %(timeout)s',
-                      {'node': _utils.log_node(node), 'timeout': wait})
+                      {'node': _utils.log_res(node), 'timeout': wait})
             instance = self.wait_for_provisioning([node], timeout=wait)[0]
-            LOG.info('Deploy succeeded on node %s', _utils.log_node(node))
+            LOG.info('Deploy succeeded on node %s', _utils.log_res(node))
         else:
             # Update the node to return it's latest state
-            node = self._api.get_node(node, refresh=True)
-            instance = _instance.Instance(self._api, node)
+            node = self._get_node(node, refresh=True)
+            instance = _instance.Instance(self.connection, node)
 
         return instance
 
-    def wait_for_provisioning(self, nodes, timeout=None, delay=15):
+    def wait_for_provisioning(self, nodes, timeout=None, delay=None):
         """Wait for nodes to be provisioned.
 
         Loops until all nodes finish provisioning.
@@ -336,96 +340,46 @@ class Provisioner(object):
         :param timeout: How much time (in seconds) to wait for all nodes
             to finish provisioning. If ``None`` (the default), wait forever
             (more precisely, until the operation times out on server side).
-        :param delay: Delay (in seconds) between two provision state checks.
+        :param delay: DEPRECATED, do not use.
         :return: List of updated :py:class:`metalsmith.Instance` objects if
             all succeeded.
         :raises: :py:class:`metalsmith.exceptions.DeploymentFailure`
             if the deployment failed or timed out for any nodes.
         """
-        nodes = self._wait_for_state(nodes, 'active',
-                                     timeout=timeout, delay=delay)
-        return [_instance.Instance(self._api, node) for node in nodes]
-
-    def _wait_for_state(self, nodes, state, timeout, delay=15):
-        if timeout is not None and timeout <= 0:
-            raise ValueError("The timeout argument must be a positive int")
-        if delay < 0:
-            raise ValueError("The delay argument must be a non-negative int")
-
-        failed_nodes = []
-        finished_nodes = []
-
-        deadline = time.time() + timeout if timeout is not None else None
-        while timeout is None or time.time() < deadline:
-            remaining_nodes = []
-            for node in nodes:
-                node = self._api.get_node(node, refresh=True,
-                                          accept_hostname=True)
-                if node.provision_state == state:
-                    LOG.debug('Node %(node)s reached state %(state)s',
-                              {'node': _utils.log_node(node), 'state': state})
-                    finished_nodes.append(node)
-                elif (node.provision_state == 'error' or
-                      node.provision_state.endswith(' failed')):
-                    LOG.error('Node %(node)s failed deployment: %(error)s',
-                              {'node': _utils.log_node(node),
-                               'error': node.last_error})
-                    failed_nodes.append(node)
-                else:
-                    remaining_nodes.append(node)
-
-            if remaining_nodes:
-                nodes = remaining_nodes
-            else:
-                nodes = []
-                break
-
-            LOG.debug('Still waiting for the following nodes to reach state '
-                      '%(state)s: %(nodes)s',
-                      {'state': state,
-                       'nodes': ', '.join(_utils.log_node(n) for n in nodes)})
-            time.sleep(delay)
-
-        messages = []
-        if failed_nodes:
-            messages.append('the following nodes failed deployment: %s' %
-                            ', '.join('%s (%s)' % (_utils.log_node(node),
-                                                   node.last_error)
-                                      for node in failed_nodes))
-        if nodes:
-            messages.append('deployment timed out for nodes %s' %
-                            ', '.join(_utils.log_node(node) for node in nodes))
-
-        if messages:
-            raise exceptions.DeploymentFailure(
-                'Deployment failed: %s' % '; '.join(messages),
-                failed_nodes + nodes)
-        else:
-            LOG.debug('All nodes reached state %s', state)
-            return finished_nodes
+        if delay is not None:
+            warnings.warn("The delay argument to wait_for_provisioning is "
+                          "deprecated and has not effect", DeprecationWarning)
+        nodes = [self._get_node(n, accept_hostname=True) for n in nodes]
+        nodes = self.connection.baremetal.wait_for_nodes_provision_state(
+            nodes, 'active', timeout=timeout)
+        return [_instance.Instance(self.connection, node) for node in nodes]
 
     def _clean_up(self, node, nics=None):
         if nics is None:
             created_ports = node.extra.get(_CREATED_PORTS, [])
             attached_ports = node.extra.get(_ATTACHED_PORTS, [])
-            _nics.detach_and_delete_ports(self._api, node, created_ports,
-                                          attached_ports)
+            _nics.detach_and_delete_ports(self.connection, node,
+                                          created_ports, attached_ports)
         else:
             nics.detach_and_delete_ports()
 
-        update = {'/extra/%s' % item: _os_api.REMOVE
-                  for item in (_CREATED_PORTS, _ATTACHED_PORTS)}
-        update['/instance_info/%s' % _os_api.HOSTNAME_FIELD] = _os_api.REMOVE
-        LOG.debug('Updating node %(node)s with %(updates)s',
-                  {'node': _utils.log_node(node), 'updates': update})
+        extra = node.extra.copy()
+        for item in (_CREATED_PORTS, _ATTACHED_PORTS):
+            extra.pop(item, None)
+        instance_info = node.instance_info.copy()
+        instance_info.pop(self.HOSTNAME_FIELD, None)
+        LOG.debug('Updating node %(node)s with instance info %(iinfo)s '
+                  'and extras %(extra)s and releasing the lock',
+                  {'node': _utils.log_res(node),
+                   'iinfo': instance_info,
+                   'extra': extra})
         try:
-            self._api.update_node(node, update)
+            self.connection.baremetal.update_node(
+                node, instance_info=instance_info, extra=extra,
+                instance_id=None)
         except Exception as exc:
             LOG.debug('Failed to clear node %(node)s extra: %(exc)s',
-                      {'node': _utils.log_node(node), 'exc': exc})
-
-        LOG.debug('Releasing lock on node %s', _utils.log_node(node))
-        self._api.release_node(node)
+                      {'node': _utils.log_res(node), 'exc': exc})
 
     def unprovision_node(self, node, wait=None):
         """Unprovision a previously provisioned node.
@@ -436,21 +390,23 @@ class Provisioner(object):
             None to return immediately.
         :return: the latest `Node` object.
         """
-        node = self._api.get_node(node, accept_hostname=True)
+        node = self._get_node(node, accept_hostname=True)
         if self._dry_run:
             LOG.warning("Dry run, not unprovisioning")
             return
 
         self._clean_up(node)
-        self._api.node_action(node, 'deleted')
+        node = self.connection.baremetal.set_node_provision_state(
+            node, 'deleted', wait=False)
 
-        LOG.info('Deleting started for node %s', _utils.log_node(node))
+        LOG.info('Deleting started for node %s', _utils.log_res(node))
 
         if wait is not None:
-            self._wait_for_state([node], 'available', timeout=wait)
-            LOG.info('Node %s undeployed successfully', _utils.log_node(node))
+            node = self.connection.baremetal.wait_for_nodes_provision_state(
+                [node], 'available', timeout=wait)[0]
+            LOG.info('Node %s undeployed successfully', _utils.log_res(node))
 
-        return self._api.get_node(node, refresh=True)
+        return node
 
     def show_instance(self, instance_id):
         """Show information about instance.
@@ -470,11 +426,11 @@ class Provisioner(object):
         :return: list of :py:class:`metalsmith.Instance` objects in the same
             order as ``instances``.
         """
-        with self._api.cache_node_list_for_lookup():
+        with self._cache_node_list_for_lookup():
             return [
                 _instance.Instance(
-                    self._api,
-                    self._api.get_node(inst, accept_hostname=True))
+                    self.connection,
+                    self._get_node(inst, accept_hostname=True))
                 for inst in instances
             ]
 
@@ -483,8 +439,9 @@ class Provisioner(object):
 
         :return: list of :py:class:`metalsmith.Instance` objects.
         """
-        nodes = self._api.list_nodes(provision_state=None, associated=True)
+        nodes = self.connection.baremetal.nodes(associated=True, details=True)
         instances = [i for i in
-                     (_instance.Instance(self._api, node) for node in nodes)
+                     (_instance.Instance(self.connection, node)
+                      for node in nodes)
                      if i._is_deployed_by_metalsmith]
         return instances

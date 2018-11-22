@@ -19,7 +19,7 @@
   include_role:
     name: metalsmith_deployment
   vars:
-    metalsmith_extra_args: -vv
+    metalsmith_extra_args: --debug
     metalsmith_resource_class: baremetal
     metalsmith_instances:
       - hostname: test
@@ -48,7 +48,7 @@
   failed_when: instance_via_list.state != 'active' or instance_via_list.node.provision_state != 'active'
 
 - name: Show active node information
-  command: openstack baremetal node show {{ instance.node.uuid }}
+  command: openstack baremetal node show {{ instance.node.id }}
 
 - name: Get IP address
   set_fact:
@@ -69,7 +69,7 @@
   command: metalsmith --debug undeploy --wait 900 test
 
 - name: Get the current status of the deployed node
-  command: openstack baremetal node show {{ instance.node.uuid }} -f json
+  command: openstack baremetal node show {{ instance.node.id }} -f json
   register: undeployed_node_result
 
 - name: Parse node state
@@ -87,7 +87,7 @@
   when: undeployed_node.extra != {}
 
 - name: Get attached VIFs for the node
-  command: openstack baremetal node vif list {{ instance.node.uuid }} -f value -c ID
+  command: openstack baremetal node vif list {{ instance.node.id }} -f value -c ID
   register: vif_list_output
 
 - name: Check that no VIFs are still attached

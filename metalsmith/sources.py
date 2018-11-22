@@ -69,12 +69,12 @@ class GlanceImage(_Source):
         LOG.debug('Image: %s', self._image_obj)
 
         updates = {
-            '/instance_info/image_source': self._image_obj.id
+            'image_source': self._image_obj.id
         }
         for prop in ('kernel', 'ramdisk'):
             value = getattr(self._image_obj, '%s_id' % prop, None)
             if value:
-                updates['/instance_info/%s' % prop] = value
+                updates[prop] = value
 
         return updates
 
@@ -144,8 +144,8 @@ class HttpWholeDiskImage(_Source):
         LOG.debug('Image: %(image)s, checksum %(checksum)s',
                   {'image': self.url, 'checksum': self.checksum})
         return {
-            '/instance_info/image_source': self.url,
-            '/instance_info/image_checksum': self.checksum,
+            'image_source': self.url,
+            'image_checksum': self.checksum,
         }
 
 
@@ -172,8 +172,8 @@ class HttpPartitionImage(HttpWholeDiskImage):
 
     def _node_updates(self, connection):
         updates = super(HttpPartitionImage, self)._node_updates(connection)
-        updates['/instance_info/kernel'] = self.kernel_url
-        updates['/instance_info/ramdisk'] = self.ramdisk_url
+        updates['kernel'] = self.kernel_url
+        updates['ramdisk'] = self.ramdisk_url
         return updates
 
 
@@ -203,8 +203,8 @@ class FileWholeDiskImage(_Source):
         LOG.debug('Image: %(image)s, checksum %(checksum)s',
                   {'image': self.location, 'checksum': self.checksum})
         return {
-            '/instance_info/image_source': self.location,
-            '/instance_info/image_checksum': self.checksum,
+            'image_source': self.location,
+            'image_checksum': self.checksum,
         }
 
 
@@ -239,6 +239,6 @@ class FilePartitionImage(FileWholeDiskImage):
 
     def _node_updates(self, connection):
         updates = super(FilePartitionImage, self)._node_updates(connection)
-        updates['/instance_info/kernel'] = self.kernel_location
-        updates['/instance_info/ramdisk'] = self.ramdisk_location
+        updates['kernel'] = self.kernel_location
+        updates['ramdisk'] = self.ramdisk_location
         return updates

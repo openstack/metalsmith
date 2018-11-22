@@ -4,9 +4,8 @@ fixtures==3.0.0
 flake8-import-order==0.13
 hacking==1.0.0
 mock==2.0
-openstacksdk==0.17.0
+openstacksdk==0.22.0
 pbr==2.0.0
-python-ironicclient==1.14.0
 Pygments==2.2.0
 requests==2.18.4
 six==1.10.0

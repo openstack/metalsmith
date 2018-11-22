@@ -14,9 +14,9 @@
 # limitations under the License.
 
 import json
-import os
 
 import mock
+from openstack.baremetal import configdrive
 import testtools
 
 from metalsmith import _config
@@ -25,7 +25,7 @@ from metalsmith import _config
 class TestInstanceConfig(testtools.TestCase):
     def setUp(self):
         super(TestInstanceConfig, self).setUp()
-        self.node = mock.Mock(uuid='1234')
+        self.node = mock.Mock(id='1234')
         self.node.name = 'node name'
 
     def _check(self, config, expected_metadata, expected_userdata=None):
@@ -39,24 +39,19 @@ class TestInstanceConfig(testtools.TestCase):
                       'meta': {}}
         expected_m.update(expected_metadata)
 
-        with config.build_configdrive_directory(self.node, 'example.com') as d:
-            for version in ('2012-08-10', 'latest'):
-                with open(os.path.join(d, 'openstack', version,
-                                       'meta_data.json')) as fp:
-                    metadata = json.load(fp)
+        with mock.patch.object(configdrive, 'build', autospec=True) as mb:
+            result = config.build_configdrive(self.node, "example.com")
+            mb.assert_called_once_with(expected_m, mock.ANY)
+            self.assertIs(result, mb.return_value)
+            user_data = mb.call_args[0][1]
 
-                self.assertEqual(expected_m, metadata)
-                user_data = os.path.join(d, 'openstack', version, 'user_data')
-                if expected_userdata is None:
-                    self.assertFalse(os.path.exists(user_data))
-                else:
-                    with open(user_data) as fp:
-                        lines = list(fp)
-                    self.assertEqual('#cloud-config\n', lines[0])
-                    user_data = json.loads(''.join(lines[1:]))
-                    self.assertEqual(expected_userdata, user_data)
-
-        self.assertFalse(os.path.exists(d))
+        if expected_userdata:
+            self.assertIsNotNone(user_data)
+            user_data = user_data.decode('utf-8')
+            header, user_data = user_data.split('\n', 1)
+            self.assertEqual('#cloud-config', header)
+            user_data = json.loads(user_data)
+        self.assertEqual(expected_userdata, user_data)
 
     def test_default(self):
         config = _config.InstanceConfig()
