@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import mock
+from openstack import exceptions as sdk_exc
 import testtools
 
 from metalsmith import _scheduler
@@ -24,14 +25,14 @@ class TestScheduleNode(testtools.TestCase):
 
     def setUp(self):
         super(TestScheduleNode, self).setUp()
-        self.nodes = [mock.Mock(spec=['uuid', 'name']) for _ in range(2)]
+        self.nodes = [mock.Mock(spec=['id', 'name']) for _ in range(2)]
         self.reserver = self._reserver(lambda x: x)
 
     def _reserver(self, side_effect):
         reserver = mock.Mock(spec=_scheduler.Reserver)
         reserver.side_effect = side_effect
         if isinstance(side_effect, Exception):
-            reserver.fail.side_effect = RuntimeError('failed')
+            reserver.fail.side_effect = exceptions.ReservationFailed('fail')
         else:
             reserver.fail.side_effect = AssertionError('called fail')
         return reserver
@@ -56,15 +57,16 @@ class TestScheduleNode(testtools.TestCase):
         self.assertFalse(self.reserver.fail.called)
 
     def test_reservation_one_failed(self):
-        reserver = self._reserver([Exception("boom"), self.nodes[1]])
+        reserver = self._reserver([sdk_exc.SDKException("boom"),
+                                   self.nodes[1]])
         result = _scheduler.schedule_node(self.nodes, [], reserver)
         self.assertIs(result, self.nodes[1])
         self.assertEqual([mock.call(n) for n in self.nodes],
                          reserver.call_args_list)
 
     def test_reservation_all_failed(self):
-        reserver = self._reserver(Exception("boom"))
-        self.assertRaisesRegex(RuntimeError, 'failed',
+        reserver = self._reserver(sdk_exc.SDKException("boom"))
+        self.assertRaisesRegex(exceptions.ReservationFailed, 'fail',
                                _scheduler.schedule_node,
                                self.nodes, [], reserver)
         self.assertEqual([mock.call(n) for n in self.nodes],
@@ -121,7 +123,7 @@ class TestCapabilitiesFilter(testtools.TestCase):
 
     def test_nothing_requested_nothing_found(self):
         fltr = _scheduler.CapabilitiesFilter({})
-        node = mock.Mock(properties={}, spec=['properties', 'name', 'uuid'])
+        node = mock.Mock(properties={}, spec=['properties', 'name', 'id'])
         self.assertTrue(fltr(node))
 
     def test_matching_node(self):
@@ -129,7 +131,7 @@ class TestCapabilitiesFilter(testtools.TestCase):
                                               'foo': 'bar'})
         node = mock.Mock(
             properties={'capabilities': 'foo:bar,profile:compute,answer:42'},
-            spec=['properties', 'name', 'uuid'])
+            spec=['properties', 'name', 'id'])
         self.assertTrue(fltr(node))
 
     def test_not_matching_node(self):
@@ -137,14 +139,14 @@ class TestCapabilitiesFilter(testtools.TestCase):
                                               'foo': 'bar'})
         node = mock.Mock(
             properties={'capabilities': 'foo:bar,answer:42'},
-            spec=['properties', 'name', 'uuid'])
+            spec=['properties', 'name', 'id'])
         self.assertFalse(fltr(node))
 
     def test_fail_message(self):
         fltr = _scheduler.CapabilitiesFilter({'profile': 'compute'})
         node = mock.Mock(
             properties={'capabilities': 'profile:control'},
-            spec=['properties', 'name', 'uuid'])
+            spec=['properties', 'name', 'id'])
         self.assertFalse(fltr(node))
         self.assertRaisesRegex(exceptions.CapabilitiesNotFound,
                                'No available nodes found with capabilities '
@@ -156,7 +158,7 @@ class TestCapabilitiesFilter(testtools.TestCase):
         fltr = _scheduler.CapabilitiesFilter({'profile': 'compute'})
         for cap in ['foo,profile:control', 42, 'a:b:c']:
             node = mock.Mock(properties={'capabilities': cap},
-                             spec=['properties', 'name', 'uuid'])
+                             spec=['properties', 'name', 'id'])
             self.assertFalse(fltr(node))
         self.assertRaisesRegex(exceptions.CapabilitiesNotFound,
                                'No available nodes found with capabilities '
@@ -175,24 +177,24 @@ class TestTraitsFilter(testtools.TestCase):
 
     def test_no_traits(self):
         fltr = _scheduler.TraitsFilter([])
-        node = mock.Mock(spec=['name', 'uuid'])
+        node = mock.Mock(spec=['name', 'id'])
         self.assertTrue(fltr(node))
 
     def test_ok(self):
         fltr = _scheduler.TraitsFilter(['tr1', 'tr2'])
-        node = mock.Mock(spec=['name', 'uuid', 'traits'],
+        node = mock.Mock(spec=['name', 'id', 'traits'],
                          traits=['tr3', 'tr2', 'tr1'])
         self.assertTrue(fltr(node))
 
     def test_missing_one(self):
         fltr = _scheduler.TraitsFilter(['tr1', 'tr2'])
-        node = mock.Mock(spec=['name', 'uuid', 'traits'],
+        node = mock.Mock(spec=['name', 'id', 'traits'],
                          traits=['tr3', 'tr1'])
         self.assertFalse(fltr(node))
 
     def test_missing_all(self):
         fltr = _scheduler.TraitsFilter(['tr1', 'tr2'])
-        node = mock.Mock(spec=['name', 'uuid', 'traits'], traits=None)
+        node = mock.Mock(spec=['name', 'id', 'traits'], traits=None)
         self.assertFalse(fltr(node))
 
 
@@ -200,10 +202,12 @@ class TestIronicReserver(testtools.TestCase):
 
     def setUp(self):
         super(TestIronicReserver, self).setUp()
-        self.node = mock.Mock(spec=['uuid', 'name'])
-        self.api = mock.Mock(spec=['reserve_node', 'release_node',
-                                   'validate_node'])
-        self.api.reserve_node.side_effect = lambda node, instance_uuid: node
+        self.node = mock.Mock(spec=['id', 'name', 'instance_info'],
+                              instance_info={})
+        self.api = mock.Mock(spec=['baremetal'])
+        self.api.baremetal = mock.Mock(spec=['update_node', 'validate_node'])
+        self.api.baremetal.update_node.side_effect = (
+            lambda node, **kw: node)
         self.reserver = _scheduler.IronicReserver(self.api)
 
     def test_fail(self):
@@ -213,22 +217,36 @@ class TestIronicReserver(testtools.TestCase):
 
     def test_ok(self):
         self.assertEqual(self.node, self.reserver(self.node))
-        self.api.validate_node.assert_called_with(self.node)
-        self.api.reserve_node.assert_called_once_with(
-            self.node, instance_uuid=self.node.uuid)
+        self.api.baremetal.validate_node.assert_called_with(
+            self.node, required=('power', 'management'))
+        self.api.baremetal.update_node.assert_called_once_with(
+            self.node, instance_id=self.node.id, instance_info={})
+
+    def test_with_instance_info(self):
+        self.reserver = _scheduler.IronicReserver(self.api,
+                                                  {'cat': 'meow'})
+        self.assertEqual(self.node, self.reserver(self.node))
+        self.api.baremetal.validate_node.assert_called_with(
+            self.node, required=('power', 'management'))
+        self.api.baremetal.update_node.assert_called_once_with(
+            self.node, instance_id=self.node.id,
+            instance_info={'cat': 'meow'})
 
     def test_reservation_failed(self):
-        self.api.reserve_node.side_effect = RuntimeError('conflict')
-        self.assertRaisesRegex(RuntimeError, 'conflict',
+        self.api.baremetal.update_node.side_effect = (
+            sdk_exc.SDKException('conflict'))
+        self.assertRaisesRegex(sdk_exc.SDKException, 'conflict',
                                self.reserver, self.node)
-        self.api.validate_node.assert_called_with(self.node)
-        self.api.reserve_node.assert_called_once_with(
-            self.node, instance_uuid=self.node.uuid)
+        self.api.baremetal.validate_node.assert_called_with(
+            self.node, required=('power', 'management'))
+        self.api.baremetal.update_node.assert_called_once_with(
+            self.node, instance_id=self.node.id, instance_info={})
 
     def test_validation_failed(self):
-        self.api.validate_node.side_effect = RuntimeError('fail')
+        self.api.baremetal.validate_node.side_effect = (
+            sdk_exc.SDKException('fail'))
         self.assertRaisesRegex(exceptions.ValidationFailed, 'fail',
                                self.reserver, self.node)
-        self.api.validate_node.assert_called_once_with(self.node)
-        self.assertFalse(self.api.reserve_node.called)
-        self.assertFalse(self.api.release_node.called)
+        self.api.baremetal.validate_node.assert_called_with(
+            self.node, required=('power', 'management'))
+        self.assertFalse(self.api.baremetal.update_node.called)

@@ -13,11 +13,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import contextlib
 import json
-import os
-import shutil
-import tempfile
+import logging
+
+from openstack.baremetal import configdrive
+
+from metalsmith import _utils
+
+
+LOG = logging.getLogger(__name__)
 
 
 class InstanceConfig(object):
@@ -56,13 +60,12 @@ class InstanceConfig(object):
             kwargs.setdefault('ssh_authorized_keys', self.ssh_keys)
         self.users.append(kwargs)
 
-    @contextlib.contextmanager
-    def build_configdrive_directory(self, node, hostname):
-        """Build a configdrive from the provided information.
+    def build_configdrive(self, node, hostname):
+        """Make the config drive.
 
         :param node: `Node` object.
         :param hostname: instance hostname.
-        :return: a context manager yielding a directory with files
+        :return: configdrive contents as a base64-encoded string.
         """
         # NOTE(dtantsur): CirrOS does not understand lists
         if isinstance(self.ssh_keys, list):
@@ -70,33 +73,25 @@ class InstanceConfig(object):
         else:
             ssh_keys = self.ssh_keys
 
-        d = tempfile.mkdtemp()
-        try:
-            metadata = {'public_keys': ssh_keys,
-                        'uuid': node.uuid,
-                        'name': node.name,
-                        'hostname': hostname,
-                        'launch_index': 0,
-                        'availability_zone': '',
-                        'files': [],
-                        'meta': {}}
-            user_data = {}
-            if self.users:
-                user_data['users'] = self.users
+        metadata = {'public_keys': ssh_keys,
+                    'uuid': node.id,
+                    'name': node.name,
+                    'hostname': hostname,
+                    'launch_index': 0,
+                    'availability_zone': '',
+                    'files': [],
+                    'meta': {}}
+        user_data = {}
+        user_data_bin = None
 
-            for version in ('2012-08-10', 'latest'):
-                subdir = os.path.join(d, 'openstack', version)
-                if not os.path.exists(subdir):
-                    os.makedirs(subdir)
+        if self.users:
+            user_data['users'] = self.users
 
-                with open(os.path.join(subdir, 'meta_data.json'), 'w') as fp:
-                    json.dump(metadata, fp)
+        if user_data:
+            user_data_bin = ("#cloud-config\n" + json.dumps(user_data)).encode(
+                'utf-8')
 
-                if user_data:
-                    with open(os.path.join(subdir, 'user_data'), 'w') as fp:
-                        fp.write("#cloud-config\n")
-                        json.dump(user_data, fp)
-
-            yield d
-        finally:
-            shutil.rmtree(d)
+        LOG.debug('Generating configdrive tree for node %(node)s with '
+                  'metadata %(meta)s', {'node': _utils.log_res(node),
+                                        'meta': metadata})
+        return configdrive.build(metadata, user_data_bin)

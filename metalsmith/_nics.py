@@ -26,7 +26,7 @@ LOG = logging.getLogger(__name__)
 class NICs(object):
     """Requested NICs."""
 
-    def __init__(self, api, node, nics):
+    def __init__(self, connection, node, nics):
         if nics is None:
             nics = []
 
@@ -38,7 +38,7 @@ class NICs(object):
                 raise TypeError("Each NIC must be a dict got %s" % nic)
 
         self._node = node
-        self._api = api
+        self._connection = connection
         self._nics = nics
         self._validated = None
         self.created_ports = []
@@ -68,25 +68,26 @@ class NICs(object):
 
         for nic_type, nic in self._validated:
             if nic_type == 'network':
-                port = self._api.connection.network.create_port(**nic)
+                port = self._connection.network.create_port(**nic)
                 self.created_ports.append(port.id)
                 LOG.info('Created port %(port)s for node %(node)s with '
                          '%(nic)s', {'port': _utils.log_res(port),
-                                     'node': _utils.log_node(self._node),
+                                     'node': _utils.log_res(self._node),
                                      'nic': nic})
             else:
                 port = nic
 
-            self._api.attach_port_to_node(self._node.uuid, port.id)
+            self._connection.baremetal.attach_vif_to_node(self._node,
+                                                          port.id)
             LOG.info('Attached port %(port)s to node %(node)s',
                      {'port': _utils.log_res(port),
-                      'node': _utils.log_node(self._node)})
+                      'node': _utils.log_res(self._node)})
             self.attached_ports.append(port.id)
 
     def detach_and_delete_ports(self):
         """Detach attached port and delete previously created ones."""
-        detach_and_delete_ports(self._api, self._node, self.created_ports,
-                                self.attached_ports)
+        detach_and_delete_ports(self._connection, self._node,
+                                self.created_ports, self.attached_ports)
 
     def _get_port(self, nic):
         """Validate and get the NIC information for a port.
@@ -100,7 +101,7 @@ class NICs(object):
                 'Unexpected fields for a port: %s' % ', '.join(unexpected))
 
         try:
-            port = self._api.connection.network.find_port(
+            port = self._connection.network.find_port(
                 nic['port'], ignore_missing=False)
         except Exception as exc:
             raise exceptions.InvalidNIC(
@@ -122,7 +123,7 @@ class NICs(object):
                 'Unexpected fields for a network: %s' % ', '.join(unexpected))
 
         try:
-            network = self._api.connection.network.find_network(
+            network = self._connection.network.find_network(
                 nic['network'], ignore_missing=False)
         except Exception as exc:
             raise exceptions.InvalidNIC(
@@ -136,33 +137,32 @@ class NICs(object):
         return port_args
 
 
-def detach_and_delete_ports(api, node, created_ports, attached_ports):
+def detach_and_delete_ports(connection, node, created_ports, attached_ports):
     """Detach attached port and delete previously created ones.
 
-    :param api: `Api` instance.
+    :param connection: `openstacksdk.Connection` instance.
     :param node: `Node` object to detach ports from.
     :param created_ports: List of IDs of previously created ports.
     :param attached_ports: List of IDs of previously attached_ports.
     """
     for port_id in set(attached_ports + created_ports):
         LOG.debug('Detaching port %(port)s from node %(node)s',
-                  {'port': port_id, 'node': node.uuid})
+                  {'port': port_id, 'node': _utils.log_res(node)})
         try:
-            api.detach_port_from_node(node, port_id)
+            connection.baremetal.detach_vif_from_node(node, port_id)
         except Exception as exc:
             LOG.debug('Failed to remove VIF %(vif)s from node %(node)s, '
                       'assuming already removed: %(exc)s',
-                      {'vif': port_id, 'node': _utils.log_node(node),
+                      {'vif': port_id, 'node': _utils.log_res(node),
                        'exc': exc})
 
     for port_id in created_ports:
         LOG.debug('Deleting port %s', port_id)
         try:
-            api.connection.network.delete_port(port_id,
-                                               ignore_missing=False)
+            connection.network.delete_port(port_id, ignore_missing=False)
         except Exception as exc:
             LOG.warning('Failed to delete neutron port %(port)s: %(exc)s',
                         {'port': port_id, 'exc': exc})
         else:
             LOG.info('Deleted port %(port)s for node %(node)s',
-                     {'port': port_id, 'node': _utils.log_node(node)})
+                     {'port': port_id, 'node': _utils.log_res(node)})

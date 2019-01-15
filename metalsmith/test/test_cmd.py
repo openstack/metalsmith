@@ -75,7 +75,7 @@ class TestDeploy(testtools.TestCase):
         instance = mock_pr.return_value.provision_node.return_value
         instance.create_autospec(_instance.Instance)
         instance.node.name = None
-        instance.node.uuid = '123'
+        instance.node.id = '123'
         instance.state = 'active'
         instance.is_deployed = True
         instance.ip_addresses.return_value = {'private': ['1.2.3.4']}
@@ -127,7 +127,7 @@ class TestDeploy(testtools.TestCase):
         instance.is_deployed = True
         instance.ip_addresses.return_value = {}
         instance.node.name = None
-        instance.node.uuid = '123'
+        instance.node.id = '123'
         instance.state = 'active'
 
         args = ['deploy', '--network', 'mynet', '--image', 'myimg',
@@ -142,7 +142,7 @@ class TestDeploy(testtools.TestCase):
         instance.create_autospec(_instance.Instance)
         instance.is_deployed = False
         instance.node.name = None
-        instance.node.uuid = '123'
+        instance.node.id = '123'
         instance.state = 'deploying'
 
         args = ['deploy', '--network', 'mynet', '--image', 'myimg',
@@ -487,7 +487,7 @@ class TestUndeploy(testtools.TestCase):
 
     def test_ok(self, mock_os_conf, mock_pr):
         node = mock_pr.return_value.unprovision_node.return_value
-        node.uuid = '123'
+        node.id = '123'
         node.name = None
         node.provision_state = 'cleaning'
 
@@ -506,7 +506,7 @@ class TestUndeploy(testtools.TestCase):
 
     def test_custom_wait(self, mock_os_conf, mock_pr):
         node = mock_pr.return_value.unprovision_node.return_value
-        node.uuid = '123'
+        node.id = '123'
         node.name = None
         node.provision_state = 'available'
 
@@ -580,9 +580,9 @@ class TestShowWait(testtools.TestCase):
             for hostname in ['hostname1', 'hostname2']
         ]
         for inst in self.instances:
-            inst.node.uuid = inst.uuid
+            inst.node.id = inst.uuid
             inst.node.name = 'name-%s' % inst.uuid
-            inst.to_dict.return_value = {inst.node.uuid: inst.node.name}
+            inst.to_dict.return_value = {inst.node.id: inst.node.name}
 
     def test_show(self, mock_os_conf, mock_pr):
         mock_pr.return_value.show_instances.return_value = self.instances

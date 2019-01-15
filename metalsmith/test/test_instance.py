@@ -23,21 +23,19 @@ class TestInstanceIPAddresses(test_provisioner.Base):
     def setUp(self):
         super(TestInstanceIPAddresses, self).setUp()
         self.instance = _instance.Instance(self.api, self.node)
-        self.api.list_node_attached_ports.return_value = [
-            mock.Mock(spec=['id'], id=i) for i in ('111', '222')
-        ]
+        self.api.baremetal.list_node_vifs.return_value = ['111', '222']
         self.ports = [
             mock.Mock(spec=['network_id', 'fixed_ips', 'network'],
                       network_id=n, fixed_ips=[{'ip_address': ip}])
             for n, ip in [('0', '192.168.0.1'), ('1', '10.0.0.2')]
         ]
-        self.conn.network.get_port.side_effect = self.ports
+        self.api.network.get_port.side_effect = self.ports
         self.nets = [
             mock.Mock(spec=['id', 'name'], id=str(i)) for i in range(2)
         ]
         for n in self.nets:
             n.name = 'name-%s' % n.id
-        self.conn.network.get_network.side_effect = self.nets
+        self.api.network.get_network.side_effect = self.nets
 
     def test_ip_addresses(self):
         ips = self.instance.ip_addresses()
@@ -70,7 +68,7 @@ class TestInstanceStates(test_provisioner.Base):
         self.assertTrue(self.instance.is_healthy)
 
     def test_state_deploying_maintenance(self):
-        self.node.maintenance = True
+        self.node.is_maintenance = True
         self.node.provision_state = 'wait call-back'
         self.assertEqual('deploying', self.instance.state)
         self.assertFalse(self.instance.is_deployed)
@@ -83,7 +81,7 @@ class TestInstanceStates(test_provisioner.Base):
         self.assertTrue(self.instance.is_healthy)
 
     def test_state_maintenance(self):
-        self.node.maintenance = True
+        self.node.is_maintenance = True
         self.node.provision_state = 'active'
         self.assertEqual('maintenance', self.instance.state)
         self.assertTrue(self.instance.is_deployed)
@@ -112,5 +110,5 @@ class TestInstanceStates(test_provisioner.Base):
                           'ip_addresses': {'private': ['1.2.3.4']},
                           'node': {'node': 'dict'},
                           'state': 'deploying',
-                          'uuid': self.node.uuid},
+                          'uuid': self.node.id},
                          self.instance.to_dict())

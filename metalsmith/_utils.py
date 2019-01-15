@@ -13,18 +13,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import contextlib
 import re
 
 import six
 
 from metalsmith import exceptions
-
-
-def log_node(node):
-    if node.name:
-        return '%s (UUID %s)' % (node.name, node.uuid)
-    else:
-        return node.uuid
 
 
 def log_res(res):
@@ -56,12 +50,12 @@ def get_root_disk(root_size_gb, node):
         except KeyError:
             raise exceptions.UnknownRootDiskSize(
                 'No local_gb for node %s and no root partition size '
-                'specified' % log_node(node))
+                'specified' % log_res(node))
         except (TypeError, ValueError, AssertionError):
             raise exceptions.UnknownRootDiskSize(
                 'The local_gb for node %(node)s is invalid: '
                 'expected positive integer, got %(value)s' %
-                {'node': log_node(node),
+                {'node': log_res(node),
                  'value': node.properties['local_gb']})
 
         # allow for partitioning and config drive
@@ -104,3 +98,65 @@ def parse_checksums(checksums):
         result[fname.strip().lstrip('*')] = checksum.strip()
 
     return result
+
+
+class GetNodeMixin(object):
+    """A helper mixin for getting nodes with hostnames."""
+
+    HOSTNAME_FIELD = 'metalsmith_hostname'
+
+    _node_list = None
+
+    def _available_nodes(self):
+        return self.connection.baremetal.nodes(details=True,
+                                               associated=False,
+                                               provision_state='available',
+                                               is_maintenance=False)
+
+    def _nodes_for_lookup(self):
+        return self.connection.baremetal.nodes(
+            fields=['uuid', 'name', 'instance_info'])
+
+    def _find_node_by_hostname(self, hostname):
+        """A helper to find a node by metalsmith hostname."""
+        nodes = self._node_list or self._nodes_for_lookup()
+        existing = [n for n in nodes
+                    if n.instance_info.get(self.HOSTNAME_FIELD) == hostname]
+        if len(existing) > 1:
+            raise RuntimeError("More than one node found with hostname "
+                               "%(host)s: %(nodes)s" %
+                               {'host': hostname,
+                                'nodes': ', '.join(log_res(n)
+                                                   for n in existing)})
+        elif not existing:
+            return None
+        else:
+            # Fetch the complete node information before returning
+            return self.connection.baremetal.get_node(existing[0].id)
+
+    def _get_node(self, node, refresh=False, accept_hostname=False):
+        """A helper to find and return a node."""
+        if isinstance(node, six.string_types):
+            if accept_hostname and is_hostname_safe(node):
+                by_hostname = self._find_node_by_hostname(node)
+                if by_hostname is not None:
+                    return by_hostname
+
+            return self.connection.baremetal.get_node(node)
+        elif hasattr(node, 'node'):
+            # Instance object
+            node = node.node
+        else:
+            node = node
+
+        if refresh:
+            return self.connection.baremetal.get_node(node)
+        else:
+            return node
+
+    @contextlib.contextmanager
+    def _cache_node_list_for_lookup(self):
+        if self._node_list is None:
+            self._node_list = list(self._nodes_for_lookup())
+        yield self._node_list
+        self._node_list = None
