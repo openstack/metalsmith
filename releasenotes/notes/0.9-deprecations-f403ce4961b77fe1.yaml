@@ -1,0 +1,10 @@
+---
+upgrade:
+  - |
+    The deprecated ``root_disk_size`` argument has been removed, use
+    ``root_size_gb`` instead.
+deprecations:
+  - |
+    Not providing ``resource_class`` to the ``reserve_node`` call is now
+    deprecated. This is not compatible with the in-progress bare metal
+    allocation API.

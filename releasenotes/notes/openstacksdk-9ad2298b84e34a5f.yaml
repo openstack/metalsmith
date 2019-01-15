@@ -1,0 +1,13 @@
+---
+upgrade:
+  - |
+    `openstacksdk <https://docs.openstack.org/openstacksdk/>`_ is now used
+    for bare metal operation. The ``Node`` objects returned from various calls
+    are now `openstacksdk Node objects
+    <https://docs.openstack.org/openstacksdk/latest/user/resources/baremetal/v1/node.html#openstack.baremetal.v1.node.Node>`_
+    instead of ones from **python-ironicclient**.
+  - |
+    The **genisoimage** utility is now required for building configdrives.
+other:
+  - |
+    The dependency on **python-ironicclient** has been removed.
