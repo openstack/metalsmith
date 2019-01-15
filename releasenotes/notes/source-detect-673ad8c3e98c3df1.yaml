@@ -1,0 +1,5 @@
+---
+features:
+  - |
+    Adds new function ``metalsmith.sources.detect`` to automate detection of
+    various sources from their location, kernel, image and checksum.

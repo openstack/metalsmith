@@ -49,7 +49,7 @@ class TestDeploy(testtools.TestCase):
                                 candidates=None)
         reserve_defaults.update(reserve_args)
 
-        provision_defaults = dict(image='myimg',
+        provision_defaults = dict(image=mock.ANY,
                                   nics=[{'network': 'mynet'}],
                                   root_size_gb=None,
                                   swap_size_mb=None,
@@ -88,6 +88,10 @@ class TestDeploy(testtools.TestCase):
         self.assertEqual([], config.ssh_keys)
         mock_log.basicConfig.assert_called_once_with(level=mock_log.WARNING,
                                                      format=mock.ANY)
+
+        source = mock_pr.return_value.provision_node.call_args[1]['image']
+        self.assertIsInstance(source, sources.GlanceImage)
+        self.assertEqual("myimg", source.image)
         self.assertEqual(
             mock.call('metalsmith').setLevel(mock_log.WARNING).call_list() +
             mock.call(_cmd._URLLIB3_LOGGER).setLevel(

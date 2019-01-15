@@ -50,19 +50,19 @@ class GlanceImage(_Source):
 
         :param image: `Image` object, ID or name.
         """
-        self._image_id = image
+        self.image = image
         self._image_obj = None
 
     def _validate(self, connection):
         if self._image_obj is not None:
             return
         try:
-            self._image_obj = connection.image.find_image(self._image_id,
+            self._image_obj = connection.image.find_image(self.image,
                                                           ignore_missing=False)
         except openstack.exceptions.SDKException as exc:
             raise exceptions.InvalidImage(
                 'Cannot find image %(image)s: %(error)s' %
-                {'image': self._image_id, 'error': exc})
+                {'image': self.image, 'error': exc})
 
     def _node_updates(self, connection):
         self._validate(connection)
@@ -242,3 +242,82 @@ class FilePartitionImage(FileWholeDiskImage):
         updates['kernel'] = self.kernel_location
         updates['ramdisk'] = self.ramdisk_location
         return updates
+
+
+def detect(image, kernel=None, ramdisk=None, checksum=None):
+    """Try detecting the correct source type from the provided information.
+
+    .. note::
+        Images without a schema are assumed to be Glance images.
+
+    :param image: Location of the image: ``file://``, ``http://``, ``https://``
+        link or a Glance image name or UUID.
+    :param kernel: Location of the kernel (if present): ``file://``,
+        ``http://``, ``https://`` link or a Glance image name or UUID.
+    :param ramdisk: Location of the ramdisk (if present): ``file://``,
+        ``http://``, ``https://`` link or a Glance image name or UUID.
+    :param checksum: MD5 checksum of the image: ``http://`` or ``https://``
+        link or a string.
+    :return: A valid source object.
+    :raises: ValueError if the given parameters do not correspond to any
+        valid source.
+    """
+    image_type = _link_type(image)
+    checksum_type = _link_type(checksum)
+
+    if image_type == 'glance':
+        if kernel or ramdisk or checksum:
+            raise ValueError('kernel, image and checksum cannot be provided '
+                             'for Glance images')
+        else:
+            return GlanceImage(image)
+
+    kernel_type = _link_type(kernel)
+    ramdisk_type = _link_type(ramdisk)
+    if not checksum:
+        raise ValueError('checksum is required for HTTP and file images')
+
+    if image_type == 'file':
+        if (kernel_type not in (None, 'file')
+                or ramdisk_type not in (None, 'file')
+                or checksum_type == 'http'):
+            raise ValueError('kernal, ramdisk and checksum can only be files '
+                             'for file images')
+
+        if kernel or ramdisk:
+            return FilePartitionImage(image,
+                                      kernel_location=kernel,
+                                      ramdisk_location=ramdisk,
+                                      checksum=checksum)
+        else:
+            return FileWholeDiskImage(image, checksum=checksum)
+    else:
+        if (kernel_type not in (None, 'http')
+                or ramdisk_type not in (None, 'http')
+                or checksum_type == 'file'):
+            raise ValueError('kernal, ramdisk and checksum can only be HTTP '
+                             'links for HTTP images')
+
+        if checksum_type == 'http':
+            kwargs = {'checksum_url': checksum}
+        else:
+            kwargs = {'checksum': checksum}
+
+        if kernel or ramdisk:
+            return HttpPartitionImage(image,
+                                      kernel_url=kernel,
+                                      ramdisk_url=ramdisk,
+                                      **kwargs)
+        else:
+            return HttpWholeDiskImage(image, **kwargs)
+
+
+def _link_type(link):
+    if link is None:
+        return None
+    elif link.startswith('http://') or link.startswith('https://'):
+        return 'http'
+    elif link.startswith('file://'):
+        return 'file'
+    else:
+        return 'glance'

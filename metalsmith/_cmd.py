@@ -29,10 +29,6 @@ from metalsmith import sources
 LOG = logging.getLogger(__name__)
 
 
-def _is_http(smth):
-    return smth.startswith('http://') or smth.startswith('https://')
-
-
 class NICAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         assert option_string in ('--port', '--network', '--ip')
@@ -64,41 +60,10 @@ def _do_deploy(api, args, formatter):
     if args.hostname and not _utils.is_hostname_safe(args.hostname):
         raise RuntimeError("%s cannot be used as a hostname" % args.hostname)
 
-    if _is_http(args.image):
-        kwargs = {}
-        if not args.image_checksum:
-            raise RuntimeError("HTTP(s) images require --image-checksum")
-        elif _is_http(args.image_checksum):
-            kwargs['checksum_url'] = args.image_checksum
-        else:
-            kwargs['checksum'] = args.image_checksum
-
-        if args.image_kernel or args.image_ramdisk:
-            source = sources.HttpPartitionImage(args.image,
-                                                args.image_kernel,
-                                                args.image_ramdisk,
-                                                **kwargs)
-        else:
-            source = sources.HttpWholeDiskImage(args.image, **kwargs)
-    elif args.image.startswith('file://'):
-        if not args.image_checksum:
-            raise RuntimeError("File images require --image-checksum")
-
-        if args.image_kernel or args.image_ramdisk:
-            if not (args.image_kernel.startswith('file://') and
-                    args.image_ramdisk.startswith('file://')):
-                raise RuntimeError('Images with the file:// schema require '
-                                   'kernel and ramdisk images to also use '
-                                   'the file:// schema')
-            source = sources.FilePartitionImage(args.image,
-                                                args.image_kernel,
-                                                args.image_ramdisk,
-                                                args.image_checksum)
-        else:
-            source = sources.FileWholeDiskImage(args.image,
-                                                args.image_checksum)
-    else:
-        source = args.image
+    source = sources.detect(args.image,
+                            kernel=args.image_kernel,
+                            ramdisk=args.image_ramdisk,
+                            checksum=args.image_checksum)
 
     config = _config.InstanceConfig(ssh_keys=ssh_keys)
     if args.user_name:
@@ -176,10 +141,8 @@ def _parse_args(args, config):
                         required=True)
     deploy.add_argument('--image-checksum',
                         help='image MD5 checksum or URL with checksums')
-    deploy.add_argument('--image-kernel', help='URL of the image\'s kernel',
-                        default='')
-    deploy.add_argument('--image-ramdisk', help='URL of the image\'s ramdisk',
-                        default='')
+    deploy.add_argument('--image-kernel', help='URL of the image\'s kernel')
+    deploy.add_argument('--image-ramdisk', help='URL of the image\'s ramdisk')
     deploy.add_argument('--network', help='network to use (name or UUID)',
                         dest='nics', action=NICAction)
     deploy.add_argument('--port', help='port to attach (name or UUID)',
