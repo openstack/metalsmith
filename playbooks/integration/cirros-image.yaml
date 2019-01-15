@@ -1,11 +1,11 @@
 ---
 - name: Find Cirros UEC image
-  shell: openstack image list -f value -c Name | grep 'cirros-.*-uec$'
+  shell: openstack image list -f value -c Name | grep 'cirros-.*-uec$' | sort | tail -n1
   register: cirros_uec_image_result
   failed_when: cirros_uec_image_result.stdout == ""
 
 - name: Find Cirros disk image
-  shell: openstack image list -f value -c Name | grep 'cirros-.*-disk$'
+  shell: openstack image list -f value -c Name | grep 'cirros-.*-disk$' | sort | tail -n1
   register: cirros_disk_image_result
   failed_when: cirros_disk_image_result.stdout == ""
 
@@ -33,7 +33,15 @@
         creates: /opt/stack/data/ironic/httpboot/metalsmith
       become: yes
 
-    - name: Create MD5 checksums file for partition images
+    - name: Copy whole disk image
+      command: >
+        cp /opt/stack/devstack/files/{{ cirros_disk_image_result.stdout }}.img
+            /opt/stack/data/ironic/httpboot/metalsmith/
+      args:
+        creates: /opt/stack/data/ironic/httpboot/metalsmith/{{ cirros_disk_image_result.stdout }}.img
+      become: yes
+
+    - name: Create MD5 checksums file for images
       shell: md5sum cirros-* > CHECKSUMS
       args:
         chdir: /opt/stack/data/ironic/httpboot/metalsmith
@@ -61,7 +69,7 @@
         metalsmith_partition_kernel_image: "{{ baremetal_endpoint_result.stdout}}/metalsmith/{{ cirros_uec_image_result.stdout | replace('-uec', '-vmlinuz') }}"
         metalsmith_partition_ramdisk_image: "{{ baremetal_endpoint_result.stdout}}/metalsmith/{{ cirros_uec_image_result.stdout | replace('-uec', '-initrd') }}"
         metalsmith_partition_checksum: "{{ baremetal_endpoint_result.stdout}}/metalsmith/CHECKSUMS"
-        metalsmith_whole_disk_image: "{{ baremetal_endpoint_result.stdout}}/{{ cirros_disk_image_result.stdout }}.img"
+        metalsmith_whole_disk_image: "{{ baremetal_endpoint_result.stdout}}/metalsmith/{{ cirros_disk_image_result.stdout }}.img"
         metalsmith_whole_disk_checksum: "{{ cirros_disk_image_checksum_result.stdout }}"
 
   when: metalsmith_use_http | default(false)
