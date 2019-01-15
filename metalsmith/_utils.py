@@ -16,6 +16,7 @@
 import contextlib
 import re
 
+from openstack import exceptions as sdk_exc
 import six
 
 from metalsmith import exceptions
@@ -100,6 +101,12 @@ def parse_checksums(checksums):
     return result
 
 
+# NOTE(dtantsur): make this private since it will no longer be possible with
+# transition to allocation API.
+class DuplicateHostname(sdk_exc.SDKException, exceptions.Error):
+    pass
+
+
 class GetNodeMixin(object):
     """A helper mixin for getting nodes with hostnames."""
 
@@ -123,11 +130,10 @@ class GetNodeMixin(object):
         existing = [n for n in nodes
                     if n.instance_info.get(self.HOSTNAME_FIELD) == hostname]
         if len(existing) > 1:
-            raise RuntimeError("More than one node found with hostname "
-                               "%(host)s: %(nodes)s" %
-                               {'host': hostname,
-                                'nodes': ', '.join(log_res(n)
-                                                   for n in existing)})
+            raise DuplicateHostname(
+                "More than one node found with hostname %(host)s: %(nodes)s" %
+                {'host': hostname,
+                 'nodes': ', '.join(log_res(n) for n in existing)})
         elif not existing:
             return None
         else:
@@ -150,7 +156,7 @@ class GetNodeMixin(object):
             node = node
 
         if refresh:
-            return self.connection.baremetal.get_node(node)
+            return self.connection.baremetal.get_node(node.id)
         else:
             return node
 

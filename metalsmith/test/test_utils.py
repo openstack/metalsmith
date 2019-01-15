@@ -13,9 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import mock
 import testtools
 
 from metalsmith import _utils
+from metalsmith import exceptions
 
 
 class TestIsHostnameSafe(testtools.TestCase):
@@ -66,3 +68,74 @@ class TestIsHostnameSafe(testtools.TestCase):
         # Need to ensure a binary response for success or fail
         self.assertIsNotNone(_utils.is_hostname_safe('spam'))
         self.assertIsNotNone(_utils.is_hostname_safe('-spam'))
+
+
+class TestGetNodeMixin(testtools.TestCase):
+    def setUp(self):
+        super(TestGetNodeMixin, self).setUp()
+        self.mixin = _utils.GetNodeMixin()
+        self.mixin.connection = mock.Mock(spec=['baremetal'])
+        self.api = self.mixin.connection.baremetal
+
+    def test__get_node_with_node(self):
+        node = mock.Mock(spec=['id', 'name'])
+        result = self.mixin._get_node(node)
+        self.assertIs(result, node)
+        self.assertFalse(self.api.get_node.called)
+
+    def test__get_node_with_node_refresh(self):
+        node = mock.Mock(spec=['id', 'name'])
+        result = self.mixin._get_node(node, refresh=True)
+        self.assertIs(result, self.api.get_node.return_value)
+        self.api.get_node.assert_called_once_with(node.id)
+
+    def test__get_node_with_instance(self):
+        node = mock.Mock(spec=['uuid', 'node'])
+        result = self.mixin._get_node(node)
+        self.assertIs(result, node.node)
+        self.assertFalse(self.api.get_node.called)
+
+    def test__get_node_with_instance_refresh(self):
+        node = mock.Mock(spec=['uuid', 'node'])
+        result = self.mixin._get_node(node, refresh=True)
+        self.assertIs(result, self.api.get_node.return_value)
+        self.api.get_node.assert_called_once_with(node.node.id)
+
+    def test__get_node_with_string(self):
+        result = self.mixin._get_node('node')
+        self.assertIs(result, self.api.get_node.return_value)
+        self.api.get_node.assert_called_once_with('node')
+
+    def test__get_node_with_string_hostname_allowed(self):
+        nodes = [
+            mock.Mock(instance_info={'metalsmith_hostname': host})
+            for host in ['host1', 'host2', 'host3']
+        ]
+        self.api.nodes.return_value = nodes
+
+        result = self.mixin._get_node('host2', accept_hostname=True)
+        self.assertIs(result, self.api.get_node.return_value)
+        self.api.get_node.assert_called_once_with(nodes[1].id)
+
+    def test__get_node_with_string_hostname_allowed_fallback(self):
+        nodes = [
+            mock.Mock(instance_info={'metalsmith_hostname': host})
+            for host in ['host1', 'host2', 'host3']
+        ]
+        self.api.nodes.return_value = nodes
+
+        result = self.mixin._get_node('node', accept_hostname=True)
+        self.assertIs(result, self.api.get_node.return_value)
+        self.api.get_node.assert_called_once_with('node')
+
+    def test__get_node_with_string_hostname_not_unique(self):
+        nodes = [
+            mock.Mock(instance_info={'metalsmith_hostname': host})
+            for host in ['host1', 'host2', 'host2']
+        ]
+        self.api.nodes.return_value = nodes
+
+        self.assertRaises(exceptions.Error,
+                          self.mixin._get_node,
+                          'host2', accept_hostname=True)
+        self.assertFalse(self.api.get_node.called)
