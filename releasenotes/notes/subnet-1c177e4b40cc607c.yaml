@@ -1,0 +1,7 @@
+---
+features:
+  - |
+    Allows specifying a subnet for the ``nics`` argument of the
+    ``provision_node`` call as ``{"subnet": "<name or ID>"}``.
+  - |
+    Adds a new CLI argument ``--subnet`` to create a port on the given subnet.

@@ -16,6 +16,8 @@
 import collections
 import logging
 
+from openstack import exceptions as sdk_exc
+
 from metalsmith import _utils
 from metalsmith import exceptions
 
@@ -55,10 +57,12 @@ class NICs(object):
                 result.append(('port', self._get_port(nic)))
             elif 'network' in nic:
                 result.append(('network', self._get_network(nic)))
+            elif 'subnet' in nic:
+                result.append(('subnet', self._get_subnet(nic)))
             else:
                 raise exceptions.InvalidNIC(
-                    'Unknown NIC record type, export "port" or "network", '
-                    'got %s' % nic)
+                    'Unknown NIC record type, export "port", "subnet" or '
+                    '"network", got %s' % nic)
 
         self._validated = result
 
@@ -67,7 +71,7 @@ class NICs(object):
         self.validate()
 
         for nic_type, nic in self._validated:
-            if nic_type == 'network':
+            if nic_type != 'port':
                 port = self._connection.network.create_port(**nic)
                 self.created_ports.append(port.id)
                 LOG.info('Created port %(port)s for node %(node)s with '
@@ -103,7 +107,7 @@ class NICs(object):
         try:
             port = self._connection.network.find_port(
                 nic['port'], ignore_missing=False)
-        except Exception as exc:
+        except sdk_exc.SDKException as exc:
             raise exceptions.InvalidNIC(
                 'Cannot find port %(port)s: %(error)s' %
                 {'port': nic['port'], 'error': exc})
@@ -125,7 +129,7 @@ class NICs(object):
         try:
             network = self._connection.network.find_network(
                 nic['network'], ignore_missing=False)
-        except Exception as exc:
+        except sdk_exc.SDKException as exc:
             raise exceptions.InvalidNIC(
                 'Cannot find network %(net)s: %(error)s' %
                 {'net': nic['network'], 'error': exc})
@@ -135,6 +139,35 @@ class NICs(object):
             port_args['fixed_ips'] = [{'ip_address': nic['fixed_ip']}]
 
         return port_args
+
+    def _get_subnet(self, nic):
+        """Validate and get the NIC information for a subnet.
+
+        :param nic: NIC information in the form ``{"subnet": "<id or name>"}``.
+        :returns: keyword arguments to use when creating a port.
+        """
+        unexpected = set(nic) - {'subnet'}
+        if unexpected:
+            raise exceptions.InvalidNIC(
+                'Unexpected fields for a subnet: %s' % ', '.join(unexpected))
+
+        try:
+            subnet = self._connection.network.find_subnet(
+                nic['subnet'], ignore_missing=False)
+        except sdk_exc.SDKException as exc:
+            raise exceptions.InvalidNIC(
+                'Cannot find subnet %(sub)s: %(error)s' %
+                {'sub': nic['subnet'], 'error': exc})
+
+        try:
+            network = self._connection.network.get_network(subnet.network_id)
+        except sdk_exc.SDKException as exc:
+            raise exceptions.InvalidNIC(
+                'Cannot find network %(net)s for subnet %(sub)s: %(error)s' %
+                {'net': subnet.network_id, 'sub': nic['subnet'], 'error': exc})
+
+        return {'network_id': network.id,
+                'fixed_ips': [{'subnet_id': subnet.id}]}
 
 
 def detach_and_delete_ports(connection, node, created_ports, attached_ports):

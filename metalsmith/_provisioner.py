@@ -217,10 +217,16 @@ class Provisioner(_utils.GetNodeMixin):
             `Image` name or UUID.
         :param nics: List of virtual NICs to attach to physical ports.
             Each item is a dict with a key describing the type of the NIC:
-            either a port (``{"port": "<port name or ID>"}``) or a network
-            to create a port on (``{"network": "<network name or ID>"}``).
-            A network record can optionally feature a ``fixed_ip`` argument
-            to use this specific fixed IP from a suitable subnet.
+
+            * ``{"port": "<port name or ID>"}`` to use the provided pre-created
+              port.
+            * ``{"network": "<network name or ID>"}`` to create a port on the
+              provided network. Optionally, a ``fixed_ip`` argument can be used
+              to specify an IP address.
+            * ``{"subnet": "<subnet name or ID>"}`` to create a port with an IP
+              address from the provided subnet. The network is determined from
+              the subnet.
+
         :param root_size_gb: The size of the root partition. By default
             the value of the local_gb property is used.
         :param swap_size_mb: The size of the swap partition. It's an error

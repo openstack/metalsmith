@@ -342,6 +342,11 @@ class TestDeploy(testtools.TestCase):
                     {'nics': [{'network': 'private', 'fixed_ip': '10.0.0.2'},
                               {'network': 'public', 'fixed_ip': '8.0.8.0'}]})
 
+    def test_args_subnet(self, mock_pr):
+        args = ['deploy', '--subnet', 'mysubnet', '--image', 'myimg',
+                '--resource-class', 'compute']
+        self._check(mock_pr, args, {}, {'nics': [{'subnet': 'mysubnet'}]})
+
     def test_args_bad_ip(self, mock_pr):
         args = ['deploy', '--image', 'myimg', '--resource-class', 'compute',
                 '--ip', 'private:10.0.0.2', '--ip', 'public']

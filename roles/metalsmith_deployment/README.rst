@@ -106,6 +106,14 @@ Each instances has the following attributes:
             nics:
               - port: b2254316-7867-4615-9fb7-911b3f38ca2a
 
+    ``subnet``
+        creates a port on the given subnet, for example:
+
+        .. code-block:: yaml
+
+            nics:
+              - subnet: private-subnet1
+
 ``resource_class`` (defaults to ``metalsmith_resource_class``)
     requested node's resource class.
 ``root_size`` (defaults to ``metalsmith_root_size``)

@@ -466,6 +466,28 @@ class TestProvisionNode(Base):
             self.api.baremetal.wait_for_nodes_provision_state.called)
         self.assertFalse(self.api.network.delete_port.called)
 
+    def test_with_subnet(self):
+        inst = self.pr.provision_node(self.node, 'image',
+                                      [{'subnet': 'subnet'}])
+
+        self.assertEqual(inst.uuid, self.node.id)
+        self.assertEqual(inst.node, self.node)
+
+        self.api.network.create_port.assert_called_once_with(
+            network_id=self.api.network.get_network.return_value.id,
+            fixed_ips=[{'subnet_id':
+                        self.api.network.find_subnet.return_value.id}])
+        self.api.baremetal.attach_vif_to_node.assert_called_once_with(
+            self.node, self.api.network.create_port.return_value.id)
+        self.api.baremetal.update_node.assert_called_once_with(
+            self.node, extra=self.extra, instance_info=self.instance_info)
+        self.api.baremetal.validate_node.assert_called_once_with(self.node)
+        self.api.baremetal.set_node_provision_state.assert_called_once_with(
+            self.node, 'active', config_drive=mock.ANY)
+        self.assertFalse(
+            self.api.baremetal.wait_for_nodes_provision_state.called)
+        self.assertFalse(self.api.network.delete_port.called)
+
     def test_whole_disk(self):
         self.image.kernel_id = None
         self.image.ramdisk_id = None
@@ -1036,7 +1058,8 @@ abcd  and-not-image-again
         self.assertFalse(self.api.baremetal.set_node_provision_state.called)
 
     def test_invalid_network(self):
-        self.api.network.find_network.side_effect = RuntimeError('Not found')
+        self.api.network.find_network.side_effect = os_exc.SDKException(
+            'Not found')
         self.assertRaisesRegex(exceptions.InvalidNIC, 'Not found',
                                self.pr.provision_node,
                                self.node, 'image', [{'network': 'network'}])
@@ -1046,10 +1069,34 @@ abcd  and-not-image-again
         self.assertFalse(self.api.baremetal.set_node_provision_state.called)
 
     def test_invalid_port(self):
-        self.api.network.find_port.side_effect = RuntimeError('Not found')
+        self.api.network.find_port.side_effect = os_exc.SDKException(
+            'Not found')
         self.assertRaisesRegex(exceptions.InvalidNIC, 'Not found',
                                self.pr.provision_node,
                                self.node, 'image', [{'port': 'port1'}])
+        self.api.baremetal.update_node.assert_called_once_with(
+            self.node, extra={}, instance_info={}, instance_id=None)
+        self.assertFalse(self.api.network.create_port.called)
+        self.assertFalse(self.api.baremetal.set_node_provision_state.called)
+
+    def test_invalid_subnet(self):
+        self.api.network.find_subnet.side_effect = os_exc.SDKException(
+            'Not found')
+        self.assertRaisesRegex(exceptions.InvalidNIC, 'Not found',
+                               self.pr.provision_node,
+                               self.node, 'image', [{'subnet': 'subnet'}])
+        self.api.baremetal.update_node.assert_called_once_with(
+            self.node, extra={}, instance_info={}, instance_id=None)
+        self.assertFalse(self.api.network.create_port.called)
+        self.assertFalse(self.api.baremetal.set_node_provision_state.called)
+
+    def test_invalid_network_of_subnet(self):
+        # NOTE(dtantsur): I doubt this can happen, maybe some race?
+        self.api.network.get_network.side_effect = os_exc.SDKException(
+            'Not found')
+        self.assertRaisesRegex(exceptions.InvalidNIC, 'Not found',
+                               self.pr.provision_node,
+                               self.node, 'image', [{'subnet': 'subnet'}])
         self.api.baremetal.update_node.assert_called_once_with(
             self.node, extra={}, instance_info={}, instance_id=None)
         self.assertFalse(self.api.network.create_port.called)
@@ -1113,7 +1160,8 @@ abcd  and-not-image-again
     def test_invalid_nic_type_fields(self):
         for item in ({'port': '1234', 'foo': 'bar'},
                      {'port': '1234', 'network': '4321'},
-                     {'network': '4321', 'foo': 'bar'}):
+                     {'network': '4321', 'foo': 'bar'},
+                     {'subnet': '4321', 'foo': 'bar'}):
             self.assertRaisesRegex(exceptions.InvalidNIC,
                                    'Unexpected fields',
                                    self.pr.provision_node,
