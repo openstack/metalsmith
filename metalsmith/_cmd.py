@@ -31,11 +31,9 @@ LOG = logging.getLogger(__name__)
 
 class NICAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
-        assert option_string in ('--port', '--network', '--ip')
+        assert option_string in ('--port', '--network', '--ip', '--subnet')
         nics = getattr(namespace, self.dest, None) or []
-        if option_string == '--network':
-            nics.append({'network': values})
-        elif option_string == '--ip':
+        if option_string == '--ip':
             try:
                 network, ip = values.split(':', 1)
             except ValueError:
@@ -43,7 +41,7 @@ class NICAction(argparse.Action):
                     self, '--ip format is NETWORK:IP, got %s' % values)
             nics.append({'network': network, 'fixed_ip': ip})
         else:
-            nics.append({'port': values})
+            nics.append({option_string[2:]: values})
         setattr(namespace, self.dest, nics)
 
 
@@ -143,8 +141,10 @@ def _parse_args(args, config):
                         help='image MD5 checksum or URL with checksums')
     deploy.add_argument('--image-kernel', help='URL of the image\'s kernel')
     deploy.add_argument('--image-ramdisk', help='URL of the image\'s ramdisk')
-    deploy.add_argument('--network', help='network to use (name or UUID)',
-                        dest='nics', action=NICAction)
+    deploy.add_argument('--network', help='network to create a port on '
+                        '(name or UUID)', dest='nics', action=NICAction)
+    deploy.add_argument('--subnet', help='subnet to create a port on '
+                        '(name or UUID)', dest='nics', action=NICAction)
     deploy.add_argument('--port', help='port to attach (name or UUID)',
                         dest='nics', action=NICAction)
     deploy.add_argument('--ip', help='attach IP from the network',
