@@ -419,6 +419,8 @@ class Provisioner(_utils.GetNodeMixin):
 
         :param instance_id: hostname, UUID or node name.
         :return: :py:class:`metalsmith.Instance` object.
+        :raises: :py:class:`metalsmith.exceptions.InvalidInstance`
+            if the instance is not a valid instance.
         """
         return self.show_instances([instance_id])[0]
 
@@ -431,14 +433,25 @@ class Provisioner(_utils.GetNodeMixin):
         :param instances: list of hostnames, UUIDs or node names.
         :return: list of :py:class:`metalsmith.Instance` objects in the same
             order as ``instances``.
+        :raises: :py:class:`metalsmith.exceptions.InvalidInstance`
+            if one of the instances are not valid instances.
         """
         with self._cache_node_list_for_lookup():
-            return [
+            result = [
                 _instance.Instance(
                     self.connection,
                     self._get_node(inst, accept_hostname=True))
                 for inst in instances
             ]
+        # NOTE(dtantsur): do not accept node names as valid instances if they
+        # are not deployed or being deployed.
+        missing = [inst for (res, inst) in zip(result, instances)
+                   if res.state == _instance.InstanceState.UNKNOWN]
+        if missing:
+            raise exceptions.InvalidInstance(
+                "Node(s)/instance(s) %s are not valid instances"
+                % ', '.join(map(str, missing)))
+        return result
 
     def list_instances(self):
         """List instances deployed by metalsmith.
@@ -449,5 +462,5 @@ class Provisioner(_utils.GetNodeMixin):
         instances = [i for i in
                      (_instance.Instance(self.connection, node)
                       for node in nodes)
-                     if i._is_deployed_by_metalsmith]
+                     if i.state != _instance.InstanceState.UNKNOWN]
         return instances

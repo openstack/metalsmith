@@ -1,0 +1,17 @@
+---
+features:
+  - |
+    The ``Instance.state`` value is now a proper enumeration of type
+    ``metalsmith.InstanceState``.
+  - |
+    The ``list_instances`` call now returns any valid instances, not only ones
+    created by metalsmith. This is consistent with the ``show_instance(s)``
+    behavior.
+deprecations:
+  - |
+    Comparing an instance state with strings is deprecated, use enumeration
+    values instead.
+fixes:
+  - |
+    Fixes the ``show_instance(s)`` calls to return an exception for nodes that
+    are not valid instances (state == ``UNKNOWN``).

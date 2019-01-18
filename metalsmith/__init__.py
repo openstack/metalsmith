@@ -15,6 +15,7 @@
 
 from metalsmith._config import InstanceConfig
 from metalsmith._instance import Instance
+from metalsmith._instance import InstanceState
 from metalsmith._provisioner import Provisioner
 
-__all__ = ['Instance', 'InstanceConfig', 'Provisioner']
+__all__ = ['Instance', 'InstanceConfig', 'InstanceState', 'Provisioner']

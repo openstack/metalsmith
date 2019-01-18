@@ -120,3 +120,7 @@ class DeploymentFailure(Error):
     def __init__(self, message, nodes):
         self.nodes = nodes
         super(DeploymentFailure, self).__init__(message)
+
+
+class InvalidInstance(Error):
+    """The node(s) does not have a metalsmith instance associated."""

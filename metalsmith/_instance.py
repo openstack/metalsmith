@@ -13,18 +13,74 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import enum
+import warnings
+
 from metalsmith import _utils
 
 
 _PROGRESS_STATES = frozenset(['deploying', 'wait call-back',
                               'deploy complete'])
-# NOTE(dtantsur): include available since there is a period of time between
-# claiming the instance and starting the actual provisioning via ironic.
-_DEPLOYING_STATES = _PROGRESS_STATES | {'available'}
 _ACTIVE_STATES = frozenset(['active'])
 _ERROR_STATES = frozenset(['error', 'deploy failed'])
+_RESERVED_STATES = frozenset(['available'])
 
-_HEALTHY_STATES = _PROGRESS_STATES | _ACTIVE_STATES
+
+class InstanceState(enum.Enum):
+    """A state of an instance."""
+
+    DEPLOYING = 'deploying'
+    """Provisioning is in progress.
+
+    This includes the case when a node is still in the ``available`` state, but
+    already has an instance associated with it.
+    """
+
+    ACTIVE = 'active'
+    """The instance is provisioned."""
+
+    MAINTENANCE = 'maintenance'
+    """The instance is provisioned but is in the maintenance mode."""
+
+    ERROR = 'error'
+    """The instance has a failure."""
+
+    UNKNOWN = 'unknown'
+    """The node is in an unexpected state.
+
+    It can be unprovisioned or modified by a third party.
+    """
+
+    @property
+    def is_deployed(self):
+        """Whether the state designates a finished deployment."""
+        return self in _DEPLOYED_STATES
+
+    @property
+    def is_healthy(self):
+        """Whether the state is considered healthy."""
+        return self in _HEALTHY_STATES
+
+    # TODO(dtantsur): remove before 1.0
+
+    def __eq__(self, other):
+        if isinstance(other, str):
+            warnings.warn("Comparing states with strings is deprecated, "
+                          "use InstanceState instead", DeprecationWarning)
+            return self.value == other
+        else:
+            return super(InstanceState, self).__eq__(other)
+
+    def __ne__(self, other):
+        eq = self.__eq__(other)
+        return NotImplemented if eq is NotImplemented else not eq
+
+    def __hash__(self):
+        return hash(self.value)
+
+
+_HEALTHY_STATES = frozenset([InstanceState.ACTIVE, InstanceState.DEPLOYING])
+_DEPLOYED_STATES = frozenset([InstanceState.ACTIVE, InstanceState.MAINTENANCE])
 
 
 class Instance(object):
@@ -57,16 +113,12 @@ class Instance(object):
     @property
     def is_deployed(self):
         """Whether the node is deployed."""
-        return self._node.provision_state in _ACTIVE_STATES
-
-    @property
-    def _is_deployed_by_metalsmith(self):
-        return _utils.GetNodeMixin.HOSTNAME_FIELD in self._node.instance_info
+        return self.state.is_deployed
 
     @property
     def is_healthy(self):
-        """Whether the node is not at fault or maintenance."""
-        return self.state in _HEALTHY_STATES and not self._node.is_maintenance
+        """Whether the instance is not at fault or maintenance."""
+        return self.state.is_healthy and not self._node.is_maintenance
 
     def nics(self):
         """List NICs for this instance.
@@ -90,32 +142,23 @@ class Instance(object):
 
     @property
     def state(self):
-        """Instance state.
-
-        ``deploying``
-            deployment is in progress
-        ``active``
-            node is provisioned
-        ``maintenance``
-            node is provisioned but is in maintenance mode
-        ``error``
-            node has a failure
-        ``unknown``
-            node in unexpected state (maybe unprovisioned or modified by
-            a third party)
-        """
+        """Instance state, one of :py:class:`InstanceState`."""
         prov_state = self._node.provision_state
-        if prov_state in _DEPLOYING_STATES:
-            return 'deploying'
+        if prov_state in _PROGRESS_STATES:
+            return InstanceState.DEPLOYING
+        # NOTE(dtantsur): include available since there is a period of time
+        # between claiming the instance and starting the actual provisioning.
+        elif prov_state in _RESERVED_STATES and self._node.instance_id:
+            return InstanceState.DEPLOYING
         elif prov_state in _ERROR_STATES:
-            return 'error'
+            return InstanceState.ERROR
         elif prov_state in _ACTIVE_STATES:
             if self._node.is_maintenance:
-                return 'maintenance'
+                return InstanceState.MAINTENANCE
             else:
-                return 'active'
+                return InstanceState.ACTIVE
         else:
-            return 'unknown'
+            return InstanceState.UNKNOWN
 
     def to_dict(self):
         """Convert instance to a dict."""
@@ -123,7 +166,7 @@ class Instance(object):
             'hostname': self.hostname,
             'ip_addresses': self.ip_addresses(),
             'node': self._node.to_dict(),
-            'state': self.state,
+            'state': self.state.value,
             'uuid': self._uuid,
         }
 

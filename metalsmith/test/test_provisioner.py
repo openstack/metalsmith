@@ -1305,6 +1305,10 @@ class TestUnprovisionNode(Base):
 
 
 class TestShowInstance(Base):
+    def setUp(self):
+        super(TestShowInstance, self).setUp()
+        self.node.provision_state = 'active'
+
     def test_show_instance(self):
         self.mock_get_node.side_effect = lambda n, *a, **kw: self.node
         inst = self.pr.show_instance('id1')
@@ -1315,7 +1319,7 @@ class TestShowInstance(Base):
         self.assertIs(inst.uuid, self.node.id)
 
     def test_show_instances(self):
-        self.mock_get_node.side_effect = [self.node, mock.Mock()]
+        self.mock_get_node.side_effect = [self.node, self.node]
         result = self.pr.show_instances(['1', '2'])
         self.mock_get_node.assert_has_calls([
             mock.call(self.pr, '1', accept_hostname=True),
@@ -1343,16 +1347,16 @@ class TestListInstances(Base):
         super(TestListInstances, self).setUp()
         self.nodes = [
             mock.Mock(spec=NODE_FIELDS, provision_state=state,
-                      instance_info={'metalsmith_hostname': '1234'})
+                      instance_id='1234')
             for state in ('active', 'active', 'deploying', 'wait call-back',
-                          'deploy failed', 'available')
+                          'deploy failed', 'available', 'available', 'enroll')
         ]
-        del self.nodes[-1].instance_info['metalsmith_hostname']
+        self.nodes[6].instance_id = None
         self.api.baremetal.nodes.return_value = self.nodes
 
     def test_list(self):
         instances = self.pr.list_instances()
         self.assertTrue(isinstance(i, _instance.Instance) for i in instances)
-        self.assertEqual(self.nodes[:5], [i.node for i in instances])
+        self.assertEqual(self.nodes[:6], [i.node for i in instances])
         self.api.baremetal.nodes.assert_called_once_with(associated=True,
                                                          details=True)

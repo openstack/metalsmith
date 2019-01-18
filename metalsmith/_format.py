@@ -57,7 +57,8 @@ class DefaultFormat(object):
     def show(self, instances):
         for instance in instances:
             _print("Node %(node)s, current state is %(state)s",
-                   node=_utils.log_res(instance.node), state=instance.state)
+                   node=_utils.log_res(instance.node),
+                   state=instance.state.name)
 
             if instance.is_deployed:
                 ips = instance.ip_addresses()

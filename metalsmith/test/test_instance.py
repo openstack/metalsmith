@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import mock
+import six
 
 from metalsmith import _instance
 from metalsmith.test import test_provisioner
@@ -57,47 +58,68 @@ class TestInstanceStates(test_provisioner.Base):
 
     def test_state_deploying(self):
         self.node.provision_state = 'wait call-back'
-        self.assertEqual('deploying', self.instance.state)
+        self.assertEqual(_instance.InstanceState.DEPLOYING,
+                         self.instance.state)
         self.assertFalse(self.instance.is_deployed)
         self.assertTrue(self.instance.is_healthy)
+        self.assertTrue(self.instance.state.is_healthy)
+        self.assertFalse(self.instance.state.is_deployed)
 
     def test_state_deploying_when_available(self):
         self.node.provision_state = 'available'
-        self.assertEqual('deploying', self.instance.state)
+        self.node.instance_id = 'abcd'
+        self.assertEqual(_instance.InstanceState.DEPLOYING,
+                         self.instance.state)
         self.assertFalse(self.instance.is_deployed)
         self.assertTrue(self.instance.is_healthy)
+
+    def test_state_unknown_when_available(self):
+        self.node.provision_state = 'available'
+        self.node.instance_id = None
+        self.assertEqual(_instance.InstanceState.UNKNOWN, self.instance.state)
+        self.assertFalse(self.instance.is_deployed)
+        self.assertFalse(self.instance.is_healthy)
+        self.assertFalse(self.instance.state.is_healthy)
 
     def test_state_deploying_maintenance(self):
         self.node.is_maintenance = True
         self.node.provision_state = 'wait call-back'
-        self.assertEqual('deploying', self.instance.state)
+        self.assertEqual(_instance.InstanceState.DEPLOYING,
+                         self.instance.state)
         self.assertFalse(self.instance.is_deployed)
         self.assertFalse(self.instance.is_healthy)
+        # The state itself is considered healthy
+        self.assertTrue(self.instance.state.is_healthy)
 
     def test_state_active(self):
         self.node.provision_state = 'active'
-        self.assertEqual('active', self.instance.state)
+        self.assertEqual(_instance.InstanceState.ACTIVE, self.instance.state)
         self.assertTrue(self.instance.is_deployed)
         self.assertTrue(self.instance.is_healthy)
+        self.assertTrue(self.instance.state.is_deployed)
 
     def test_state_maintenance(self):
         self.node.is_maintenance = True
         self.node.provision_state = 'active'
-        self.assertEqual('maintenance', self.instance.state)
+        self.assertEqual(_instance.InstanceState.MAINTENANCE,
+                         self.instance.state)
         self.assertTrue(self.instance.is_deployed)
         self.assertFalse(self.instance.is_healthy)
+        self.assertFalse(self.instance.state.is_healthy)
 
     def test_state_error(self):
         self.node.provision_state = 'deploy failed'
-        self.assertEqual('error', self.instance.state)
+        self.assertEqual(_instance.InstanceState.ERROR, self.instance.state)
         self.assertFalse(self.instance.is_deployed)
         self.assertFalse(self.instance.is_healthy)
+        self.assertFalse(self.instance.state.is_healthy)
 
     def test_state_unknown(self):
         self.node.provision_state = 'enroll'
-        self.assertEqual('unknown', self.instance.state)
+        self.assertEqual(_instance.InstanceState.UNKNOWN, self.instance.state)
         self.assertFalse(self.instance.is_deployed)
         self.assertFalse(self.instance.is_healthy)
+        self.assertFalse(self.instance.state.is_healthy)
 
     @mock.patch.object(_instance.Instance, 'ip_addresses', autospec=True)
     def test_to_dict(self, mock_ips):
@@ -106,9 +128,17 @@ class TestInstanceStates(test_provisioner.Base):
         self.node.instance_info = {'metalsmith_hostname': 'host'}
         mock_ips.return_value = {'private': ['1.2.3.4']}
 
+        to_dict = self.instance.to_dict()
         self.assertEqual({'hostname': 'host',
                           'ip_addresses': {'private': ['1.2.3.4']},
                           'node': {'node': 'dict'},
                           'state': 'deploying',
                           'uuid': self.node.id},
-                         self.instance.to_dict())
+                         to_dict)
+        # States are converted to strings
+        self.assertIsInstance(to_dict['state'], six.string_types)
+
+    def test_deprecated_comparisons(self):
+        for item in _instance.InstanceState:
+            self.assertEqual(item, item.value)
+            self.assertFalse(item != item.value)  # noqa
