@@ -268,6 +268,10 @@ class TestProvisionNode(Base):
                 self.api.network.create_port.return_value.id
             ],
         }
+        self.configdrive_mock = self.useFixture(
+            fixtures.MockPatchObject(_config.InstanceConfig,
+                                     'build_configdrive', autospec=True)
+        ).mock
 
     def test_ok(self):
         inst = self.pr.provision_node(self.node, 'image',
@@ -283,6 +287,8 @@ class TestProvisionNode(Base):
         self.api.baremetal.update_node.assert_called_once_with(
             self.node, instance_info=self.instance_info, extra=self.extra)
         self.api.baremetal.validate_node.assert_called_once_with(self.node)
+        self.configdrive_mock.assert_called_once_with(mock.ANY, self.node,
+                                                      self.node.name)
         self.api.baremetal.set_node_provision_state.assert_called_once_with(
             self.node, 'active', config_drive=mock.ANY)
         self.assertFalse(self.api.network.delete_port.called)
@@ -371,6 +377,8 @@ class TestProvisionNode(Base):
         self.api.baremetal.update_node.assert_called_once_with(
             self.node, instance_info=self.instance_info, extra=self.extra)
         self.api.baremetal.validate_node.assert_called_once_with(self.node)
+        self.configdrive_mock.assert_called_once_with(mock.ANY, self.node,
+                                                      hostname)
         self.api.baremetal.set_node_provision_state.assert_called_once_with(
             self.node, 'active', config_drive=mock.ANY)
         self.assertFalse(
