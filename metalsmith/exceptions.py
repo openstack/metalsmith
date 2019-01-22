@@ -35,9 +35,9 @@ class NodesNotFound(ReservationFailed):
 
     def __init__(self, resource_class, conductor_group):
         message = "No available nodes%(rc)s found%(cg)s" % {
-            'rc': 'with resource class %s' % resource_class
+            'rc': ' with resource class %s' % resource_class
             if resource_class else '',
-            'cg': 'in conductor group %s' % (conductor_group or '<default>')
+            'cg': ' in conductor group %s' % (conductor_group or '<default>')
             if conductor_group is not None else ''
         }
         self.requested_resource_class = resource_class

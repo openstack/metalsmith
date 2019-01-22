@@ -29,7 +29,7 @@ from metalsmith import sources
 
 NODE_FIELDS = ['name', 'id', 'instance_info', 'instance_id', 'is_maintenance',
                'maintenance_reason', 'properties', 'provision_state', 'extra',
-               'last_error', 'traits']
+               'last_error', 'traits', 'resource_class', 'conductor_group']
 
 
 class TestInit(testtools.TestCase):
@@ -98,6 +98,8 @@ class TestReserveNode(Base):
         kwargs.setdefault('id', '000')
         kwargs.setdefault('properties', {'local_gb': 100})
         kwargs.setdefault('instance_info', {})
+        kwargs.setdefault('instance_id', None)
+        kwargs.setdefault('is_maintenance', False)
         return mock.Mock(spec=NODE_FIELDS, **kwargs)
 
     def test_no_nodes(self):
@@ -108,7 +110,7 @@ class TestReserveNode(Base):
         self.assertFalse(self.api.baremetal.update_node.called)
 
     def test_simple_ok(self):
-        nodes = [self._node()]
+        nodes = [self._node(resource_class='control')]
         self.api.baremetal.nodes.return_value = nodes
 
         node = self.pr.reserve_node('control')
@@ -129,7 +131,8 @@ class TestReserveNode(Base):
 
     def test_with_capabilities(self):
         nodes = [
-            self._node(properties={'local_gb': 100, 'capabilities': caps})
+            self._node(properties={'local_gb': 100, 'capabilities': caps},
+                       resource_class='control')
             for caps in ['answer:1', 'answer:42', None]
         ]
         expected = nodes[1]
@@ -235,8 +238,14 @@ class TestReserveNode(Base):
             instance_info={'capabilities': {'cat': 'meow'}})
 
     def test_provided_nodes_no_match(self):
-        nodes = [self._node(resource_class='compute', conductor_group='loc1'),
-                 self._node(resource_class='control', conductor_group='loc2')]
+        nodes = [
+            self._node(resource_class='compute', conductor_group='loc1'),
+            self._node(resource_class='control', conductor_group='loc2'),
+            self._node(resource_class='control', conductor_group='loc1',
+                       is_maintenance=True),
+            self._node(resource_class='control', conductor_group='loc1',
+                       instance_id='abcd')
+        ]
 
         self.assertRaises(exceptions.NodesNotFound,
                           self.pr.reserve_node, candidates=nodes,

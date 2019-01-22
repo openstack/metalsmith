@@ -123,12 +123,33 @@ class NodeTypeFilter(Filter):
         self.conductor_group = conductor_group
 
     def __call__(self, node):
-        return (
-            (self.resource_class is None or
-             node.resource_class == self.resource_class) and
-            (self.conductor_group is None or
-             node.conductor_group == self.conductor_group)
-        )
+        if node.instance_id:
+            LOG.debug('Node %s is already reserved', _utils.log_res(node))
+            return False
+
+        if node.is_maintenance:
+            LOG.debug('Node %s is in maintenance', _utils.log_res(node))
+            return False
+
+        if (self.resource_class is not None
+                and node.resource_class != self.resource_class):
+            LOG.debug('Resource class %(real)s does not match the expected '
+                      'value of %(exp)s for node %(node)s',
+                      {'node': _utils.log_res(node),
+                       'exp': self.resource_class,
+                       'real': node.resource_class})
+            return False
+
+        if (self.conductor_group is not None
+                and node.conductor_group != self.conductor_group):
+            LOG.debug('Conductor group %(real)s does not match the expected '
+                      'value of %(exp)s for node %(node)s',
+                      {'node': _utils.log_res(node),
+                       'exp': self.conductor_group,
+                       'real': node.conductor_group})
+            return False
+
+        return True
 
     def fail(self):
         raise exceptions.NodesNotFound(self.resource_class,

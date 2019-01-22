@@ -98,25 +98,29 @@ class Provisioner(_utils.GetNodeMixin):
 
         if candidates:
             nodes = [self._get_node(node) for node in candidates]
-            filters = [
-                _scheduler.NodeTypeFilter(resource_class, conductor_group),
-            ]
         else:
+            kwargs = {}
+            if conductor_group:
+                kwargs['conductor_group'] = conductor_group
             nodes = list(self.connection.baremetal.nodes(
+                associated=False,
+                provision_state='available',
+                maintenance=False,
                 resource_class=resource_class,
-                conductor_group=conductor_group,
-                details=True))
+                details=True,
+                **kwargs))
             if not nodes:
                 raise exceptions.NodesNotFound(resource_class, conductor_group)
             # Ensure parallel executions don't try nodes in the same sequence
             random.shuffle(nodes)
-            # No need to filter by resource_class and conductor_group any more
-            filters = []
 
         LOG.debug('Candidate nodes: %s', nodes)
 
-        filters.append(_scheduler.CapabilitiesFilter(capabilities))
-        filters.append(_scheduler.TraitsFilter(traits))
+        filters = [
+            _scheduler.NodeTypeFilter(resource_class, conductor_group),
+            _scheduler.CapabilitiesFilter(capabilities),
+            _scheduler.TraitsFilter(traits),
+        ]
         if predicate is not None:
             filters.append(_scheduler.CustomPredicateFilter(predicate))
 
