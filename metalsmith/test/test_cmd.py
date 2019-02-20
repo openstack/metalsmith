@@ -79,6 +79,7 @@ class TestDeploy(testtools.TestCase):
         instance.state = _instance.InstanceState.ACTIVE
         instance.is_deployed = True
         instance.ip_addresses.return_value = {'private': ['1.2.3.4']}
+        instance.hostname = None
 
         args = ['deploy', '--network', 'mynet', '--image', 'myimg',
                 '--resource-class', 'compute']
@@ -133,6 +134,7 @@ class TestDeploy(testtools.TestCase):
         instance.node.name = None
         instance.node.id = '123'
         instance.state = _instance.InstanceState.ACTIVE
+        instance.hostname = None
 
         args = ['deploy', '--network', 'mynet', '--image', 'myimg',
                 '--resource-class', 'compute']
@@ -148,6 +150,7 @@ class TestDeploy(testtools.TestCase):
         instance.node.name = None
         instance.node.id = '123'
         instance.state = _instance.InstanceState.DEPLOYING
+        instance.hostname = None
 
         args = ['deploy', '--network', 'mynet', '--image', 'myimg',
                 '--resource-class', 'compute']
@@ -355,9 +358,24 @@ class TestDeploy(testtools.TestCase):
         self.assertFalse(mock_pr.return_value.provision_node.called)
 
     def test_args_hostname(self, mock_pr):
+        instance = mock_pr.return_value.provision_node.return_value
+        instance.create_autospec(_instance.Instance)
+        instance.is_deployed = True
+        instance.node.name = None
+        instance.node.id = '123'
+        instance.state = _instance.InstanceState.ACTIVE
+        instance.hostname = 'host'
+        instance.ip_addresses.return_value = {'private': ['1.2.3.4']}
+
         args = ['deploy', '--network', 'mynet', '--image', 'myimg',
                 '--hostname', 'host', '--resource-class', 'compute']
         self._check(mock_pr, args, {}, {'hostname': 'host'})
+
+        self.mock_print.assert_has_calls([
+            mock.call(mock.ANY, node='123', state='ACTIVE'),
+            mock.call(mock.ANY, hostname='host'),
+            mock.call(mock.ANY, ips='private=1.2.3.4')
+        ])
 
     def test_args_with_candidates(self, mock_pr):
         args = ['deploy', '--network', 'mynet', '--image', 'myimg',
@@ -601,8 +619,10 @@ class TestShowWait(testtools.TestCase):
 
         self.mock_print.assert_has_calls([
             mock.call(mock.ANY, node='name-1 (UUID 1)', state='ACTIVE'),
+            mock.call(mock.ANY, hostname='hostname1'),
             mock.call(mock.ANY, ips='private=1.2.3.4'),
             mock.call(mock.ANY, node='name-2 (UUID 2)', state='DEPLOYING'),
+            mock.call(mock.ANY, hostname='hostname2'),
         ])
         mock_pr.return_value.show_instances.assert_called_once_with(
             ['uuid1', 'hostname2'])
@@ -614,8 +634,10 @@ class TestShowWait(testtools.TestCase):
 
         self.mock_print.assert_has_calls([
             mock.call(mock.ANY, node='name-1 (UUID 1)', state='ACTIVE'),
+            mock.call(mock.ANY, hostname='hostname1'),
             mock.call(mock.ANY, ips='private=1.2.3.4'),
             mock.call(mock.ANY, node='name-2 (UUID 2)', state='DEPLOYING'),
+            mock.call(mock.ANY, hostname='hostname2'),
         ])
         mock_pr.return_value.list_instances.assert_called_once_with()
 
@@ -627,8 +649,10 @@ class TestShowWait(testtools.TestCase):
 
         self.mock_print.assert_has_calls([
             mock.call(mock.ANY, node='name-1 (UUID 1)', state='ACTIVE'),
+            mock.call(mock.ANY, hostname='hostname1'),
             mock.call(mock.ANY, ips='private=1.2.3.4'),
             mock.call(mock.ANY, node='name-2 (UUID 2)', state='DEPLOYING'),
+            mock.call(mock.ANY, hostname='hostname2'),
         ])
         mock_pr.return_value.wait_for_provisioning.assert_called_once_with(
             ['uuid1', 'hostname2'], timeout=None)
@@ -641,8 +665,10 @@ class TestShowWait(testtools.TestCase):
 
         self.mock_print.assert_has_calls([
             mock.call(mock.ANY, node='name-1 (UUID 1)', state='ACTIVE'),
+            mock.call(mock.ANY, hostname='hostname1'),
             mock.call(mock.ANY, ips='private=1.2.3.4'),
             mock.call(mock.ANY, node='name-2 (UUID 2)', state='DEPLOYING'),
+            mock.call(mock.ANY, hostname='hostname2'),
         ])
         mock_pr.return_value.wait_for_provisioning.assert_called_once_with(
             ['uuid1', 'hostname2'], timeout=42)

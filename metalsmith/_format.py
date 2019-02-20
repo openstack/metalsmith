@@ -60,6 +60,9 @@ class DefaultFormat(object):
                    node=_utils.log_res(instance.node),
                    state=instance.state.name)
 
+            if instance.hostname:
+                _print('* Hostname: %(hostname)s', hostname=instance.hostname)
+
             if instance.is_deployed:
                 ips = instance.ip_addresses()
                 if ips:

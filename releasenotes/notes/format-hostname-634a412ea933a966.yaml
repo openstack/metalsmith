@@ -1,0 +1,4 @@
+---
+features:
+  - |
+    Hostname is now displayed in the default format when displaying instances.
