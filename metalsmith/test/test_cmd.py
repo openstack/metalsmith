@@ -46,7 +46,8 @@ class TestDeploy(testtools.TestCase):
                                 conductor_group=None,
                                 capabilities={},
                                 traits=[],
-                                candidates=None)
+                                candidates=None,
+                                hostname=None)
         reserve_defaults.update(reserve_args)
 
         provision_defaults = dict(image=mock.ANY,
@@ -54,7 +55,6 @@ class TestDeploy(testtools.TestCase):
                                   root_size_gb=None,
                                   swap_size_mb=None,
                                   config=mock.ANY,
-                                  hostname=None,
                                   netboot=False,
                                   wait=1800)
         provision_defaults.update(provision_args)
@@ -369,7 +369,7 @@ class TestDeploy(testtools.TestCase):
 
         args = ['deploy', '--network', 'mynet', '--image', 'myimg',
                 '--hostname', 'host', '--resource-class', 'compute']
-        self._check(mock_pr, args, {}, {'hostname': 'host'})
+        self._check(mock_pr, args, {'hostname': 'host'}, {})
 
         self.mock_print.assert_has_calls([
             mock.call(mock.ANY, node='123', state='ACTIVE'),

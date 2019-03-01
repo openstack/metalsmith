@@ -71,14 +71,14 @@ def _do_deploy(api, args, formatter):
                             conductor_group=args.conductor_group,
                             capabilities=capabilities,
                             traits=args.trait,
-                            candidates=args.candidate)
+                            candidates=args.candidate,
+                            hostname=args.hostname)
     instance = api.provision_node(node,
                                   image=source,
                                   nics=args.nics,
                                   root_size_gb=args.root_size,
                                   swap_size_mb=args.swap_size,
                                   config=config,
-                                  hostname=args.hostname,
                                   netboot=args.netboot,
                                   wait=wait)
     formatter.deploy(instance)

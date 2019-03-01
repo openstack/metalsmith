@@ -103,7 +103,9 @@ class TestReserveNode(Base):
         kwargs.setdefault('instance_id', None)
         kwargs.setdefault('is_maintenance', False)
         kwargs.setdefault('resource_class', self.RSC)
-        return mock.Mock(spec=NODE_FIELDS, **kwargs)
+        result = mock.Mock(spec=NODE_FIELDS, **kwargs)
+        result.name = kwargs.get('name')
+        return result
 
     def test_no_nodes(self):
         self.api.baremetal.nodes.return_value = []
@@ -120,7 +122,30 @@ class TestReserveNode(Base):
 
         self.assertIn(node, nodes)
         self.api.baremetal.update_node.assert_called_once_with(
-            node, instance_id=node.id, instance_info={})
+            node, instance_id=node.id,
+            instance_info={'metalsmith_hostname': node.id})
+
+    def test_with_hostname(self):
+        nodes = [self._node()]
+        self.api.baremetal.nodes.return_value = nodes
+
+        node = self.pr.reserve_node(self.RSC, hostname='example.com')
+
+        self.assertIn(node, nodes)
+        self.api.baremetal.update_node.assert_called_once_with(
+            node, instance_id=node.id,
+            instance_info={'metalsmith_hostname': 'example.com'})
+
+    def test_with_name_as_hostname(self):
+        nodes = [self._node(name='example.com')]
+        self.api.baremetal.nodes.return_value = nodes
+
+        node = self.pr.reserve_node(self.RSC)
+
+        self.assertIn(node, nodes)
+        self.api.baremetal.update_node.assert_called_once_with(
+            node, instance_id=node.id,
+            instance_info={'metalsmith_hostname': 'example.com'})
 
     def test_with_capabilities(self):
         nodes = [
@@ -135,7 +160,8 @@ class TestReserveNode(Base):
         self.assertIs(node, expected)
         self.api.baremetal.update_node.assert_called_once_with(
             node, instance_id=node.id,
-            instance_info={'capabilities': {'answer': '42'}})
+            instance_info={'capabilities': {'answer': '42'},
+                           'metalsmith_hostname': node.id})
 
     def test_with_traits(self):
         nodes = [self._node(properties={'local_gb': 100}, traits=traits)
@@ -149,7 +175,8 @@ class TestReserveNode(Base):
         self.assertIs(node, expected)
         self.api.baremetal.update_node.assert_called_once_with(
             node, instance_id=node.id,
-            instance_info={'traits': ['foo', 'answer:42']})
+            instance_info={'traits': ['foo', 'answer:42'],
+                           'metalsmith_hostname': node.id})
 
     def test_custom_predicate(self):
         nodes = [self._node(properties={'local_gb': i})
@@ -162,7 +189,8 @@ class TestReserveNode(Base):
 
         self.assertEqual(node, nodes[1])
         self.api.baremetal.update_node.assert_called_once_with(
-            node, instance_id=node.id, instance_info={})
+            node, instance_id=node.id,
+            instance_info={'metalsmith_hostname': node.id})
 
     def test_custom_predicate_false(self):
         nodes = [self._node() for _ in range(3)]
@@ -184,7 +212,8 @@ class TestReserveNode(Base):
         self.assertEqual(node, nodes[0])
         self.assertFalse(self.api.baremetal.nodes.called)
         self.api.baremetal.update_node.assert_called_once_with(
-            node, instance_id=node.id, instance_info={})
+            node, instance_id=node.id,
+            instance_info={'metalsmith_hostname': node.id})
 
     def test_provided_nodes(self):
         nodes = [self._node(), self._node()]
@@ -194,7 +223,8 @@ class TestReserveNode(Base):
         self.assertEqual(node, nodes[0])
         self.assertFalse(self.api.baremetal.nodes.called)
         self.api.baremetal.update_node.assert_called_once_with(
-            node, instance_id=node.id, instance_info={})
+            node, instance_id=node.id,
+            instance_info={'metalsmith_hostname': node.id})
 
     def test_nodes_filtered(self):
         nodes = [self._node(resource_class='banana'),
@@ -210,7 +240,8 @@ class TestReserveNode(Base):
         self.assertFalse(self.api.baremetal.nodes.called)
         self.api.baremetal.update_node.assert_called_once_with(
             node, instance_id=node.id,
-            instance_info={'capabilities': {'cat': 'meow'}})
+            instance_info={'capabilities': {'cat': 'meow'},
+                           'metalsmith_hostname': node.id})
 
     def test_nodes_filtered_by_conductor_group(self):
         nodes = [self._node(conductor_group='loc1'),
@@ -230,7 +261,8 @@ class TestReserveNode(Base):
         self.assertFalse(self.api.baremetal.nodes.called)
         self.api.baremetal.update_node.assert_called_once_with(
             node, instance_id=node.id,
-            instance_info={'capabilities': {'cat': 'meow'}})
+            instance_info={'capabilities': {'cat': 'meow'},
+                           'metalsmith_hostname': node.id})
 
     def test_provided_nodes_no_match(self):
         nodes = [
@@ -262,7 +294,7 @@ class TestProvisionNode(Base):
             'image_source': self.image.id,
             'root_gb': 99,  # 100 - 1
             'capabilities': {'boot_option': 'local'},
-            _utils.GetNodeMixin.HOSTNAME_FIELD: 'control-0'
+            _utils.HOSTNAME_FIELD: 'control-0'
         }
         self.extra = {
             'metalsmith_created_ports': [
@@ -291,8 +323,7 @@ class TestProvisionNode(Base):
         self.api.baremetal.update_node.assert_called_once_with(
             self.node, instance_info=self.instance_info, extra=self.extra)
         self.api.baremetal.validate_node.assert_called_once_with(self.node)
-        self.configdrive_mock.assert_called_once_with(mock.ANY, self.node,
-                                                      self.node.name)
+        self.configdrive_mock.assert_called_once_with(mock.ANY, self.node)
         self.api.baremetal.set_node_provision_state.assert_called_once_with(
             self.node, 'active', config_drive=mock.ANY)
         self.assertFalse(self.api.network.delete_port.called)
@@ -346,8 +377,7 @@ class TestProvisionNode(Base):
         self.assertEqual(inst.uuid, self.node.id)
         self.assertEqual(inst.node, self.node)
 
-        config.build_configdrive.assert_called_once_with(
-            self.node, self.node.name)
+        config.build_configdrive.assert_called_once_with(self.node)
         self.api.network.create_port.assert_called_once_with(
             network_id=self.api.network.find_network.return_value.id)
         self.api.baremetal.attach_vif_to_node.assert_called_once_with(
@@ -369,7 +399,7 @@ class TestProvisionNode(Base):
         inst = self.pr.provision_node(self.node, 'image',
                                       [{'network': 'network'}],
                                       hostname=hostname)
-        self.instance_info[_utils.GetNodeMixin.HOSTNAME_FIELD] = hostname
+        self.instance_info[_utils.HOSTNAME_FIELD] = hostname
 
         self.assertEqual(inst.uuid, self.node.id)
         self.assertEqual(inst.node, self.node)
@@ -381,8 +411,31 @@ class TestProvisionNode(Base):
         self.api.baremetal.update_node.assert_called_once_with(
             self.node, instance_info=self.instance_info, extra=self.extra)
         self.api.baremetal.validate_node.assert_called_once_with(self.node)
-        self.configdrive_mock.assert_called_once_with(mock.ANY, self.node,
-                                                      hostname)
+        self.configdrive_mock.assert_called_once_with(mock.ANY, self.node)
+        self.api.baremetal.set_node_provision_state.assert_called_once_with(
+            self.node, 'active', config_drive=mock.ANY)
+        self.assertFalse(
+            self.api.baremetal.wait_for_nodes_provision_state.called)
+        self.assertFalse(self.api.network.delete_port.called)
+
+    def test_existing_hostname(self):
+        hostname = 'control-0.example.com'
+        self.node.instance_info[_utils.HOSTNAME_FIELD] = hostname
+        inst = self.pr.provision_node(self.node, 'image',
+                                      [{'network': 'network'}])
+        self.instance_info[_utils.HOSTNAME_FIELD] = hostname
+
+        self.assertEqual(inst.uuid, self.node.id)
+        self.assertEqual(inst.node, self.node)
+
+        self.api.network.create_port.assert_called_once_with(
+            network_id=self.api.network.find_network.return_value.id)
+        self.api.baremetal.attach_vif_to_node.assert_called_once_with(
+            self.node, self.api.network.create_port.return_value.id)
+        self.api.baremetal.update_node.assert_called_once_with(
+            self.node, instance_info=self.instance_info, extra=self.extra)
+        self.api.baremetal.validate_node.assert_called_once_with(self.node)
+        self.configdrive_mock.assert_called_once_with(mock.ANY, self.node)
         self.api.baremetal.set_node_provision_state.assert_called_once_with(
             self.node, 'active', config_drive=mock.ANY)
         self.assertFalse(
@@ -393,7 +446,7 @@ class TestProvisionNode(Base):
         self.node.name = 'node_1'
         inst = self.pr.provision_node(self.node, 'image',
                                       [{'network': 'network'}])
-        self.instance_info[_utils.GetNodeMixin.HOSTNAME_FIELD] = '000'
+        self.instance_info[_utils.HOSTNAME_FIELD] = '000'
 
         self.assertEqual(inst.uuid, self.node.id)
         self.assertEqual(inst.node, self.node)

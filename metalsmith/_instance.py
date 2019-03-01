@@ -94,7 +94,7 @@ class Instance(object):
     @property
     def hostname(self):
         """Node's hostname."""
-        return self._node.instance_info.get(_utils.GetNodeMixin.HOSTNAME_FIELD)
+        return self._node.instance_info.get(_utils.HOSTNAME_FIELD)
 
     def ip_addresses(self):
         """Returns IP addresses for this instance.

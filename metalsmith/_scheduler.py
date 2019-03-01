@@ -261,10 +261,11 @@ class CustomPredicateFilter(Filter):
 
 class IronicReserver(Reserver):
 
-    def __init__(self, connection, instance_info=None):
+    def __init__(self, connection, instance_info=None, hostname=None):
         self._connection = connection
         self._failed_nodes = []
         self._iinfo = instance_info or {}
+        self.hostname = hostname
 
     def validate(self, node):
         try:
@@ -276,10 +277,17 @@ class IronicReserver(Reserver):
             LOG.warning(message)
             raise exceptions.ValidationFailed(message)
 
+    def _get_hostname(self, node):
+        if self.hostname is None:
+            return _utils.default_hostname(node)
+        else:
+            return self.hostname
+
     def __call__(self, node):
         try:
             self.validate(node)
             iinfo = dict(node.instance_info or {}, **self._iinfo)
+            iinfo[_utils.HOSTNAME_FIELD] = self._get_hostname(node)
             return self._connection.baremetal.update_node(
                 node, instance_id=node.id, instance_info=iinfo)
         except sdk_exc.SDKException:

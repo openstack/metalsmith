@@ -204,6 +204,8 @@ class TestIronicReserver(testtools.TestCase):
         super(TestIronicReserver, self).setUp()
         self.node = mock.Mock(spec=['id', 'name', 'instance_info'],
                               instance_info={})
+        self.node.id = 'abcd'
+        self.node.name = None
         self.api = mock.Mock(spec=['baremetal'])
         self.api.baremetal = mock.Mock(spec=['update_node', 'validate_node'])
         self.api.baremetal.update_node.side_effect = (
@@ -220,7 +222,27 @@ class TestIronicReserver(testtools.TestCase):
         self.api.baremetal.validate_node.assert_called_with(
             self.node, required=('power', 'management'))
         self.api.baremetal.update_node.assert_called_once_with(
-            self.node, instance_id=self.node.id, instance_info={})
+            self.node, instance_id=self.node.id,
+            instance_info={'metalsmith_hostname': 'abcd'})
+
+    def test_name_as_hostname(self):
+        self.node.name = 'example.com'
+        self.assertEqual(self.node, self.reserver(self.node))
+        self.api.baremetal.validate_node.assert_called_with(
+            self.node, required=('power', 'management'))
+        self.api.baremetal.update_node.assert_called_once_with(
+            self.node, instance_id=self.node.id,
+            instance_info={'metalsmith_hostname': 'example.com'})
+
+    def test_name_cannot_be_hostname(self):
+        # This should not ever happen, but checking just in case
+        self.node.name = 'banana!'
+        self.assertEqual(self.node, self.reserver(self.node))
+        self.api.baremetal.validate_node.assert_called_with(
+            self.node, required=('power', 'management'))
+        self.api.baremetal.update_node.assert_called_once_with(
+            self.node, instance_id=self.node.id,
+            instance_info={'metalsmith_hostname': 'abcd'})
 
     def test_with_instance_info(self):
         self.reserver = _scheduler.IronicReserver(self.api,
@@ -230,7 +252,17 @@ class TestIronicReserver(testtools.TestCase):
             self.node, required=('power', 'management'))
         self.api.baremetal.update_node.assert_called_once_with(
             self.node, instance_id=self.node.id,
-            instance_info={'cat': 'meow'})
+            instance_info={'cat': 'meow', 'metalsmith_hostname': 'abcd'})
+
+    def test_with_hostname(self):
+        self.reserver = _scheduler.IronicReserver(self.api,
+                                                  hostname='example.com')
+        self.assertEqual(self.node, self.reserver(self.node))
+        self.api.baremetal.validate_node.assert_called_with(
+            self.node, required=('power', 'management'))
+        self.api.baremetal.update_node.assert_called_once_with(
+            self.node, instance_id=self.node.id,
+            instance_info={'metalsmith_hostname': 'example.com'})
 
     def test_reservation_failed(self):
         self.api.baremetal.update_node.side_effect = (
@@ -240,7 +272,8 @@ class TestIronicReserver(testtools.TestCase):
         self.api.baremetal.validate_node.assert_called_with(
             self.node, required=('power', 'management'))
         self.api.baremetal.update_node.assert_called_once_with(
-            self.node, instance_id=self.node.id, instance_info={})
+            self.node, instance_id=self.node.id,
+            instance_info={'metalsmith_hostname': 'abcd'})
 
     def test_validation_failed(self):
         self.api.baremetal.validate_node.side_effect = (

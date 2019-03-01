@@ -107,10 +107,18 @@ class DuplicateHostname(sdk_exc.SDKException, exceptions.Error):
     pass
 
 
+HOSTNAME_FIELD = 'metalsmith_hostname'
+
+
+def default_hostname(node):
+    if node.name and is_hostname_safe(node.name):
+        return node.name
+    else:
+        return node.id
+
+
 class GetNodeMixin(object):
     """A helper mixin for getting nodes with hostnames."""
-
-    HOSTNAME_FIELD = 'metalsmith_hostname'
 
     _node_list = None
 
@@ -128,7 +136,7 @@ class GetNodeMixin(object):
         """A helper to find a node by metalsmith hostname."""
         nodes = self._node_list or self._nodes_for_lookup()
         existing = [n for n in nodes
-                    if n.instance_info.get(self.HOSTNAME_FIELD) == hostname]
+                    if n.instance_info.get(HOSTNAME_FIELD) == hostname]
         if len(existing) > 1:
             raise DuplicateHostname(
                 "More than one node found with hostname %(host)s: %(nodes)s" %

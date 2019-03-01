@@ -34,7 +34,8 @@ LOG = logging.getLogger(__name__)
 
 _CREATED_PORTS = 'metalsmith_created_ports'
 _ATTACHED_PORTS = 'metalsmith_attached_ports'
-_PRESERVE_INSTANCE_INFO_KEYS = {'capabilities', 'traits'}
+_PRESERVE_INSTANCE_INFO_KEYS = {'capabilities', 'traits',
+                                _utils.HOSTNAME_FIELD}
 
 
 class Provisioner(_utils.GetNodeMixin):
@@ -67,7 +68,7 @@ class Provisioner(_utils.GetNodeMixin):
 
     def reserve_node(self, resource_class, conductor_group=None,
                      capabilities=None, traits=None, candidates=None,
-                     predicate=None):
+                     predicate=None, hostname=None):
         """Find and reserve a suitable node.
 
         Example::
@@ -88,10 +89,13 @@ class Provisioner(_utils.GetNodeMixin):
         :param predicate: Custom predicate to run on nodes. A callable that
             accepts a node and returns ``True`` if it should be included,
             ``False`` otherwise. Any exceptions are propagated to the caller.
+        :param hostname: Hostname to assign to the instance. Defaults to the
+            node's name or UUID.
         :return: reserved `Node` object.
         :raises: :py:class:`metalsmith.exceptions.ReservationFailed`
         """
         capabilities = capabilities or {}
+        self._check_hostname(hostname)
 
         if candidates:
             nodes = [self._get_node(node) for node in candidates]
@@ -127,7 +131,8 @@ class Provisioner(_utils.GetNodeMixin):
         if traits:
             instance_info['traits'] = traits
         reserver = _scheduler.IronicReserver(self.connection,
-                                             instance_info)
+                                             instance_info,
+                                             hostname)
 
         node = _scheduler.schedule_node(nodes, filters, reserver,
                                         dry_run=self._dry_run)
@@ -170,32 +175,24 @@ class Provisioner(_utils.GetNodeMixin):
 
         return node
 
-    def _check_hostname(self, node, hostname):
+    def _check_hostname(self, hostname, node=None):
         """Check the provided host name.
 
-        If the ``hostname`` is not provided, use either the name or the UUID,
-        whichever is appropriate for a host name.
-
-        :return: appropriate hostname
         :raises: ValueError on inappropriate value of ``hostname``
         """
         if hostname is None:
-            if node.name and _utils.is_hostname_safe(node.name):
-                return node.name
-            else:
-                return node.id
+            return
 
         if not _utils.is_hostname_safe(hostname):
             raise ValueError("%s cannot be used as a hostname" % hostname)
 
         existing = self._find_node_by_hostname(hostname)
-        if existing is not None and existing.id != node.id:
+        if (existing is not None and node is not None
+                and existing.id != node.id):
             raise ValueError("The following node already uses hostname "
                              "%(host)s: %(node)s" %
                              {'host': hostname,
                               'node': _utils.log_res(existing)})
-
-        return hostname
 
     def provision_node(self, node, image, nics=None, root_size_gb=None,
                        swap_size_mb=None, config=None, hostname=None,
@@ -234,8 +231,8 @@ class Provisioner(_utils.GetNodeMixin):
             to specify it for a whole disk image.
         :param config: :py:class:`metalsmith.InstanceConfig` object with
             the configuration to pass to the instance.
-        :param hostname: Hostname to assign to the instance. Defaults to the
-            node's name or UUID.
+        :param hostname: Hostname to assign to the instance. If provided,
+            overrides the ``hostname`` passed to ``reserve_node``.
         :param netboot: Whether to use networking boot for final instances.
         :param capabilities: Requested capabilities of the node. If present,
             overwrites the capabilities set by :meth:`reserve_node`.
@@ -261,7 +258,7 @@ class Provisioner(_utils.GetNodeMixin):
         nics = _nics.NICs(self.connection, node, nics)
 
         try:
-            hostname = self._check_hostname(node, hostname)
+            self._check_hostname(hostname, node=node)
             root_size_gb = _utils.get_root_disk(root_size_gb, node)
 
             image._validate(self.connection)
@@ -283,7 +280,12 @@ class Provisioner(_utils.GetNodeMixin):
             instance_info = self._clean_instance_info(node.instance_info)
             instance_info['root_gb'] = root_size_gb
             instance_info['capabilities'] = capabilities
-            instance_info[self.HOSTNAME_FIELD] = hostname
+            if hostname:
+                instance_info[_utils.HOSTNAME_FIELD] = hostname
+            elif not instance_info.get(_utils.HOSTNAME_FIELD):
+                instance_info[_utils.HOSTNAME_FIELD] = _utils.default_hostname(
+                    node)
+
             extra = node.extra.copy()
             extra[_CREATED_PORTS] = nics.created_ports
             extra[_ATTACHED_PORTS] = nics.attached_ports
@@ -303,10 +305,7 @@ class Provisioner(_utils.GetNodeMixin):
 
             LOG.debug('Generating a configdrive for node %s',
                       _utils.log_res(node))
-            cd = config.build_configdrive(node, hostname)
-            # TODO(dtantsur): move this to openstacksdk?
-            if not isinstance(cd, six.string_types):
-                cd = cd.decode('utf-8')
+            cd = config.build_configdrive(node)
             LOG.debug('Starting provisioning of node %s', _utils.log_res(node))
             self.connection.baremetal.set_node_provision_state(
                 node, 'active', config_drive=cd)

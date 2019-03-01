@@ -60,13 +60,14 @@ class InstanceConfig(object):
             kwargs.setdefault('ssh_authorized_keys', self.ssh_keys)
         self.users.append(kwargs)
 
-    def build_configdrive(self, node, hostname):
+    def build_configdrive(self, node):
         """Make the config drive.
 
         :param node: `Node` object.
-        :param hostname: instance hostname.
         :return: configdrive contents as a base64-encoded string.
         """
+        hostname = node.instance_info.get(_utils.HOSTNAME_FIELD)
+
         # NOTE(dtantsur): CirrOS does not understand lists
         if isinstance(self.ssh_keys, list):
             ssh_keys = {str(i): v for i, v in enumerate(self.ssh_keys)}

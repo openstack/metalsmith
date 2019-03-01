@@ -20,6 +20,7 @@ from openstack.baremetal import configdrive
 import testtools
 
 from metalsmith import _config
+from metalsmith import _utils
 
 
 class TestInstanceConfig(testtools.TestCase):
@@ -38,9 +39,11 @@ class TestInstanceConfig(testtools.TestCase):
                       'files': [],
                       'meta': {}}
         expected_m.update(expected_metadata)
+        self.node.instance_info = {_utils.HOSTNAME_FIELD:
+                                   expected_m.get('hostname')}
 
         with mock.patch.object(configdrive, 'build', autospec=True) as mb:
-            result = config.build_configdrive(self.node, "example.com")
+            result = config.build_configdrive(self.node)
             mb.assert_called_once_with(expected_m, mock.ANY)
             self.assertIs(result, mb.return_value)
             user_data = mb.call_args[0][1]

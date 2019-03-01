@@ -1,0 +1,4 @@
+---
+features:
+  - |
+    The ``reserve_node`` call now also accepts ``hostname``.
