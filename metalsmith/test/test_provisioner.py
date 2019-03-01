@@ -94,36 +94,29 @@ class Base(testtools.TestCase):
 
 class TestReserveNode(Base):
 
+    RSC = 'baremetal'
+
     def _node(self, **kwargs):
         kwargs.setdefault('id', '000')
         kwargs.setdefault('properties', {'local_gb': 100})
         kwargs.setdefault('instance_info', {})
         kwargs.setdefault('instance_id', None)
         kwargs.setdefault('is_maintenance', False)
+        kwargs.setdefault('resource_class', self.RSC)
         return mock.Mock(spec=NODE_FIELDS, **kwargs)
 
     def test_no_nodes(self):
         self.api.baremetal.nodes.return_value = []
 
         self.assertRaises(exceptions.NodesNotFound,
-                          self.pr.reserve_node, resource_class='control')
+                          self.pr.reserve_node, self.RSC)
         self.assertFalse(self.api.baremetal.update_node.called)
 
     def test_simple_ok(self):
-        nodes = [self._node(resource_class='control')]
-        self.api.baremetal.nodes.return_value = nodes
-
-        node = self.pr.reserve_node('control')
-
-        self.assertIn(node, nodes)
-        self.api.baremetal.update_node.assert_called_once_with(
-            node, instance_id=node.id, instance_info={})
-
-    def test_any_resource_class(self):
         nodes = [self._node()]
         self.api.baremetal.nodes.return_value = nodes
 
-        node = self.pr.reserve_node()
+        node = self.pr.reserve_node(self.RSC)
 
         self.assertIn(node, nodes)
         self.api.baremetal.update_node.assert_called_once_with(
@@ -131,14 +124,13 @@ class TestReserveNode(Base):
 
     def test_with_capabilities(self):
         nodes = [
-            self._node(properties={'local_gb': 100, 'capabilities': caps},
-                       resource_class='control')
+            self._node(properties={'local_gb': 100, 'capabilities': caps})
             for caps in ['answer:1', 'answer:42', None]
         ]
         expected = nodes[1]
         self.api.baremetal.nodes.return_value = nodes
 
-        node = self.pr.reserve_node('control', capabilities={'answer': '42'})
+        node = self.pr.reserve_node(self.RSC, capabilities={'answer': '42'})
 
         self.assertIs(node, expected)
         self.api.baremetal.update_node.assert_called_once_with(
@@ -152,7 +144,7 @@ class TestReserveNode(Base):
         expected = nodes[1]
         self.api.baremetal.nodes.return_value = nodes
 
-        node = self.pr.reserve_node(traits=['foo', 'answer:42'])
+        node = self.pr.reserve_node(self.RSC, traits=['foo', 'answer:42'])
 
         self.assertIs(node, expected)
         self.api.baremetal.update_node.assert_called_once_with(
@@ -165,6 +157,7 @@ class TestReserveNode(Base):
         self.api.baremetal.nodes.return_value = nodes[:]
 
         node = self.pr.reserve_node(
+            self.RSC,
             predicate=lambda node: 100 < node.properties['local_gb'] < 200)
 
         self.assertEqual(node, nodes[1])
@@ -178,6 +171,7 @@ class TestReserveNode(Base):
         self.assertRaisesRegex(exceptions.CustomPredicateFailed,
                                'custom predicate',
                                self.pr.reserve_node,
+                               self.RSC,
                                predicate=lambda node: False)
 
         self.assertFalse(self.api.baremetal.update_node.called)
@@ -185,7 +179,7 @@ class TestReserveNode(Base):
     def test_provided_node(self):
         nodes = [self._node()]
 
-        node = self.pr.reserve_node(candidates=nodes)
+        node = self.pr.reserve_node(self.RSC, candidates=nodes)
 
         self.assertEqual(node, nodes[0])
         self.assertFalse(self.api.baremetal.nodes.called)
@@ -195,7 +189,7 @@ class TestReserveNode(Base):
     def test_provided_nodes(self):
         nodes = [self._node(), self._node()]
 
-        node = self.pr.reserve_node(candidates=nodes)
+        node = self.pr.reserve_node(self.RSC, candidates=nodes)
 
         self.assertEqual(node, nodes[0])
         self.assertFalse(self.api.baremetal.nodes.called)
@@ -227,7 +221,8 @@ class TestReserveNode(Base):
                                         'capabilities': 'cat:meow'},
                             conductor_group='loc1')]
 
-        node = self.pr.reserve_node(conductor_group='loc1',
+        node = self.pr.reserve_node(self.RSC,
+                                    conductor_group='loc1',
                                     candidates=nodes,
                                     capabilities={'cat': 'meow'})
 

@@ -64,7 +64,7 @@ class Provisioner(_utils.GetNodeMixin):
 
         self._dry_run = dry_run
 
-    def reserve_node(self, resource_class=None, conductor_group=None,
+    def reserve_node(self, resource_class, conductor_group=None,
                      capabilities=None, traits=None, candidates=None,
                      predicate=None):
         """Find and reserve a suitable node.
@@ -91,10 +91,6 @@ class Provisioner(_utils.GetNodeMixin):
         :raises: :py:class:`metalsmith.exceptions.ReservationFailed`
         """
         capabilities = capabilities or {}
-        if resource_class is None:
-            warnings.warn("Not providing resource_class is deprecated as it's "
-                          "not compatible with the proposed allocation API",
-                          DeprecationWarning)
 
         if candidates:
             nodes = [self._get_node(node) for node in candidates]

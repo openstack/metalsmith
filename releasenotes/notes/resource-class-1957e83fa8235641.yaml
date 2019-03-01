@@ -1,0 +1,5 @@
+---
+upgrade:
+  - |
+    The ``resource_class`` argument to ``reserve_node``, as well as the
+    ``--resource-class`` CLI argument, are now required.

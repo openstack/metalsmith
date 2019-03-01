@@ -164,7 +164,7 @@ def _parse_args(args, config):
     deploy.add_argument('--ssh-public-key', help='SSH public key to load')
     deploy.add_argument('--hostname', help='Host name to use, defaults to '
                         'Node\'s name or UUID')
-    deploy.add_argument('--resource-class',
+    deploy.add_argument('--resource-class', required=True,
                         help='node resource class to deploy')
     deploy.add_argument('--conductor-group',
                         help='conductor group to pick the node from')

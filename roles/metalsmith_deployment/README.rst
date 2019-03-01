@@ -115,7 +115,7 @@ Each instances has the following attributes:
               - subnet: private-subnet1
 
 ``resource_class`` (defaults to ``metalsmith_resource_class``)
-    requested node's resource class.
+    requested node's resource class. Mandatory.
 ``root_size`` (defaults to ``metalsmith_root_size``)
     size of the root partition (in GiB), if partition images are used.
 
