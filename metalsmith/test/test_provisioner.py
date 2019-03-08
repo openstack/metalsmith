@@ -505,6 +505,9 @@ class TestProvisionNode(Base):
         self.image.ramdisk_id = None
         del self.instance_info['kernel']
         del self.instance_info['ramdisk']
+        # Ensure stale values clean up
+        self.node.instance_info['kernel'] = 'bad value'
+        self.node.instance_info['ramdisk'] = 'bad value'
 
         self.pr.provision_node(self.node, 'image', [{'network': 'network'}])
 

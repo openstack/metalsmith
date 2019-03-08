@@ -34,6 +34,7 @@ LOG = logging.getLogger(__name__)
 
 _CREATED_PORTS = 'metalsmith_created_ports'
 _ATTACHED_PORTS = 'metalsmith_attached_ports'
+_PRESERVE_INSTANCE_INFO_KEYS = {'capabilities', 'traits'}
 
 
 class Provisioner(_utils.GetNodeMixin):
@@ -279,7 +280,7 @@ class Provisioner(_utils.GetNodeMixin):
 
             capabilities['boot_option'] = 'netboot' if netboot else 'local'
 
-            instance_info = node.instance_info.copy()
+            instance_info = self._clean_instance_info(node.instance_info)
             instance_info['root_gb'] = root_size_gb
             instance_info['capabilities'] = capabilities
             instance_info[self.HOSTNAME_FIELD] = hostname
@@ -360,6 +361,11 @@ class Provisioner(_utils.GetNodeMixin):
             nodes, 'active', timeout=timeout)
         return [_instance.Instance(self.connection, node) for node in nodes]
 
+    def _clean_instance_info(self, instance_info):
+        return {key: value
+                for key, value in instance_info.items()
+                if key in _PRESERVE_INSTANCE_INFO_KEYS}
+
     def _clean_up(self, node, nics=None):
         if nics is None:
             created_ports = node.extra.get(_CREATED_PORTS, [])
@@ -372,17 +378,14 @@ class Provisioner(_utils.GetNodeMixin):
         extra = node.extra.copy()
         for item in (_CREATED_PORTS, _ATTACHED_PORTS):
             extra.pop(item, None)
-        instance_info = node.instance_info.copy()
-        instance_info.pop(self.HOSTNAME_FIELD, None)
-        LOG.debug('Updating node %(node)s with instance info %(iinfo)s '
-                  'and extras %(extra)s and releasing the lock',
+        LOG.debug('Updating node %(node)s with empty instance info (was '
+                  '%(iinfo)s) and extras %(extra)s and releasing the lock',
                   {'node': _utils.log_res(node),
-                   'iinfo': instance_info,
+                   'iinfo': node.instance_info,
                    'extra': extra})
         try:
             self.connection.baremetal.update_node(
-                node, instance_info=instance_info, extra=extra,
-                instance_id=None)
+                node, instance_info={}, extra=extra, instance_id=None)
         except Exception as exc:
             LOG.debug('Failed to clear node %(node)s extra: %(exc)s',
                       {'node': _utils.log_res(node), 'exc': exc})
