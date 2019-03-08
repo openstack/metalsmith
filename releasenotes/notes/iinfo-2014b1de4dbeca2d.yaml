@@ -1,0 +1,7 @@
+---
+fixes:
+  - |
+    Fixes stale ``instance_info`` remaining after deploy failures.
+  - |
+    Cleans up ``instance_info`` before updating it before deployment to make
+    sure not stale information is left there.
