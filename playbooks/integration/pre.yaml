@@ -5,7 +5,7 @@
 
   tasks:
     - set_fact:
-        metalsmith_src_dir: '{{ ansible_user_dir }}/src/git.openstack.org/openstack'
+        metalsmith_src_dir: '{{ ansible_user_dir }}/src/opendev.org/openstack'
 
     - name: Install requirements for metalsmith
       pip:
