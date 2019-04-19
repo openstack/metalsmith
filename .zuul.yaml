@@ -84,7 +84,7 @@
         horizon: false
         tempest: false
       devstack_plugins:
-        ironic: https://git.openstack.org/openstack/ironic
+        ironic: https://opendev.org/openstack/ironic
       devstack_localrc:
         IRONIC_BAREMETAL_BASIC_OPS: true
         IRONIC_BUILD_DEPLOY_RAMDISK: false
