@@ -15,7 +15,7 @@ Service (neutron) <https://docs.openstack.org/neutron/latest/>`_.
 
 * License: Apache License, Version 2.0
 * Documentation: https://docs.openstack.org/metalsmith/
-* Source: https://git.openstack.org/cgit/openstack/metalsmith
+* Source: https://opendev.org/openstack/metalsmith
 * Bugs: https://storyboard.openstack.org/#!/project/openstack/metalsmith
 
 Installation
