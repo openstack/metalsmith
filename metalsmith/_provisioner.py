@@ -305,10 +305,9 @@ class Provisioner(_utils.GetNodeMixin):
 
             LOG.debug('Generating a configdrive for node %s',
                       _utils.log_res(node))
-            cd = config.build_configdrive(node)
             LOG.debug('Starting provisioning of node %s', _utils.log_res(node))
             self.connection.baremetal.set_node_provision_state(
-                node, 'active', config_drive=cd)
+                node, 'active', config_drive=config.generate(node))
         except Exception:
             exc_info = sys.exc_info()
 

@@ -1,0 +1,9 @@
+---
+upgrade:
+  - |
+    Bare Metal API version 1.56 (Stein) or newer is now required. Use the 0.11
+    release series for older versions.
+deprecations:
+  - |
+    ``InstanceConfig.build_configdrive`` is deprecated, use ``generate`` with
+    openstacksdk's ``openstack.baremetal.configdrive.build`` instead.

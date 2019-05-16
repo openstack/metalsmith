@@ -15,6 +15,7 @@
 
 import json
 import logging
+import warnings
 
 from openstack.baremetal import configdrive
 
@@ -60,11 +61,16 @@ class InstanceConfig(object):
             kwargs.setdefault('ssh_authorized_keys', self.ssh_keys)
         self.users.append(kwargs)
 
-    def build_configdrive(self, node):
-        """Make the config drive.
+    def generate(self, node):
+        """Generate the config drive information.
 
         :param node: `Node` object.
-        :return: configdrive contents as a base64-encoded string.
+        :return: configdrive contents as a dictionary with keys:
+
+            ``meta_data``
+                meta data dictionary
+            ``user_data``
+                user data as a string
         """
         hostname = node.instance_info.get(_utils.HOSTNAME_FIELD)
 
@@ -83,16 +89,36 @@ class InstanceConfig(object):
                     'files': [],
                     'meta': {}}
         user_data = {}
-        user_data_bin = None
+        user_data_str = None
 
         if self.users:
             user_data['users'] = self.users
 
         if user_data:
-            user_data_bin = ("#cloud-config\n" + json.dumps(user_data)).encode(
-                'utf-8')
+            user_data_str = "#cloud-config\n" + json.dumps(user_data)
+
+        return {'meta_data': metadata,
+                'user_data': user_data_str}
+
+    def build_configdrive(self, node):
+        """Make the config drive ISO.
+
+        Deprecated, use :py:meth:`generate` with openstacksdk's
+        ``openstack.baremetal.configdrive.build`` instead.
+
+        :param node: `Node` object.
+        :return: configdrive contents as a base64-encoded string.
+        """
+        warnings.warn("build_configdrive is deprecated, use generate with "
+                      "openstacksdk's openstack.baremetal.configdrive.build "
+                      "instead", DeprecationWarning)
+        cd = self.generate(node)
+        metadata = cd.pop('meta_data')
+        user_data = cd.pop('user_data')
+        if user_data:
+            user_data = user_data.encode('utf-8')
 
         LOG.debug('Generating configdrive tree for node %(node)s with '
                   'metadata %(meta)s', {'node': _utils.log_res(node),
                                         'meta': metadata})
-        return configdrive.build(metadata, user_data_bin)
+        return configdrive.build(metadata, user_data=user_data, **cd)

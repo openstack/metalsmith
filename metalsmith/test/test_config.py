@@ -46,7 +46,7 @@ class TestInstanceConfig(testtools.TestCase):
             result = config.build_configdrive(self.node)
             mb.assert_called_once_with(expected_m, mock.ANY)
             self.assertIs(result, mb.return_value)
-            user_data = mb.call_args[0][1]
+            user_data = mb.call_args[1].get('user_data')
 
         if expected_userdata:
             self.assertIsNotNone(user_data)

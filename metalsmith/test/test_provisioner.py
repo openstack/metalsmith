@@ -308,7 +308,7 @@ class TestProvisionNode(Base):
         }
         self.configdrive_mock = self.useFixture(
             fixtures.MockPatchObject(_config.InstanceConfig,
-                                     'build_configdrive', autospec=True)
+                                     'generate', autospec=True)
         ).mock
 
     def test_ok(self):
@@ -379,7 +379,7 @@ class TestProvisionNode(Base):
         self.assertEqual(inst.uuid, self.node.id)
         self.assertEqual(inst.node, self.node)
 
-        config.build_configdrive.assert_called_once_with(self.node)
+        config.generate.assert_called_once_with(self.node)
         self.api.network.create_port.assert_called_once_with(
             network_id=self.api.network.find_network.return_value.id)
         self.api.baremetal.attach_vif_to_node.assert_called_once_with(
