@@ -23,7 +23,9 @@ from metalsmith import exceptions
 
 
 def log_res(res):
-    if getattr(res, 'name', None):
+    if res is None:
+        return None
+    elif getattr(res, 'name', None):
         return '%s (UUID %s)' % (res.name, res.id)
     else:
         return res.id

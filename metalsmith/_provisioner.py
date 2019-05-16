@@ -14,11 +14,11 @@
 # limitations under the License.
 
 import logging
-import random
 import sys
 import warnings
 
 from openstack import connection
+from openstack import exceptions as os_exc
 import six
 
 from metalsmith import _config
@@ -97,47 +97,114 @@ class Provisioner(_utils.GetNodeMixin):
         capabilities = capabilities or {}
         self._check_hostname(hostname)
 
+        if candidates or capabilities or conductor_group or predicate:
+            # Predicates, capabilities and conductor groups are not supported
+            # by the allocation API natively, so we need to use prefiltering.
+            candidates = self._prefilter_nodes(resource_class,
+                                               conductor_group=conductor_group,
+                                               capabilities=capabilities,
+                                               candidates=candidates,
+                                               predicate=predicate)
+
+        node = self._reserve_node(resource_class, hostname=hostname,
+                                  candidates=candidates, traits=traits,
+                                  capabilities=capabilities)
+        return node
+
+    def _prefilter_nodes(self, resource_class, conductor_group, capabilities,
+                         candidates, predicate):
+        """Build a list of candidate nodes for allocation."""
         if candidates:
             nodes = [self._get_node(node) for node in candidates]
         else:
-            kwargs = {}
-            if conductor_group:
-                kwargs['conductor_group'] = conductor_group
             nodes = list(self.connection.baremetal.nodes(
+                details=True,
                 associated=False,
                 provision_state='available',
                 maintenance=False,
                 resource_class=resource_class,
-                details=True,
-                **kwargs))
+                conductor_group=conductor_group))
             if not nodes:
                 raise exceptions.NodesNotFound(resource_class, conductor_group)
-            # Ensure parallel executions don't try nodes in the same sequence
-            random.shuffle(nodes)
-
-        LOG.debug('Candidate nodes: %s', nodes)
 
         filters = [
             _scheduler.NodeTypeFilter(resource_class, conductor_group),
-            _scheduler.CapabilitiesFilter(capabilities),
-            _scheduler.TraitsFilter(traits),
         ]
+        if capabilities:
+            filters.append(_scheduler.CapabilitiesFilter(capabilities))
         if predicate is not None:
             filters.append(_scheduler.CustomPredicateFilter(predicate))
 
-        instance_info = {}
-        if capabilities:
-            instance_info['capabilities'] = capabilities
-        if traits:
-            instance_info['traits'] = traits
-        reserver = _scheduler.IronicReserver(self.connection,
-                                             instance_info,
-                                             hostname)
+        return _scheduler.run_filters(filters, nodes)
 
-        node = _scheduler.schedule_node(nodes, filters, reserver,
-                                        dry_run=self._dry_run)
+    def _reserve_node(self, resource_class, hostname=None, candidates=None,
+                      traits=None, capabilities=None,
+                      update_instance_info=True):
+        """Create an allocation with given parameters."""
+        if candidates:
+            candidates = [
+                (node.id if not isinstance(node, six.string_types) else node)
+                for node in candidates
+            ]
+
+        LOG.debug('Creating an allocation for resource class %(rsc)s '
+                  'with traits %(traits)s and candidate nodes %(candidates)s',
+                  {'rsc': resource_class, 'traits': traits,
+                   'candidates': candidates})
+        allocation = self.connection.baremetal.create_allocation(
+            name=hostname, candidate_nodes=candidates,
+            resource_class=resource_class, traits=traits)
+
+        node = None
+        try:
+            try:
+                allocation = self.connection.baremetal.wait_for_allocation(
+                    allocation)
+            except os_exc.SDKException as exc:
+                # Re-raise the expected exception class
+                raise exceptions.ReservationFailed(
+                    'Failed to reserve a node: %s' % exc)
+
+            LOG.info('Successful allocation %(alloc)s for host %(host)s',
+                     {'alloc': allocation, 'host': hostname})
+            node = self.connection.baremetal.get_node(allocation.node_id)
+
+            if update_instance_info:
+                node = self._patch_reserved_node(node, allocation, hostname,
+                                                 capabilities)
+        except Exception as exc:
+            exc_info = sys.exc_info()
+
+            try:
+                LOG.error('Processing allocation %(alloc)s for node %(node)s '
+                          'failed: %(exc)s; deleting allocation',
+                          {'alloc': _utils.log_res(allocation),
+                           'node': _utils.log_res(node), 'exc': exc})
+                self.connection.baremetal.delete_allocation(allocation)
+            except Exception:
+                LOG.exception('Failed to delete failed allocation')
+
+            six.reraise(*exc_info)
+
         LOG.debug('Reserved node: %s', node)
         return node
+
+    def _patch_reserved_node(self, node, allocation, hostname, capabilities):
+        """Make required updates on a newly reserved node."""
+        if not hostname:
+            hostname = _utils.default_hostname(node)
+        patch = [
+            {'path': '/instance_info/%s' % _utils.HOSTNAME_FIELD,
+             'op': 'add', 'value': hostname}
+        ]
+
+        if capabilities:
+            patch.append({'path': '/instance_info/capabilities',
+                          'op': 'add', 'value': capabilities})
+
+        LOG.debug('Patching reserved node %(node)s with %(patch)s',
+                  {'node': _utils.log_res(node), 'patch': patch})
+        return self.connection.baremetal.patch_node(node, patch)
 
     def _check_node_for_deploy(self, node):
         """Check that node is ready and reserve it if needed.
@@ -154,12 +221,20 @@ class Provisioner(_utils.GetNodeMixin):
                                          {'node': node, 'exc': exc})
 
         if not node.instance_id:
+            if not node.resource_class:
+                raise exceptions.InvalidNode(
+                    'Cannot create an allocation for node %s that '
+                    'does not have a resource class set'
+                    % _utils.log_res(node))
+
             if not self._dry_run:
                 LOG.debug('Node %s not reserved yet, reserving',
                           _utils.log_res(node))
-                self.connection.baremetal.update_node(
-                    node, instance_id=node.id)
-        elif node.instance_id != node.id:
+                # Not updating instance_info since it will be updated later
+                node = self._reserve_node(node.resource_class,
+                                          candidates=[node.id],
+                                          update_instance_info=False)
+        elif node.instance_id != node.id and not node.allocation_id:
             raise exceptions.InvalidNode('Node %(node)s already reserved '
                                          'by instance %(inst)s outside of '
                                          'metalsmith, cannot deploy on it' %
@@ -197,7 +272,7 @@ class Provisioner(_utils.GetNodeMixin):
     def provision_node(self, node, image, nics=None, root_size_gb=None,
                        swap_size_mb=None, config=None, hostname=None,
                        netboot=False, capabilities=None, traits=None,
-                       wait=None):
+                       wait=None, clean_up_on_failure=True):
         """Provision the node with the given image.
 
         Example::
@@ -331,8 +406,7 @@ class Provisioner(_utils.GetNodeMixin):
         else:
             # Update the node to return it's latest state
             node = self._get_node(node, refresh=True)
-            # We don't create allocations yet, so don't use _get_instance.
-            instance = _instance.Instance(self.connection, node)
+            instance = self._get_instance(node)
 
         return instance
 
@@ -379,14 +453,32 @@ class Provisioner(_utils.GetNodeMixin):
         extra = node.extra.copy()
         for item in (_CREATED_PORTS, _ATTACHED_PORTS):
             extra.pop(item, None)
+
+        kwargs = {}
+        if node.allocation_id and node.provision_state != 'active':
+            # Try to remove allocation (it will fail for active nodes)
+            LOG.debug('Trying to remove allocation %(alloc)s for node '
+                      '%(node)s', {'alloc': node.allocation_id,
+                                   'node': _utils.log_res(node)})
+            try:
+                self.connection.baremetal.delete_allocation(node.allocation_id)
+            except Exception as exc:
+                LOG.debug('Failed to remove allocation %(alloc)s for %(node)s:'
+                          ' %(exc)s',
+                          {'alloc': node.allocaiton_id,
+                           'node': _utils.log_res(node), 'exc': exc})
+        elif not node.allocation_id:
+            # Old-style reservations have to be cleared explicitly
+            kwargs['instance_id'] = None
+
         LOG.debug('Updating node %(node)s with empty instance info (was '
-                  '%(iinfo)s) and extras %(extra)s and releasing the lock',
+                  '%(iinfo)s) and extras %(extra)s',
                   {'node': _utils.log_res(node),
                    'iinfo': node.instance_info,
                    'extra': extra})
         try:
             self.connection.baremetal.update_node(
-                node, instance_info={}, extra=extra, instance_id=None)
+                node, instance_info={}, extra=extra, **kwargs)
         except Exception as exc:
             LOG.debug('Failed to clear node %(node)s extra: %(exc)s',
                       {'node': _utils.log_res(node), 'exc': exc})

@@ -84,6 +84,7 @@ class Base(testtools.TestCase):
                                      autospec=True))
         self.api = mock.Mock(spec=['image', 'network', 'baremetal'])
         self.api.baremetal.update_node.side_effect = lambda n, **kw: n
+        self.api.baremetal.patch_node.side_effect = lambda n, _p: n
         self.api.network.ports.return_value = [
             mock.Mock(spec=['id'], id=i) for i in ('000', '111')
         ]
@@ -113,41 +114,92 @@ class TestReserveNode(Base):
         self.api.baremetal.nodes.return_value = []
 
         self.assertRaises(exceptions.NodesNotFound,
-                          self.pr.reserve_node, self.RSC)
+                          self.pr.reserve_node, self.RSC,
+                          conductor_group='foo')
         self.assertFalse(self.api.baremetal.update_node.called)
 
     def test_simple_ok(self):
-        nodes = [self._node()]
-        self.api.baremetal.nodes.return_value = nodes
+        expected = self._node()
+        self.api.baremetal.get_node.return_value = expected
 
         node = self.pr.reserve_node(self.RSC)
 
-        self.assertIn(node, nodes)
-        self.api.baremetal.update_node.assert_called_once_with(
-            node, instance_id=node.id,
-            instance_info={'metalsmith_hostname': node.id})
+        self.assertIs(expected, node)
+        self.api.baremetal.create_allocation.assert_called_once_with(
+            name=None, candidate_nodes=None,
+            resource_class=self.RSC, traits=None)
+        self.api.baremetal.wait_for_allocation.assert_called_once_with(
+            self.api.baremetal.create_allocation.return_value)
+        self.api.baremetal.get_node.assert_called_once_with(
+            self.api.baremetal.wait_for_allocation.return_value.node_id)
+        self.api.baremetal.patch_node.assert_called_once_with(
+            node, [{'path': '/instance_info/metalsmith_hostname',
+                    'op': 'add', 'value': node.id}])
+
+    def test_allocation_failed(self):
+        self.api.baremetal.wait_for_allocation.side_effect = (
+            os_exc.SDKException('boom'))
+
+        self.assertRaisesRegex(exceptions.ReservationFailed, 'boom',
+                               self.pr.reserve_node, self.RSC)
+
+        self.api.baremetal.create_allocation.assert_called_once_with(
+            name=None, candidate_nodes=None,
+            resource_class=self.RSC, traits=None)
+        self.api.baremetal.delete_allocation.assert_called_once_with(
+            self.api.baremetal.create_allocation.return_value)
+        self.assertFalse(self.api.baremetal.patch_node.called)
+
+    def test_node_update_failed(self):
+        expected = self._node()
+        self.api.baremetal.get_node.return_value = expected
+        self.api.baremetal.patch_node.side_effect = os_exc.SDKException('boom')
+
+        self.assertRaisesRegex(os_exc.SDKException, 'boom',
+                               self.pr.reserve_node, self.RSC)
+
+        self.api.baremetal.create_allocation.assert_called_once_with(
+            name=None, candidate_nodes=None,
+            resource_class=self.RSC, traits=None)
+        self.api.baremetal.delete_allocation.assert_called_once_with(
+            self.api.baremetal.wait_for_allocation.return_value)
+        self.api.baremetal.patch_node.assert_called_once_with(
+            expected, [{'path': '/instance_info/metalsmith_hostname',
+                        'op': 'add', 'value': expected.id}])
 
     def test_with_hostname(self):
-        nodes = [self._node()]
-        self.api.baremetal.nodes.return_value = nodes
+        expected = self._node()
+        self.api.baremetal.get_node.return_value = expected
+        self.api.baremetal.nodes.return_value = [expected, self._node()]
 
         node = self.pr.reserve_node(self.RSC, hostname='example.com')
 
-        self.assertIn(node, nodes)
-        self.api.baremetal.update_node.assert_called_once_with(
-            node, instance_id=node.id,
-            instance_info={'metalsmith_hostname': 'example.com'})
+        self.assertIs(expected, node)
+        self.api.baremetal.create_allocation.assert_called_once_with(
+            name='example.com', candidate_nodes=None,
+            resource_class=self.RSC, traits=None)
+        self.api.baremetal.get_node.assert_called_once_with(
+            self.api.baremetal.wait_for_allocation.return_value.node_id)
+        self.api.baremetal.patch_node.assert_called_once_with(
+            node, [{'path': '/instance_info/metalsmith_hostname',
+                    'op': 'add', 'value': 'example.com'}])
 
     def test_with_name_as_hostname(self):
-        nodes = [self._node(name='example.com')]
-        self.api.baremetal.nodes.return_value = nodes
+        expected = self._node(name='example.com')
+        self.api.baremetal.get_node.return_value = expected
+        self.api.baremetal.nodes.return_value = [expected, self._node()]
 
         node = self.pr.reserve_node(self.RSC)
 
-        self.assertIn(node, nodes)
-        self.api.baremetal.update_node.assert_called_once_with(
-            node, instance_id=node.id,
-            instance_info={'metalsmith_hostname': 'example.com'})
+        self.assertIs(expected, node)
+        self.api.baremetal.create_allocation.assert_called_once_with(
+            name=None, candidate_nodes=None,
+            resource_class=self.RSC, traits=None)
+        self.api.baremetal.get_node.assert_called_once_with(
+            self.api.baremetal.wait_for_allocation.return_value.node_id)
+        self.api.baremetal.patch_node.assert_called_once_with(
+            node, [{'path': '/instance_info/metalsmith_hostname',
+                    'op': 'add', 'value': 'example.com'}])
 
     def test_with_capabilities(self):
         nodes = [
@@ -156,43 +208,53 @@ class TestReserveNode(Base):
         ]
         expected = nodes[1]
         self.api.baremetal.nodes.return_value = nodes
+        self.api.baremetal.get_node.return_value = expected
 
         node = self.pr.reserve_node(self.RSC, capabilities={'answer': '42'})
 
         self.assertIs(node, expected)
-        self.api.baremetal.update_node.assert_called_once_with(
-            node, instance_id=node.id,
-            instance_info={'capabilities': {'answer': '42'},
-                           'metalsmith_hostname': node.id})
+        self.api.baremetal.create_allocation.assert_called_once_with(
+            name=None, candidate_nodes=[expected.id],
+            resource_class=self.RSC, traits=None)
+        self.api.baremetal.get_node.assert_called_once_with(
+            self.api.baremetal.wait_for_allocation.return_value.node_id)
+        self.api.baremetal.patch_node.assert_called_once_with(
+            node, [{'path': '/instance_info/metalsmith_hostname',
+                    'op': 'add', 'value': node.id},
+                   {'path': '/instance_info/capabilities',
+                    'op': 'add', 'value': {'answer': '42'}}])
 
     def test_with_traits(self):
-        nodes = [self._node(properties={'local_gb': 100}, traits=traits)
-                 for traits in [['foo', 'answer:1'], ['answer:42', 'foo'],
-                                ['answer'], None]]
-        expected = nodes[1]
-        self.api.baremetal.nodes.return_value = nodes
+        expected = self._node(properties={'local_gb': 100},
+                              traits=['foo', 'answer:42'])
+        self.api.baremetal.get_node.return_value = expected
 
         node = self.pr.reserve_node(self.RSC, traits=['foo', 'answer:42'])
 
         self.assertIs(node, expected)
-        self.api.baremetal.update_node.assert_called_once_with(
-            node, instance_id=node.id,
-            instance_info={'traits': ['foo', 'answer:42'],
-                           'metalsmith_hostname': node.id})
+        self.api.baremetal.patch_node.assert_called_once_with(
+            node, [{'path': '/instance_info/metalsmith_hostname',
+                    'op': 'add', 'value': node.id}])
 
     def test_custom_predicate(self):
         nodes = [self._node(properties={'local_gb': i})
                  for i in (100, 150, 200)]
         self.api.baremetal.nodes.return_value = nodes[:]
+        self.api.baremetal.get_node.return_value = nodes[1]
 
         node = self.pr.reserve_node(
             self.RSC,
             predicate=lambda node: 100 < node.properties['local_gb'] < 200)
 
         self.assertEqual(node, nodes[1])
-        self.api.baremetal.update_node.assert_called_once_with(
-            node, instance_id=node.id,
-            instance_info={'metalsmith_hostname': node.id})
+        self.api.baremetal.create_allocation.assert_called_once_with(
+            name=None, candidate_nodes=[nodes[1].id],
+            resource_class=self.RSC, traits=None)
+        self.api.baremetal.get_node.assert_called_once_with(
+            self.api.baremetal.wait_for_allocation.return_value.node_id)
+        self.api.baremetal.patch_node.assert_called_once_with(
+            node, [{'path': '/instance_info/metalsmith_hostname',
+                    'op': 'add', 'value': node.id}])
 
     def test_custom_predicate_false(self):
         nodes = [self._node() for _ in range(3)]
@@ -208,25 +270,37 @@ class TestReserveNode(Base):
 
     def test_provided_node(self):
         nodes = [self._node()]
+        self.api.baremetal.get_node.return_value = nodes[0]
 
         node = self.pr.reserve_node(self.RSC, candidates=nodes)
 
         self.assertEqual(node, nodes[0])
         self.assertFalse(self.api.baremetal.nodes.called)
-        self.api.baremetal.update_node.assert_called_once_with(
-            node, instance_id=node.id,
-            instance_info={'metalsmith_hostname': node.id})
+        self.api.baremetal.create_allocation.assert_called_once_with(
+            name=None, candidate_nodes=[nodes[0].id],
+            resource_class=self.RSC, traits=None)
+        self.api.baremetal.get_node.assert_called_once_with(
+            self.api.baremetal.wait_for_allocation.return_value.node_id)
+        self.api.baremetal.patch_node.assert_called_once_with(
+            node, [{'path': '/instance_info/metalsmith_hostname',
+                    'op': 'add', 'value': node.id}])
 
     def test_provided_nodes(self):
-        nodes = [self._node(), self._node()]
+        nodes = [self._node(id=1), self._node(id=2)]
+        self.api.baremetal.get_node.return_value = nodes[0]
 
         node = self.pr.reserve_node(self.RSC, candidates=nodes)
 
         self.assertEqual(node, nodes[0])
         self.assertFalse(self.api.baremetal.nodes.called)
-        self.api.baremetal.update_node.assert_called_once_with(
-            node, instance_id=node.id,
-            instance_info={'metalsmith_hostname': node.id})
+        self.api.baremetal.create_allocation.assert_called_once_with(
+            name=None, candidate_nodes=[1, 2],
+            resource_class=self.RSC, traits=None)
+        self.api.baremetal.get_node.assert_called_once_with(
+            self.api.baremetal.wait_for_allocation.return_value.node_id)
+        self.api.baremetal.patch_node.assert_called_once_with(
+            node, [{'path': '/instance_info/metalsmith_hostname',
+                    'op': 'add', 'value': node.id}])
 
     def test_nodes_filtered(self):
         nodes = [self._node(resource_class='banana'),
@@ -234,16 +308,23 @@ class TestReserveNode(Base):
                  self._node(properties={'local_gb': 100,
                                         'capabilities': 'cat:meow'},
                             resource_class='compute')]
+        self.api.baremetal.get_node.return_value = nodes[2]
 
         node = self.pr.reserve_node('compute', candidates=nodes,
                                     capabilities={'cat': 'meow'})
 
         self.assertEqual(node, nodes[2])
         self.assertFalse(self.api.baremetal.nodes.called)
-        self.api.baremetal.update_node.assert_called_once_with(
-            node, instance_id=node.id,
-            instance_info={'capabilities': {'cat': 'meow'},
-                           'metalsmith_hostname': node.id})
+        self.api.baremetal.create_allocation.assert_called_once_with(
+            name=None, candidate_nodes=[nodes[0].id],
+            resource_class='compute', traits=None)
+        self.api.baremetal.get_node.assert_called_once_with(
+            self.api.baremetal.wait_for_allocation.return_value.node_id)
+        self.api.baremetal.patch_node.assert_called_once_with(
+            node, [{'path': '/instance_info/metalsmith_hostname',
+                    'op': 'add', 'value': node.id},
+                   {'path': '/instance_info/capabilities',
+                    'op': 'add', 'value': {'cat': 'meow'}}])
 
     def test_nodes_filtered_by_conductor_group(self):
         nodes = [self._node(conductor_group='loc1'),
@@ -253,6 +334,7 @@ class TestReserveNode(Base):
                  self._node(properties={'local_gb': 100,
                                         'capabilities': 'cat:meow'},
                             conductor_group='loc1')]
+        self.api.baremetal.get_node.return_value = nodes[2]
 
         node = self.pr.reserve_node(self.RSC,
                                     conductor_group='loc1',
@@ -261,10 +343,16 @@ class TestReserveNode(Base):
 
         self.assertEqual(node, nodes[2])
         self.assertFalse(self.api.baremetal.nodes.called)
-        self.api.baremetal.update_node.assert_called_once_with(
-            node, instance_id=node.id,
-            instance_info={'capabilities': {'cat': 'meow'},
-                           'metalsmith_hostname': node.id})
+        self.api.baremetal.create_allocation.assert_called_once_with(
+            name=None, candidate_nodes=[nodes[2].id],
+            resource_class=self.RSC, traits=None)
+        self.api.baremetal.get_node.assert_called_once_with(
+            self.api.baremetal.wait_for_allocation.return_value.node_id)
+        self.api.baremetal.patch_node.assert_called_once_with(
+            node, [{'path': '/instance_info/metalsmith_hostname',
+                    'op': 'add', 'value': node.id},
+                   {'path': '/instance_info/capabilities',
+                    'op': 'add', 'value': {'cat': 'meow'}}])
 
     def test_provided_nodes_no_match(self):
         nodes = [
@@ -468,18 +556,21 @@ class TestProvisionNode(Base):
 
     def test_unreserved(self):
         self.node.instance_id = None
+        self.api.baremetal.get_node.return_value = self.node
 
         self.pr.provision_node(self.node, 'image', [{'network': 'network'}])
 
+        self.api.baremetal.create_allocation.assert_called_once_with(
+            name=None, candidate_nodes=[self.node.id],
+            resource_class=self.node.resource_class, traits=None)
+        self.api.baremetal.get_node.assert_called_once_with(
+            self.api.baremetal.wait_for_allocation.return_value.node_id)
         self.api.network.create_port.assert_called_once_with(
             network_id=self.api.network.find_network.return_value.id)
         self.api.baremetal.attach_vif_to_node.assert_called_once_with(
             self.node, self.api.network.create_port.return_value.id)
-        self.api.baremetal.update_node.assert_has_calls([
-            mock.call(self.node, instance_id=self.node.id),
-            mock.call(self.node, instance_info=self.instance_info,
-                      extra=self.extra)
-        ])
+        self.api.baremetal.update_node.assert_called_once_with(
+            self.node, instance_info=self.instance_info, extra=self.extra)
         self.api.baremetal.validate_node.assert_called_once_with(self.node)
         self.api.baremetal.set_node_provision_state.assert_called_once_with(
             self.node, 'active', config_drive=mock.ANY)
@@ -956,6 +1047,32 @@ abcd  image
         ]
         self.api.baremetal.detach_vif_from_node.assert_has_calls(
             calls, any_order=True)
+        self.assertFalse(self.api.baremetal.delete_allocation.called)
+
+    def test_deploy_failure_with_allocation(self):
+        self.node.allocation_id = 'id2'
+        self.api.baremetal.set_node_provision_state.side_effect = (
+            RuntimeError('boom'))
+        self.assertRaisesRegex(RuntimeError, 'boom',
+                               self.pr.provision_node, self.node,
+                               'image', [{'network': 'n1'}, {'port': 'p1'}],
+                               wait=3600)
+
+        self.api.baremetal.update_node.assert_any_call(
+            self.node, extra={}, instance_info={})
+        self.assertFalse(
+            self.api.baremetal.wait_for_nodes_provision_state.called)
+        self.api.network.delete_port.assert_called_once_with(
+            self.api.network.create_port.return_value.id,
+            ignore_missing=False)
+        calls = [
+            mock.call(self.node,
+                      self.api.network.create_port.return_value.id),
+            mock.call(self.node, self.api.network.find_port.return_value.id)
+        ]
+        self.api.baremetal.detach_vif_from_node.assert_has_calls(
+            calls, any_order=True)
+        self.api.baremetal.delete_allocation.assert_called_once_with('id2')
 
     def test_port_creation_failure(self):
         self.api.network.create_port.side_effect = RuntimeError('boom')
@@ -1310,8 +1427,86 @@ abcd  and-not-image-again
 
 class TestUnprovisionNode(Base):
 
-    def test_ok(self):
+    def setUp(self):
+        super(TestUnprovisionNode, self).setUp()
         self.node.extra['metalsmith_created_ports'] = ['port1']
+        self.node.allocation_id = '123'
+        self.node.provision_state = 'active'
+
+    def test_ok(self):
+        # Check that unrelated extra fields are not touched.
+        self.node.extra['foo'] = 'bar'
+        result = self.pr.unprovision_node(self.node)
+        self.assertIs(result, self.node)
+
+        self.api.network.delete_port.assert_called_once_with(
+            'port1', ignore_missing=False)
+        self.api.baremetal.detach_vif_from_node.assert_called_once_with(
+            self.node, 'port1')
+        self.api.baremetal.set_node_provision_state.assert_called_once_with(
+            self.node, 'deleted', wait=False)
+        self.assertFalse(
+            self.api.baremetal.wait_for_nodes_provision_state.called)
+        self.api.baremetal.update_node.assert_called_once_with(
+            self.node, instance_info={}, extra={'foo': 'bar'})
+        self.assertFalse(self.api.baremetal.delete_allocation.called)
+        # We cannot delete an allocation for an active node, it will be deleted
+        # automatically.
+        self.assertFalse(self.api.baremetal.delete_allocation.called)
+
+    def test_delete_allocation(self):
+        self.node.provision_state = 'deploy failed'
+        # Check that unrelated extra fields are not touched.
+        self.node.extra['foo'] = 'bar'
+        result = self.pr.unprovision_node(self.node)
+        self.assertIs(result, self.node)
+
+        self.api.network.delete_port.assert_called_once_with(
+            'port1', ignore_missing=False)
+        self.api.baremetal.detach_vif_from_node.assert_called_once_with(
+            self.node, 'port1')
+        self.api.baremetal.set_node_provision_state.assert_called_once_with(
+            self.node, 'deleted', wait=False)
+        self.assertFalse(
+            self.api.baremetal.wait_for_nodes_provision_state.called)
+        self.api.baremetal.update_node.assert_called_once_with(
+            self.node, instance_info={}, extra={'foo': 'bar'})
+        self.api.baremetal.delete_allocation.assert_called_once_with('123')
+
+    def test_with_attached(self):
+        self.node.extra['metalsmith_attached_ports'] = ['port1', 'port2']
+        self.pr.unprovision_node(self.node)
+
+        self.api.network.delete_port.assert_called_once_with(
+            'port1', ignore_missing=False)
+        calls = [mock.call(self.node, 'port1'), mock.call(self.node, 'port2')]
+        self.api.baremetal.detach_vif_from_node.assert_has_calls(
+            calls, any_order=True)
+        self.api.baremetal.set_node_provision_state.assert_called_once_with(
+            self.node, 'deleted', wait=False)
+        self.assertFalse(
+            self.api.baremetal.wait_for_nodes_provision_state.called)
+        self.api.baremetal.update_node.assert_called_once_with(
+            self.node, instance_info={}, extra={})
+
+    def test_with_wait(self):
+        result = self.pr.unprovision_node(self.node, wait=3600)
+        self.assertIs(result, self.node)
+
+        self.api.network.delete_port.assert_called_once_with(
+            'port1', ignore_missing=False)
+        self.api.baremetal.detach_vif_from_node.assert_called_once_with(
+            self.node, 'port1')
+        self.api.baremetal.set_node_provision_state.assert_called_once_with(
+            self.node, 'deleted', wait=False)
+        self.api.baremetal.update_node.assert_called_once_with(
+            self.node, instance_info={}, extra={})
+        wait_mock = self.api.baremetal.wait_for_nodes_provision_state
+        wait_mock.assert_called_once_with([self.node], 'available',
+                                          timeout=3600)
+
+    def test_without_allocation(self):
+        self.node.allocation_id = None
         # Check that unrelated extra fields are not touched.
         self.node.extra['foo'] = 'bar'
         result = self.pr.unprovision_node(self.node)
@@ -1328,44 +1523,10 @@ class TestUnprovisionNode(Base):
         self.api.baremetal.update_node.assert_called_once_with(
             self.node, instance_info={}, extra={'foo': 'bar'},
             instance_id=None)
-
-    def test_with_attached(self):
-        self.node.extra['metalsmith_created_ports'] = ['port1']
-        self.node.extra['metalsmith_attached_ports'] = ['port1', 'port2']
-        self.pr.unprovision_node(self.node)
-
-        self.api.network.delete_port.assert_called_once_with(
-            'port1', ignore_missing=False)
-        calls = [mock.call(self.node, 'port1'), mock.call(self.node, 'port2')]
-        self.api.baremetal.detach_vif_from_node.assert_has_calls(
-            calls, any_order=True)
-        self.api.baremetal.set_node_provision_state.assert_called_once_with(
-            self.node, 'deleted', wait=False)
-        self.assertFalse(
-            self.api.baremetal.wait_for_nodes_provision_state.called)
-        self.api.baremetal.update_node.assert_called_once_with(
-            self.node, instance_info={}, extra={}, instance_id=None)
-
-    def test_with_wait(self):
-        self.node.extra['metalsmith_created_ports'] = ['port1']
-        result = self.pr.unprovision_node(self.node, wait=3600)
-        self.assertIs(result, self.node)
-
-        self.api.network.delete_port.assert_called_once_with(
-            'port1', ignore_missing=False)
-        self.api.baremetal.detach_vif_from_node.assert_called_once_with(
-            self.node, 'port1')
-        self.api.baremetal.set_node_provision_state.assert_called_once_with(
-            self.node, 'deleted', wait=False)
-        self.api.baremetal.update_node.assert_called_once_with(
-            self.node, instance_info={}, extra={}, instance_id=None)
-        wait_mock = self.api.baremetal.wait_for_nodes_provision_state
-        wait_mock.assert_called_once_with([self.node], 'available',
-                                          timeout=3600)
+        self.assertFalse(self.api.baremetal.delete_allocation.called)
 
     def test_dry_run(self):
         self.pr._dry_run = True
-        self.node.extra['metalsmith_created_ports'] = ['port1']
         self.pr.unprovision_node(self.node)
 
         self.assertFalse(self.api.baremetal.set_node_provision_state.called)

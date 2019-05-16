@@ -14,28 +14,17 @@
 # limitations under the License.
 
 import mock
-from openstack import exceptions as sdk_exc
 import testtools
 
 from metalsmith import _scheduler
 from metalsmith import exceptions
 
 
-class TestScheduleNode(testtools.TestCase):
+class TestRunFilters(testtools.TestCase):
 
     def setUp(self):
-        super(TestScheduleNode, self).setUp()
+        super(TestRunFilters, self).setUp()
         self.nodes = [mock.Mock(spec=['id', 'name']) for _ in range(2)]
-        self.reserver = self._reserver(lambda x: x)
-
-    def _reserver(self, side_effect):
-        reserver = mock.Mock(spec=_scheduler.Reserver)
-        reserver.side_effect = side_effect
-        if isinstance(side_effect, Exception):
-            reserver.fail.side_effect = exceptions.ReservationFailed('fail')
-        else:
-            reserver.fail.side_effect = AssertionError('called fail')
-        return reserver
 
     def _filter(self, side_effect, fail=AssertionError('called fail')):
         fltr = mock.Mock(spec=_scheduler.Filter)
@@ -44,39 +33,13 @@ class TestScheduleNode(testtools.TestCase):
         return fltr
 
     def test_no_filters(self):
-        result = _scheduler.schedule_node(self.nodes, [], self.reserver)
-        self.assertIs(result, self.nodes[0])
-        self.reserver.assert_called_once_with(self.nodes[0])
-        self.assertFalse(self.reserver.fail.called)
-
-    def test_dry_run(self):
-        result = _scheduler.schedule_node(self.nodes, [], self.reserver,
-                                          dry_run=True)
-        self.assertIs(result, self.nodes[0])
-        self.assertFalse(self.reserver.called)
-        self.assertFalse(self.reserver.fail.called)
-
-    def test_reservation_one_failed(self):
-        reserver = self._reserver([sdk_exc.SDKException("boom"),
-                                   self.nodes[1]])
-        result = _scheduler.schedule_node(self.nodes, [], reserver)
-        self.assertIs(result, self.nodes[1])
-        self.assertEqual([mock.call(n) for n in self.nodes],
-                         reserver.call_args_list)
-
-    def test_reservation_all_failed(self):
-        reserver = self._reserver(sdk_exc.SDKException("boom"))
-        self.assertRaisesRegex(exceptions.ReservationFailed, 'fail',
-                               _scheduler.schedule_node,
-                               self.nodes, [], reserver)
-        self.assertEqual([mock.call(n) for n in self.nodes],
-                         reserver.call_args_list)
+        result = _scheduler.run_filters([], self.nodes)
+        self.assertEqual(result, self.nodes)
 
     def test_all_filters_pass(self):
         filters = [self._filter([True, True]) for _ in range(3)]
-        result = _scheduler.schedule_node(self.nodes, filters, self.reserver)
-        self.assertIs(result, self.nodes[0])
-        self.reserver.assert_called_once_with(self.nodes[0])
+        result = _scheduler.run_filters(filters, self.nodes)
+        self.assertEqual(result, self.nodes)
         for fltr in filters:
             self.assertEqual([mock.call(n) for n in self.nodes],
                              fltr.call_args_list)
@@ -86,9 +49,8 @@ class TestScheduleNode(testtools.TestCase):
         filters = [self._filter([True, True]),
                    self._filter([False, True]),
                    self._filter([True])]
-        result = _scheduler.schedule_node(self.nodes, filters, self.reserver)
-        self.assertIs(result, self.nodes[1])
-        self.reserver.assert_called_once_with(self.nodes[1])
+        result = _scheduler.run_filters(filters, self.nodes)
+        self.assertEqual(result, self.nodes[1:2])
         for fltr in filters:
             self.assertFalse(fltr.fail.called)
         for fltr in filters[:2]:
@@ -101,9 +63,8 @@ class TestScheduleNode(testtools.TestCase):
                    self._filter([False, True]),
                    self._filter([False], fail=RuntimeError('failed'))]
         self.assertRaisesRegex(RuntimeError, 'failed',
-                               _scheduler.schedule_node,
-                               self.nodes, filters, self.reserver)
-        self.assertFalse(self.reserver.called)
+                               _scheduler.run_filters,
+                               filters, self.nodes)
         for fltr in filters[:2]:
             self.assertEqual([mock.call(n) for n in self.nodes],
                              fltr.call_args_list)
@@ -164,122 +125,3 @@ class TestCapabilitiesFilter(testtools.TestCase):
                                'No available nodes found with capabilities '
                                'profile=compute, existing capabilities: none',
                                fltr.fail)
-
-
-class TestTraitsFilter(testtools.TestCase):
-
-    def test_fail_no_traits(self):
-        fltr = _scheduler.TraitsFilter(['tr1', 'tr2'])
-        self.assertRaisesRegex(exceptions.TraitsNotFound,
-                               'No available nodes found with traits '
-                               'tr1, tr2, existing traits: none',
-                               fltr.fail)
-
-    def test_no_traits(self):
-        fltr = _scheduler.TraitsFilter([])
-        node = mock.Mock(spec=['name', 'id'])
-        self.assertTrue(fltr(node))
-
-    def test_ok(self):
-        fltr = _scheduler.TraitsFilter(['tr1', 'tr2'])
-        node = mock.Mock(spec=['name', 'id', 'traits'],
-                         traits=['tr3', 'tr2', 'tr1'])
-        self.assertTrue(fltr(node))
-
-    def test_missing_one(self):
-        fltr = _scheduler.TraitsFilter(['tr1', 'tr2'])
-        node = mock.Mock(spec=['name', 'id', 'traits'],
-                         traits=['tr3', 'tr1'])
-        self.assertFalse(fltr(node))
-
-    def test_missing_all(self):
-        fltr = _scheduler.TraitsFilter(['tr1', 'tr2'])
-        node = mock.Mock(spec=['name', 'id', 'traits'], traits=None)
-        self.assertFalse(fltr(node))
-
-
-class TestIronicReserver(testtools.TestCase):
-
-    def setUp(self):
-        super(TestIronicReserver, self).setUp()
-        self.node = mock.Mock(spec=['id', 'name', 'instance_info'],
-                              instance_info={})
-        self.node.id = 'abcd'
-        self.node.name = None
-        self.api = mock.Mock(spec=['baremetal'])
-        self.api.baremetal = mock.Mock(spec=['update_node', 'validate_node'])
-        self.api.baremetal.update_node.side_effect = (
-            lambda node, **kw: node)
-        self.reserver = _scheduler.IronicReserver(self.api)
-
-    def test_fail(self):
-        self.assertRaisesRegex(exceptions.NoNodesReserved,
-                               'All the candidate nodes are already reserved',
-                               self.reserver.fail)
-
-    def test_ok(self):
-        self.assertEqual(self.node, self.reserver(self.node))
-        self.api.baremetal.validate_node.assert_called_with(
-            self.node, required=('power', 'management'))
-        self.api.baremetal.update_node.assert_called_once_with(
-            self.node, instance_id=self.node.id,
-            instance_info={'metalsmith_hostname': 'abcd'})
-
-    def test_name_as_hostname(self):
-        self.node.name = 'example.com'
-        self.assertEqual(self.node, self.reserver(self.node))
-        self.api.baremetal.validate_node.assert_called_with(
-            self.node, required=('power', 'management'))
-        self.api.baremetal.update_node.assert_called_once_with(
-            self.node, instance_id=self.node.id,
-            instance_info={'metalsmith_hostname': 'example.com'})
-
-    def test_name_cannot_be_hostname(self):
-        # This should not ever happen, but checking just in case
-        self.node.name = 'banana!'
-        self.assertEqual(self.node, self.reserver(self.node))
-        self.api.baremetal.validate_node.assert_called_with(
-            self.node, required=('power', 'management'))
-        self.api.baremetal.update_node.assert_called_once_with(
-            self.node, instance_id=self.node.id,
-            instance_info={'metalsmith_hostname': 'abcd'})
-
-    def test_with_instance_info(self):
-        self.reserver = _scheduler.IronicReserver(self.api,
-                                                  {'cat': 'meow'})
-        self.assertEqual(self.node, self.reserver(self.node))
-        self.api.baremetal.validate_node.assert_called_with(
-            self.node, required=('power', 'management'))
-        self.api.baremetal.update_node.assert_called_once_with(
-            self.node, instance_id=self.node.id,
-            instance_info={'cat': 'meow', 'metalsmith_hostname': 'abcd'})
-
-    def test_with_hostname(self):
-        self.reserver = _scheduler.IronicReserver(self.api,
-                                                  hostname='example.com')
-        self.assertEqual(self.node, self.reserver(self.node))
-        self.api.baremetal.validate_node.assert_called_with(
-            self.node, required=('power', 'management'))
-        self.api.baremetal.update_node.assert_called_once_with(
-            self.node, instance_id=self.node.id,
-            instance_info={'metalsmith_hostname': 'example.com'})
-
-    def test_reservation_failed(self):
-        self.api.baremetal.update_node.side_effect = (
-            sdk_exc.SDKException('conflict'))
-        self.assertRaisesRegex(sdk_exc.SDKException, 'conflict',
-                               self.reserver, self.node)
-        self.api.baremetal.validate_node.assert_called_with(
-            self.node, required=('power', 'management'))
-        self.api.baremetal.update_node.assert_called_once_with(
-            self.node, instance_id=self.node.id,
-            instance_info={'metalsmith_hostname': 'abcd'})
-
-    def test_validation_failed(self):
-        self.api.baremetal.validate_node.side_effect = (
-            sdk_exc.SDKException('fail'))
-        self.assertRaisesRegex(exceptions.ValidationFailed, 'fail',
-                               self.reserver, self.node)
-        self.api.baremetal.validate_node.assert_called_with(
-            self.node, required=('power', 'management'))
-        self.assertFalse(self.api.baremetal.update_node.called)
