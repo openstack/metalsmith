@@ -56,7 +56,8 @@ class TestDeploy(testtools.TestCase):
                                   swap_size_mb=None,
                                   config=mock.ANY,
                                   netboot=False,
-                                  wait=1800)
+                                  wait=1800,
+                                  clean_up_on_failure=True)
         provision_defaults.update(provision_args)
 
         _cmd.main(args)
@@ -501,6 +502,11 @@ class TestDeploy(testtools.TestCase):
         args = ['deploy', '--network', 'mynet', '--image', 'myimg',
                 '--swap-size', '4096', '--resource-class', 'compute']
         self._check(mock_pr, args, {}, {'swap_size_mb': 4096})
+
+    def test_no_clean_up(self, mock_pr):
+        args = ['deploy', '--network', 'mynet', '--image', 'myimg',
+                '--resource-class', 'compute', '--no-clean-up']
+        self._check(mock_pr, args, {}, {'clean_up_on_failure': False})
 
 
 @mock.patch.object(_provisioner, 'Provisioner', autospec=True)

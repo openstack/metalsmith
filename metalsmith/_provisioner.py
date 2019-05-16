@@ -319,6 +319,9 @@ class Provisioner(_utils.GetNodeMixin):
             :meth:`reserve_node` for that.
         :param wait: How many seconds to wait for the deployment to finish,
             None to return immediately.
+        :param clean_up_on_failure: If True, then on failure the node is
+            cleared of instance information, VIFs are detached, created ports
+            and allocations are deleted.
         :return: :py:class:`metalsmith.Instance` object with the current
             status of provisioning. If ``wait`` is not ``None``, provisioning
             is already finished.
@@ -386,12 +389,13 @@ class Provisioner(_utils.GetNodeMixin):
         except Exception:
             exc_info = sys.exc_info()
 
-            try:
-                LOG.error('Deploy attempt failed on node %s, cleaning up',
-                          _utils.log_res(node))
-                self._clean_up(node, nics=nics)
-            except Exception:
-                LOG.exception('Clean up failed')
+            if clean_up_on_failure:
+                try:
+                    LOG.error('Deploy attempt failed on node %s, cleaning up',
+                              _utils.log_res(node))
+                    self._clean_up(node, nics=nics)
+                except Exception:
+                    LOG.exception('Clean up failed')
 
             six.reraise(*exc_info)
 

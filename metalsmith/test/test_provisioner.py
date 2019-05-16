@@ -1074,6 +1074,22 @@ abcd  image
             calls, any_order=True)
         self.api.baremetal.delete_allocation.assert_called_once_with('id2')
 
+    def test_deploy_failure_no_cleanup(self):
+        self.node.allocation_id = 'id2'
+        self.api.baremetal.set_node_provision_state.side_effect = (
+            RuntimeError('boom'))
+        self.assertRaisesRegex(RuntimeError, 'boom',
+                               self.pr.provision_node, self.node,
+                               'image', [{'network': 'n1'}, {'port': 'p1'}],
+                               wait=3600, clean_up_on_failure=False)
+
+        self.assertEqual(1, self.api.baremetal.update_node.call_count)
+        self.assertFalse(
+            self.api.baremetal.wait_for_nodes_provision_state.called)
+        self.assertFalse(self.api.network.delete_port.called)
+        self.assertFalse(self.api.baremetal.detach_vif_from_node.called)
+        self.assertFalse(self.api.baremetal.delete_allocation.called)
+
     def test_port_creation_failure(self):
         self.api.network.create_port.side_effect = RuntimeError('boom')
         self.assertRaisesRegex(RuntimeError, 'boom',

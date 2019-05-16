@@ -80,7 +80,8 @@ def _do_deploy(api, args, formatter):
                                   swap_size_mb=args.swap_size,
                                   config=config,
                                   netboot=args.netboot,
-                                  wait=wait)
+                                  wait=wait,
+                                  clean_up_on_failure=not args.no_clean_up)
     formatter.deploy(instance)
 
 
@@ -174,6 +175,8 @@ def _parse_args(args, config):
     deploy.add_argument('--user-name', help='Name of the admin user to create')
     deploy.add_argument('--passwordless-sudo', action='store_true',
                         help='allow password-less sudo for the user')
+    deploy.add_argument('--no-clean-up', help='Prevent clean up on failure',
+                        action='store_true')
 
     undeploy = subparsers.add_parser('undeploy')
     undeploy.set_defaults(func=_do_undeploy)

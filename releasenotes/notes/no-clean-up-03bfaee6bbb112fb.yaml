@@ -1,0 +1,5 @@
+---
+features:
+  - |
+    Allows disabling clean up on failure via the new ``clean_up_on_failure``
+    argument and ``--no-clean-up`` flag.
