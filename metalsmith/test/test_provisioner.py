@@ -29,7 +29,8 @@ from metalsmith import sources
 
 NODE_FIELDS = ['name', 'id', 'instance_info', 'instance_id', 'is_maintenance',
                'maintenance_reason', 'properties', 'provision_state', 'extra',
-               'last_error', 'traits', 'resource_class', 'conductor_group']
+               'last_error', 'traits', 'resource_class', 'conductor_group',
+               'allocation_id']
 
 
 class TestInit(testtools.TestCase):
@@ -66,7 +67,8 @@ class Base(testtools.TestCase):
                               id='000', instance_id=None,
                               properties={'local_gb': 100},
                               instance_info={},
-                              is_maintenance=False, extra={})
+                              is_maintenance=False, extra={},
+                              allocation_id=None)
         self.node.name = 'control-0'
 
     def _reset_api_mock(self):
@@ -1386,6 +1388,19 @@ class TestShowInstance(Base):
         self.assertIs(inst.node, self.node)
         self.assertIs(inst.uuid, self.node.id)
 
+    def test_show_instance_with_allocation(self):
+        self.node.allocation_id = 'id2'
+        self.mock_get_node.side_effect = lambda n, *a, **kw: self.node
+        inst = self.pr.show_instance('id1')
+        self.mock_get_node.assert_called_once_with(self.pr, 'id1',
+                                                   accept_hostname=True)
+        self.api.baremetal.get_allocation.assert_called_once_with('id2')
+        self.assertIsInstance(inst, _instance.Instance)
+        self.assertIs(inst.allocation,
+                      self.api.baremetal.get_allocation.return_value)
+        self.assertIs(inst.node, self.node)
+        self.assertIs(inst.uuid, self.node.id)
+
     def test_show_instances(self):
         self.mock_get_node.side_effect = [self.node, self.node]
         result = self.pr.show_instances(['1', '2'])
@@ -1415,10 +1430,11 @@ class TestListInstances(Base):
         super(TestListInstances, self).setUp()
         self.nodes = [
             mock.Mock(spec=NODE_FIELDS, provision_state=state,
-                      instance_id='1234')
+                      instance_id='1234', allocation_id=None)
             for state in ('active', 'active', 'deploying', 'wait call-back',
                           'deploy failed', 'available', 'available', 'enroll')
         ]
+        self.nodes[0].allocation_id = 'id2'
         self.nodes[6].instance_id = None
         self.api.baremetal.nodes.return_value = self.nodes
 
@@ -1426,5 +1442,8 @@ class TestListInstances(Base):
         instances = self.pr.list_instances()
         self.assertTrue(isinstance(i, _instance.Instance) for i in instances)
         self.assertEqual(self.nodes[:6], [i.node for i in instances])
+        self.assertEqual([self.api.baremetal.get_allocation.return_value]
+                         + [None] * 5,
+                         [i.allocation for i in instances])
         self.api.baremetal.nodes.assert_called_once_with(associated=True,
                                                          details=True)

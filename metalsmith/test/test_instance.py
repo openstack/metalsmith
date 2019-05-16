@@ -129,7 +129,28 @@ class TestInstanceStates(test_provisioner.Base):
         mock_ips.return_value = {'private': ['1.2.3.4']}
 
         to_dict = self.instance.to_dict()
-        self.assertEqual({'hostname': 'host',
+        self.assertEqual({'allocation': None,
+                          'hostname': 'host',
+                          'ip_addresses': {'private': ['1.2.3.4']},
+                          'node': {'node': 'dict'},
+                          'state': 'deploying',
+                          'uuid': self.node.id},
+                         to_dict)
+        # States are converted to strings
+        self.assertIsInstance(to_dict['state'], six.string_types)
+
+    @mock.patch.object(_instance.Instance, 'ip_addresses', autospec=True)
+    def test_to_dict_with_allocation(self, mock_ips):
+        self.node.provision_state = 'wait call-back'
+        self.node.to_dict.return_value = {'node': 'dict'}
+        self.node.instance_info = {'metalsmith_hostname': 'host'}
+        mock_ips.return_value = {'private': ['1.2.3.4']}
+        self.instance._allocation = mock.Mock()
+        self.instance._allocation.to_dict.return_value = {'alloc': 'dict'}
+
+        to_dict = self.instance.to_dict()
+        self.assertEqual({'allocation': {'alloc': 'dict'},
+                          'hostname': 'host',
                           'ip_addresses': {'private': ['1.2.3.4']},
                           'node': {'node': 'dict'},
                           'state': 'deploying',

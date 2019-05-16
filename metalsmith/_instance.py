@@ -86,10 +86,16 @@ _DEPLOYED_STATES = frozenset([InstanceState.ACTIVE, InstanceState.MAINTENANCE])
 class Instance(object):
     """Instance status in metalsmith."""
 
-    def __init__(self, connection, node):
+    def __init__(self, connection, node, allocation=None):
         self._connection = connection
         self._uuid = node.id
         self._node = node
+        self._allocation = allocation
+
+    @property
+    def allocation(self):
+        """Allocation object associated with the node (if any)."""
+        return self._allocation
 
     @property
     def hostname(self):
@@ -163,6 +169,8 @@ class Instance(object):
     def to_dict(self):
         """Convert instance to a dict."""
         return {
+            'allocation': (self._allocation.to_dict()
+                           if self._allocation is not None else None),
             'hostname': self.hostname,
             'ip_addresses': self.ip_addresses(),
             'node': self._node.to_dict(),

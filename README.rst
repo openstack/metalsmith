@@ -25,6 +25,9 @@ Installation
 
     pip install --user metalsmith
 
+.. note::
+    The current versions of *metalsmith* require Bare Metal API from the Stein
+    release or newer. Use the 0.11 release series for older versions.
 
 Contributing
 ------------

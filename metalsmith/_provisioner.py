@@ -332,6 +332,7 @@ class Provisioner(_utils.GetNodeMixin):
         else:
             # Update the node to return it's latest state
             node = self._get_node(node, refresh=True)
+            # We don't create allocations yet, so don't use _get_instance.
             instance = _instance.Instance(self.connection, node)
 
         return instance
@@ -358,7 +359,9 @@ class Provisioner(_utils.GetNodeMixin):
         nodes = [self._get_node(n, accept_hostname=True) for n in nodes]
         nodes = self.connection.baremetal.wait_for_nodes_provision_state(
             nodes, 'active', timeout=timeout)
-        return [_instance.Instance(self.connection, node) for node in nodes]
+        # Using _get_instance in case the deployment started by something
+        # external that uses allocations.
+        return [self._get_instance(node) for node in nodes]
 
     def _clean_instance_info(self, instance_info):
         return {key: value
@@ -426,6 +429,16 @@ class Provisioner(_utils.GetNodeMixin):
         """
         return self.show_instances([instance_id])[0]
 
+    def _get_instance(self, ident):
+        node = self._get_node(ident, accept_hostname=True)
+        if node.allocation_id:
+            allocation = self.connection.baremetal.get_allocation(
+                node.allocation_id)
+        else:
+            allocation = None
+        return _instance.Instance(self.connection, node,
+                                  allocation=allocation)
+
     def show_instances(self, instances):
         """Show information about instance.
 
@@ -439,12 +452,7 @@ class Provisioner(_utils.GetNodeMixin):
             if one of the instances are not valid instances.
         """
         with self._cache_node_list_for_lookup():
-            result = [
-                _instance.Instance(
-                    self.connection,
-                    self._get_node(inst, accept_hostname=True))
-                for inst in instances
-            ]
+            result = [self._get_instance(inst) for inst in instances]
         # NOTE(dtantsur): do not accept node names as valid instances if they
         # are not deployed or being deployed.
         missing = [inst for (res, inst) in zip(result, instances)
@@ -461,8 +469,6 @@ class Provisioner(_utils.GetNodeMixin):
         :return: list of :py:class:`metalsmith.Instance` objects.
         """
         nodes = self.connection.baremetal.nodes(associated=True, details=True)
-        instances = [i for i in
-                     (_instance.Instance(self.connection, node)
-                      for node in nodes)
+        instances = [i for i in map(self._get_instance, nodes)
                      if i.state != _instance.InstanceState.UNKNOWN]
         return instances
