@@ -1,0 +1,8 @@
+---
+upgrade:
+  - |
+    The deprecated ``delay`` argument to the ``wait_for_provisioning`` call
+    has been removed.
+  - |
+    Instance states (members of the ``InstanceState`` enumeration) can no
+    longer be compared to strings. This was deprecated in the Stein release.

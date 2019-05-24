@@ -15,7 +15,6 @@
 
 import logging
 import sys
-import warnings
 
 from openstack import connection
 from openstack import exceptions as os_exc
@@ -414,7 +413,7 @@ class Provisioner(_utils.GetNodeMixin):
 
         return instance
 
-    def wait_for_provisioning(self, nodes, timeout=None, delay=None):
+    def wait_for_provisioning(self, nodes, timeout=None):
         """Wait for nodes to be provisioned.
 
         Loops until all nodes finish provisioning.
@@ -424,15 +423,11 @@ class Provisioner(_utils.GetNodeMixin):
         :param timeout: How much time (in seconds) to wait for all nodes
             to finish provisioning. If ``None`` (the default), wait forever
             (more precisely, until the operation times out on server side).
-        :param delay: DEPRECATED, do not use.
         :return: List of updated :py:class:`metalsmith.Instance` objects if
             all succeeded.
         :raises: :py:class:`metalsmith.exceptions.DeploymentFailure`
             if the deployment failed or timed out for any nodes.
         """
-        if delay is not None:
-            warnings.warn("The delay argument to wait_for_provisioning is "
-                          "deprecated and has not effect", DeprecationWarning)
         nodes = [self._get_node(n, accept_hostname=True) for n in nodes]
         nodes = self.connection.baremetal.wait_for_nodes_provision_state(
             nodes, 'active', timeout=timeout)

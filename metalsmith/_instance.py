@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import enum
-import warnings
 
 from metalsmith import _utils
 
@@ -60,23 +59,6 @@ class InstanceState(enum.Enum):
     def is_healthy(self):
         """Whether the state is considered healthy."""
         return self in _HEALTHY_STATES
-
-    # TODO(dtantsur): remove before 1.0
-
-    def __eq__(self, other):
-        if isinstance(other, str):
-            warnings.warn("Comparing states with strings is deprecated, "
-                          "use InstanceState instead", DeprecationWarning)
-            return self.value == other
-        else:
-            return super(InstanceState, self).__eq__(other)
-
-    def __ne__(self, other):
-        eq = self.__eq__(other)
-        return NotImplemented if eq is NotImplemented else not eq
-
-    def __hash__(self):
-        return hash(self.value)
 
 
 _HEALTHY_STATES = frozenset([InstanceState.ACTIVE, InstanceState.DEPLOYING])

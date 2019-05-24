@@ -158,8 +158,3 @@ class TestInstanceStates(test_provisioner.Base):
                          to_dict)
         # States are converted to strings
         self.assertIsInstance(to_dict['state'], six.string_types)
-
-    def test_deprecated_comparisons(self):
-        for item in _instance.InstanceState:
-            self.assertEqual(item, item.value)
-            self.assertFalse(item != item.value)  # noqa
