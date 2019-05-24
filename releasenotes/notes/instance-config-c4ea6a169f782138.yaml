@@ -1,0 +1,14 @@
+---
+features:
+  - |
+    It is now possible to provide custom ``user_data`` into instance
+    configuration.
+upgrade:
+  - |
+    The ``InstanceConfig`` class has been split into ``GenericConfig`` and
+    ``CloudInitConfig`` for clarity on which features come from what.
+deprecations:
+  - |
+    The ``metalsmith.InstanceConfig`` class is deprecated, use
+    ``GenericConfig`` or ``CloudInitConfig`` from the new module
+    ``metalsmith.instance_config``.

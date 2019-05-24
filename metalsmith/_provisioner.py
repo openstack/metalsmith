@@ -21,12 +21,12 @@ from openstack import connection
 from openstack import exceptions as os_exc
 import six
 
-from metalsmith import _config
 from metalsmith import _instance
 from metalsmith import _nics
 from metalsmith import _scheduler
 from metalsmith import _utils
 from metalsmith import exceptions
+from metalsmith import instance_config
 from metalsmith import sources
 
 
@@ -304,8 +304,8 @@ class Provisioner(_utils.GetNodeMixin):
             the value of the local_gb property is used.
         :param swap_size_mb: The size of the swap partition. It's an error
             to specify it for a whole disk image.
-        :param config: :py:class:`metalsmith.InstanceConfig` object with
-            the configuration to pass to the instance.
+        :param config: configuration to pass to the instance, one of
+            objects from :py:mod:`metalsmith.instance_config`.
         :param hostname: Hostname to assign to the instance. If provided,
             overrides the ``hostname`` passed to ``reserve_node``.
         :param netboot: Whether to use networking boot for final instances.
@@ -328,7 +328,7 @@ class Provisioner(_utils.GetNodeMixin):
         :raises: :py:class:`metalsmith.exceptions.Error`
         """
         if config is None:
-            config = _config.InstanceConfig()
+            config = instance_config.GenericConfig()
         if isinstance(image, six.string_types):
             image = sources.GlanceImage(image)
 

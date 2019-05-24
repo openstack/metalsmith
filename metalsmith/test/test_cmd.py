@@ -22,9 +22,9 @@ import six
 import testtools
 
 from metalsmith import _cmd
-from metalsmith import _config
 from metalsmith import _instance
 from metalsmith import _provisioner
+from metalsmith import instance_config
 from metalsmith import sources
 
 
@@ -301,7 +301,8 @@ class TestDeploy(testtools.TestCase):
         config = mock_pr.return_value.provision_node.call_args[1]['config']
         self.assertEqual(['foo'], config.ssh_keys)
 
-    @mock.patch.object(_config.InstanceConfig, 'add_user', autospec=True)
+    @mock.patch.object(instance_config.CloudInitConfig, 'add_user',
+                       autospec=True)
     def test_args_user_name(self, mock_add_user, mock_pr):
         args = ['deploy', '--network', 'mynet', '--image', 'myimg',
                 '--user-name', 'banana', '--resource-class', 'compute']
@@ -311,7 +312,8 @@ class TestDeploy(testtools.TestCase):
         self.assertEqual([], config.ssh_keys)
         mock_add_user.assert_called_once_with(config, 'banana', sudo=False)
 
-    @mock.patch.object(_config.InstanceConfig, 'add_user', autospec=True)
+    @mock.patch.object(instance_config.CloudInitConfig, 'add_user',
+                       autospec=True)
     def test_args_user_name_with_sudo(self, mock_add_user, mock_pr):
         args = ['deploy', '--network', 'mynet', '--image', 'myimg',
                 '--user-name', 'banana', '--resource-class', 'compute',
