@@ -13,9 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from metalsmith._config import InstanceConfig
 from metalsmith._instance import Instance
 from metalsmith._instance import InstanceState
 from metalsmith._provisioner import Provisioner
+from metalsmith.instance_config import InstanceConfig
 
 __all__ = ['Instance', 'InstanceConfig', 'InstanceState', 'Provisioner']

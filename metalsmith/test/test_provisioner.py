@@ -19,11 +19,11 @@ from openstack import exceptions as os_exc
 import requests
 import testtools
 
-from metalsmith import _config
 from metalsmith import _instance
 from metalsmith import _provisioner
 from metalsmith import _utils
 from metalsmith import exceptions
+from metalsmith import instance_config
 from metalsmith import sources
 
 
@@ -395,7 +395,7 @@ class TestProvisionNode(Base):
             ],
         }
         self.configdrive_mock = self.useFixture(
-            fixtures.MockPatchObject(_config.InstanceConfig,
+            fixtures.MockPatchObject(instance_config.GenericConfig,
                                      'generate', autospec=True)
         ).mock
 
@@ -459,7 +459,7 @@ class TestProvisionNode(Base):
         self.assertFalse(self.api.network.delete_port.called)
 
     def test_with_config(self):
-        config = mock.Mock(spec=_config.InstanceConfig)
+        config = mock.Mock(spec=instance_config.GenericConfig)
         inst = self.pr.provision_node(self.node, 'image',
                                       [{'network': 'network'}],
                                       config=config)

@@ -19,10 +19,10 @@ import sys
 
 from openstack import config as os_config
 
-from metalsmith import _config
 from metalsmith import _format
 from metalsmith import _provisioner
 from metalsmith import _utils
+from metalsmith import instance_config
 from metalsmith import sources
 
 
@@ -63,9 +63,11 @@ def _do_deploy(api, args, formatter):
                             ramdisk=args.image_ramdisk,
                             checksum=args.image_checksum)
 
-    config = _config.InstanceConfig(ssh_keys=ssh_keys)
     if args.user_name:
+        config = instance_config.CloudInitConfig(ssh_keys=ssh_keys)
         config.add_user(args.user_name, sudo=args.passwordless_sudo)
+    else:
+        config = instance_config.GenericConfig(ssh_keys=ssh_keys)
 
     node = api.reserve_node(resource_class=args.resource_class,
                             conductor_group=args.conductor_group,

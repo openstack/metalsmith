@@ -19,17 +19,21 @@ import mock
 from openstack.baremetal import configdrive
 import testtools
 
-from metalsmith import _config
+import metalsmith
 from metalsmith import _utils
+from metalsmith import instance_config
 
 
-class TestInstanceConfig(testtools.TestCase):
+class TestGenericConfig(testtools.TestCase):
+    CLASS = instance_config.GenericConfig
+
     def setUp(self):
-        super(TestInstanceConfig, self).setUp()
+        super(TestGenericConfig, self).setUp()
         self.node = mock.Mock(id='1234')
         self.node.name = 'node name'
 
-    def _check(self, config, expected_metadata, expected_userdata=None):
+    def _check(self, config, expected_metadata, expected_userdata=None,
+               cloud_init=True):
         expected_m = {'public_keys': {},
                       'uuid': '1234',
                       'name': 'node name',
@@ -51,38 +55,47 @@ class TestInstanceConfig(testtools.TestCase):
         if expected_userdata:
             self.assertIsNotNone(user_data)
             user_data = user_data.decode('utf-8')
-            header, user_data = user_data.split('\n', 1)
-            self.assertEqual('#cloud-config', header)
+            if cloud_init:
+                header, user_data = user_data.split('\n', 1)
+                self.assertEqual('#cloud-config', header)
             user_data = json.loads(user_data)
         self.assertEqual(expected_userdata, user_data)
 
     def test_default(self):
-        config = _config.InstanceConfig()
+        config = self.CLASS()
         self._check(config, {})
 
     def test_ssh_keys(self):
-        config = _config.InstanceConfig(ssh_keys=['abc', 'def'])
+        config = self.CLASS(ssh_keys=['abc', 'def'])
         self._check(config, {'public_keys': {'0': 'abc', '1': 'def'}})
 
     def test_ssh_keys_as_dict(self):
-        config = _config.InstanceConfig(ssh_keys={'default': 'abc'})
+        config = self.CLASS(ssh_keys={'default': 'abc'})
         self._check(config, {'public_keys': {'default': 'abc'}})
 
+    def test_custom_user_data(self):
+        config = self.CLASS(user_data='{"answer": 42}')
+        self._check(config, {}, {"answer": 42}, cloud_init=False)
+
+
+class TestCloudInitConfig(TestGenericConfig):
+    CLASS = instance_config.CloudInitConfig
+
     def test_add_user(self):
-        config = _config.InstanceConfig()
+        config = self.CLASS()
         config.add_user('admin')
         self._check(config, {},
                     {'users': [{'name': 'admin',
                                 'groups': ['wheel']}]})
 
     def test_add_user_admin(self):
-        config = _config.InstanceConfig()
+        config = self.CLASS()
         config.add_user('admin', admin=False)
         self._check(config, {},
                     {'users': [{'name': 'admin'}]})
 
     def test_add_user_sudo(self):
-        config = _config.InstanceConfig()
+        config = self.CLASS()
         config.add_user('admin', sudo=True)
         self._check(config, {},
                     {'users': [{'name': 'admin',
@@ -90,7 +103,7 @@ class TestInstanceConfig(testtools.TestCase):
                                 'sudo': 'ALL=(ALL) NOPASSWD:ALL'}]})
 
     def test_add_user_passwd(self):
-        config = _config.InstanceConfig()
+        config = self.CLASS()
         config.add_user('admin', password_hash='123')
         self._check(config, {},
                     {'users': [{'name': 'admin',
@@ -98,9 +111,33 @@ class TestInstanceConfig(testtools.TestCase):
                                 'passwd': '123'}]})
 
     def test_add_user_with_keys(self):
-        config = _config.InstanceConfig(ssh_keys=['abc', 'def'])
+        config = self.CLASS(ssh_keys=['abc', 'def'])
         config.add_user('admin')
         self._check(config, {'public_keys': {'0': 'abc', '1': 'def'}},
                     {'users': [{'name': 'admin',
                                 'groups': ['wheel'],
                                 'ssh_authorized_keys': ['abc', 'def']}]})
+
+    # Overriding tests since CloudInitConfig does not support plain strings
+    # for user_data, only dictionaries.
+    def test_custom_user_data(self):
+        config = self.CLASS(user_data={'answer': 42})
+        self._check(config, {}, {'answer': 42})
+
+    def test_custom_user_data_with_users(self):
+        config = self.CLASS(user_data={'answer': 42})
+        config.add_user('admin')
+        self._check(config, {},
+                    {'users': [{'name': 'admin',
+                                'groups': ['wheel']}],
+                     'answer': 42})
+
+    def test_user_data_not_dict(self):
+        self.assertRaises(TypeError, self.CLASS, user_data="string")
+        config = self.CLASS()
+        config.user_data = "string"
+        self.assertRaises(TypeError, config.populate_user_data)
+
+
+class TestDeprecatedInstanceConfig(TestCloudInitConfig):
+    CLASS = metalsmith.InstanceConfig
