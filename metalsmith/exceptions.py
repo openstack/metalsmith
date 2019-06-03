@@ -68,10 +68,7 @@ class CapabilitiesNotFound(ReservationFailed):
 
 
 class TraitsNotFound(ReservationFailed):
-    """Requested traits do not match any nodes.
-
-    :ivar requested_traits: Requested node's traits.
-    """
+    """DEPRECATED."""
 
     def __init__(self, message, traits):
         self.requested_traits = traits
@@ -83,10 +80,7 @@ class ValidationFailed(ReservationFailed):
 
 
 class NoNodesReserved(ReservationFailed):
-    """All nodes are already reserved or failed validation.
-
-    :ivar nodes: List of nodes that were checked.
-    """
+    """DEPRECATED."""
 
     def __init__(self, nodes):
         self.nodes = nodes
@@ -112,10 +106,7 @@ class InvalidNode(Error):
 
 
 class DeploymentFailure(Error):
-    """One or more nodes have failed the deployment.
-
-    :ivar nodes: List of failed nodes.
-    """
+    """DEPRECATED."""
 
     def __init__(self, message, nodes):
         self.nodes = nodes

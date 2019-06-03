@@ -1,0 +1,11 @@
+---
+upgrade:
+  - |
+    An allocation name is now used for hostname instead of a custom ``extra``
+    field. Previously deployed instances will no longer be recognized, use
+    the allocation backfilling to make them recognized again.
+deprecations:
+  - |
+    The exception classes ``DeploymentFailure``, ``TraitsNotFound`` and
+    ``NoNodesReserved`` are deprecated and no longer used after transitioning
+    to the allocation API.

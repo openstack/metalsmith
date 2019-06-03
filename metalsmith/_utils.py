@@ -13,10 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import contextlib
 import re
 
-from openstack import exceptions as sdk_exc
 import six
 
 from metalsmith import exceptions
@@ -90,6 +88,15 @@ def is_hostname_safe(hostname):
     return _HOSTNAME_RE.match(hostname) is not None
 
 
+def check_hostname(hostname):
+    """Check the provided host name.
+
+    :raises: ValueError on inappropriate value of ``hostname``
+    """
+    if hostname is not None and not is_hostname_safe(hostname):
+        raise ValueError("%s cannot be used as a hostname" % hostname)
+
+
 def parse_checksums(checksums):
     """Parse standard checksums file."""
     result = {}
@@ -103,15 +110,6 @@ def parse_checksums(checksums):
     return result
 
 
-# NOTE(dtantsur): make this private since it will no longer be possible with
-# transition to allocation API.
-class DuplicateHostname(sdk_exc.SDKException, exceptions.Error):
-    pass
-
-
-HOSTNAME_FIELD = 'metalsmith_hostname'
-
-
 def default_hostname(node):
     if node.name and is_hostname_safe(node.name):
         return node.name
@@ -119,60 +117,8 @@ def default_hostname(node):
         return node.id
 
 
-class GetNodeMixin(object):
-    """A helper mixin for getting nodes with hostnames."""
-
-    _node_list = None
-
-    def _available_nodes(self):
-        return self.connection.baremetal.nodes(details=True,
-                                               associated=False,
-                                               provision_state='available',
-                                               is_maintenance=False)
-
-    def _nodes_for_lookup(self):
-        return self.connection.baremetal.nodes(
-            fields=['uuid', 'name', 'instance_info'])
-
-    def _find_node_by_hostname(self, hostname):
-        """A helper to find a node by metalsmith hostname."""
-        nodes = self._node_list or self._nodes_for_lookup()
-        existing = [n for n in nodes
-                    if n.instance_info.get(HOSTNAME_FIELD) == hostname]
-        if len(existing) > 1:
-            raise DuplicateHostname(
-                "More than one node found with hostname %(host)s: %(nodes)s" %
-                {'host': hostname,
-                 'nodes': ', '.join(log_res(n) for n in existing)})
-        elif not existing:
-            return None
-        else:
-            # Fetch the complete node information before returning
-            return self.connection.baremetal.get_node(existing[0].id)
-
-    def _get_node(self, node, refresh=False, accept_hostname=False):
-        """A helper to find and return a node."""
-        if isinstance(node, six.string_types):
-            if accept_hostname and is_hostname_safe(node):
-                by_hostname = self._find_node_by_hostname(node)
-                if by_hostname is not None:
-                    return by_hostname
-
-            return self.connection.baremetal.get_node(node)
-        elif hasattr(node, 'node'):
-            # Instance object
-            node = node.node
-        else:
-            node = node
-
-        if refresh:
-            return self.connection.baremetal.get_node(node.id)
-        else:
-            return node
-
-    @contextlib.contextmanager
-    def _cache_node_list_for_lookup(self):
-        if self._node_list is None:
-            self._node_list = list(self._nodes_for_lookup())
-        yield self._node_list
-        self._node_list = None
+def hostname_for(node, allocation=None):
+    if allocation is not None and allocation.name:
+        return allocation.name
+    else:
+        return default_hostname(node)

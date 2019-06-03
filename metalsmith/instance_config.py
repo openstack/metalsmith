@@ -44,10 +44,11 @@ class GenericConfig(object):
         self.ssh_keys = ssh_keys or []
         self.user_data = user_data
 
-    def generate(self, node):
+    def generate(self, node, hostname=None):
         """Generate the config drive information.
 
         :param node: `Node` object.
+        :param hostname: Desired hostname (defaults to node's name or ID).
         :return: configdrive contents as a dictionary with keys:
 
             ``meta_data``
@@ -55,7 +56,8 @@ class GenericConfig(object):
             ``user_data``
                 user data as a string
         """
-        hostname = node.instance_info.get(_utils.HOSTNAME_FIELD)
+        if not hostname:
+            hostname = _utils.default_hostname(node)
 
         # NOTE(dtantsur): CirrOS does not understand lists
         if isinstance(self.ssh_keys, list):
@@ -85,19 +87,20 @@ class GenericConfig(object):
         """
         return self.user_data
 
-    def build_configdrive(self, node):
+    def build_configdrive(self, node, hostname=None):
         """Make the config drive ISO.
 
         Deprecated, use :py:meth:`generate` with openstacksdk's
         ``openstack.baremetal.configdrive.build`` instead.
 
         :param node: `Node` object.
+        :param hostname: Desired hostname (defaults to node's name or ID).
         :return: configdrive contents as a base64-encoded string.
         """
         warnings.warn("build_configdrive is deprecated, use generate with "
                       "openstacksdk's openstack.baremetal.configdrive.build "
                       "instead", DeprecationWarning)
-        cd = self.generate(node)
+        cd = self.generate(node, hostname)
         metadata = cd.pop('meta_data')
         user_data = cd.pop('user_data')
         if user_data:

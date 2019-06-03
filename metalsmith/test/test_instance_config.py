@@ -20,7 +20,6 @@ from openstack.baremetal import configdrive
 import testtools
 
 import metalsmith
-from metalsmith import _utils
 from metalsmith import instance_config
 
 
@@ -33,21 +32,19 @@ class TestGenericConfig(testtools.TestCase):
         self.node.name = 'node name'
 
     def _check(self, config, expected_metadata, expected_userdata=None,
-               cloud_init=True):
+               cloud_init=True, hostname=None):
         expected_m = {'public_keys': {},
-                      'uuid': '1234',
-                      'name': 'node name',
-                      'hostname': 'example.com',
+                      'uuid': self.node.id,
+                      'name': self.node.name,
+                      'hostname': self.node.id,
                       'launch_index': 0,
                       'availability_zone': '',
                       'files': [],
                       'meta': {}}
         expected_m.update(expected_metadata)
-        self.node.instance_info = {_utils.HOSTNAME_FIELD:
-                                   expected_m.get('hostname')}
 
         with mock.patch.object(configdrive, 'build', autospec=True) as mb:
-            result = config.build_configdrive(self.node)
+            result = config.build_configdrive(self.node, hostname)
             mb.assert_called_once_with(expected_m, mock.ANY)
             self.assertIs(result, mb.return_value)
             user_data = mb.call_args[1].get('user_data')
@@ -64,6 +61,16 @@ class TestGenericConfig(testtools.TestCase):
     def test_default(self):
         config = self.CLASS()
         self._check(config, {})
+
+    def test_name_as_hostname(self):
+        self.node.name = 'example.com'
+        config = self.CLASS()
+        self._check(config, {'hostname': 'example.com'})
+
+    def test_explicit_hostname(self):
+        config = self.CLASS()
+        self._check(config, {'hostname': 'example.com'},
+                    hostname='example.com')
 
     def test_ssh_keys(self):
         config = self.CLASS(ssh_keys=['abc', 'def'])

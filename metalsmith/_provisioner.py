@@ -33,11 +33,10 @@ LOG = logging.getLogger(__name__)
 
 _CREATED_PORTS = 'metalsmith_created_ports'
 _ATTACHED_PORTS = 'metalsmith_attached_ports'
-_PRESERVE_INSTANCE_INFO_KEYS = {'capabilities', 'traits',
-                                _utils.HOSTNAME_FIELD}
+_PRESERVE_INSTANCE_INFO_KEYS = {'capabilities', 'traits'}
 
 
-class Provisioner(_utils.GetNodeMixin):
+class Provisioner(object):
     """API to deploy/undeploy nodes with OpenStack.
 
     :param session: `Session` object (from ``keystoneauth``) to use when
@@ -94,7 +93,7 @@ class Provisioner(_utils.GetNodeMixin):
         :raises: :py:class:`metalsmith.exceptions.ReservationFailed`
         """
         capabilities = capabilities or {}
-        self._check_hostname(hostname)
+        _utils.check_hostname(hostname)
 
         if candidates or capabilities or conductor_group or predicate:
             # Predicates, capabilities and conductor groups are not supported
@@ -107,7 +106,7 @@ class Provisioner(_utils.GetNodeMixin):
 
         node = self._reserve_node(resource_class, hostname=hostname,
                                   candidates=candidates, traits=traits,
-                                  capabilities=capabilities)
+                                  capabilities=capabilities)[0]
         return node
 
     def _prefilter_nodes(self, resource_class, conductor_group, capabilities,
@@ -186,26 +185,20 @@ class Provisioner(_utils.GetNodeMixin):
             six.reraise(*exc_info)
 
         LOG.debug('Reserved node: %s', node)
-        return node
+        return node, allocation
 
     def _patch_reserved_node(self, node, allocation, hostname, capabilities):
         """Make required updates on a newly reserved node."""
-        if not hostname:
-            hostname = _utils.default_hostname(node)
-        patch = [
-            {'path': '/instance_info/%s' % _utils.HOSTNAME_FIELD,
-             'op': 'add', 'value': hostname}
-        ]
-
         if capabilities:
-            patch.append({'path': '/instance_info/capabilities',
-                          'op': 'add', 'value': capabilities})
+            patch = [{'path': '/instance_info/capabilities',
+                      'op': 'add', 'value': capabilities}]
+            LOG.debug('Patching reserved node %(node)s with %(patch)s',
+                      {'node': _utils.log_res(node), 'patch': patch})
+            return self.connection.baremetal.patch_node(node, patch)
+        else:
+            return node
 
-        LOG.debug('Patching reserved node %(node)s with %(patch)s',
-                  {'node': _utils.log_res(node), 'patch': patch})
-        return self.connection.baremetal.patch_node(node, patch)
-
-    def _check_node_for_deploy(self, node):
+    def _check_node_for_deploy(self, node, hostname):
         """Check that node is ready and reserve it if needed.
 
         These checks are done outside of the try..except block in
@@ -213,33 +206,6 @@ class Provisioner(_utils.GetNodeMixin):
         Particularly, we don't want to try clean up nodes that were not
         reserved by us or are in maintenance mode.
         """
-        try:
-            node = self._get_node(node)
-        except Exception as exc:
-            raise exceptions.InvalidNode('Cannot find node %(node)s: %(exc)s' %
-                                         {'node': node, 'exc': exc})
-
-        if not node.instance_id:
-            if not node.resource_class:
-                raise exceptions.InvalidNode(
-                    'Cannot create an allocation for node %s that '
-                    'does not have a resource class set'
-                    % _utils.log_res(node))
-
-            if not self._dry_run:
-                LOG.debug('Node %s not reserved yet, reserving',
-                          _utils.log_res(node))
-                # Not updating instance_info since it will be updated later
-                node = self._reserve_node(node.resource_class,
-                                          candidates=[node.id],
-                                          update_instance_info=False)
-        elif node.instance_id != node.id and not node.allocation_id:
-            raise exceptions.InvalidNode('Node %(node)s already reserved '
-                                         'by instance %(inst)s outside of '
-                                         'metalsmith, cannot deploy on it' %
-                                         {'node': _utils.log_res(node),
-                                          'inst': node.instance_id})
-
         if node.is_maintenance:
             raise exceptions.InvalidNode('Refusing to deploy on node %(node)s '
                                          'which is in maintenance mode due to '
@@ -247,26 +213,98 @@ class Provisioner(_utils.GetNodeMixin):
                                          {'node': _utils.log_res(node),
                                           'reason': node.maintenance_reason})
 
-        return node
+        allocation = None
 
-    def _check_hostname(self, hostname, node=None):
-        """Check the provided host name.
+        # Make sure the hostname does not correspond to an existing allocation
+        # for another node.
+        if hostname is not None:
+            allocation = self._check_allocation_for_hostname(node, hostname)
 
-        :raises: ValueError on inappropriate value of ``hostname``
-        """
-        if hostname is None:
+        if node.allocation_id:
+            if allocation is None:
+                # Previously created allocation, verify/update it
+                allocation = self._check_and_update_allocation_for_node(
+                    node, hostname)
+        elif node.instance_id:
+            # Old-style reservations with instance_uuid==node.uuid
+            if node.instance_id != node.id:
+                raise exceptions.InvalidNode(
+                    'Node %(node)s already reserved by instance %(inst)s '
+                    'outside of metalsmith, cannot deploy on it' %
+                    {'node': _utils.log_res(node), 'inst': node.instance_id})
+            elif hostname:
+                # We have no way to update hostname without allocations
+                raise exceptions.InvalidNode(
+                    'Node %s does not use allocations, cannot update '
+                    'hostname for it' % _utils.log_res(node))
+        else:
+            # Node is not reserved at all - reserve it
+            if not node.resource_class:
+                raise exceptions.InvalidNode(
+                    'Cannot create an allocation for node %s that '
+                    'does not have a resource class set'
+                    % _utils.log_res(node))
+
+            if not self._dry_run:
+                if not hostname:
+                    hostname = _utils.default_hostname(node)
+                LOG.debug('Node %(node)s is not reserved yet, reserving for '
+                          'hostname %(host)s',
+                          {'node': _utils.log_res(node),
+                           'host': hostname})
+                # Not updating instance_info since it will be updated later
+                node, allocation = self._reserve_node(
+                    node.resource_class,
+                    hostname=hostname,
+                    candidates=[node.id],
+                    update_instance_info=False)
+
+        return node, allocation
+
+    def _check_allocation_for_hostname(self, node, hostname):
+        try:
+            allocation = self.connection.baremetal.get_allocation(
+                hostname)
+        except os_exc.ResourceNotFound:
             return
 
-        if not _utils.is_hostname_safe(hostname):
-            raise ValueError("%s cannot be used as a hostname" % hostname)
-
-        existing = self._find_node_by_hostname(hostname)
-        if (existing is not None and node is not None
-                and existing.id != node.id):
-            raise ValueError("The following node already uses hostname "
-                             "%(host)s: %(node)s" %
+        if allocation.node_id and allocation.node_id != node.id:
+            raise ValueError("The following node already uses "
+                             "hostname %(host)s: %(node)s" %
                              {'host': hostname,
-                              'node': _utils.log_res(existing)})
+                              'node': allocation.node_id})
+        else:
+            return allocation
+
+    def _check_and_update_allocation_for_node(self, node, hostname=None):
+        # No allocation with given hostname, find one corresponding to the
+        # node.
+        allocation = self.connection.baremetal.get_allocation(
+            node.allocation_id)
+        if allocation.name and hostname and allocation.name != hostname:
+            # Prevent updating of an existing hostname, since we don't
+            # understand the intention
+            raise exceptions.InvalidNode(
+                "Allocation %(alloc)s associated with node %(node)s "
+                "uses hostname %(old)s that does not match the expected "
+                "hostname %(new)s" %
+                {'alloc': _utils.log_res(allocation),
+                 'node': _utils.log_res(node),
+                 'old': allocation.name,
+                 'new': hostname})
+        elif not allocation.name and not self._dry_run:
+            if not hostname:
+                hostname = _utils.default_hostname(node)
+            # Set the hostname that was not set in reserve_node.
+            LOG.debug('Updating allocation %(alloc)s for node '
+                      '%(node)s with hostname %(host)s',
+                      {'alloc': _utils.log_res(allocation),
+                       'node': _utils.log_res(node),
+                       'host': hostname})
+            allocation = self.connection.baremetal.update_allocation(
+                allocation, name=hostname)
+
+        return allocation
 
     def provision_node(self, node, image, nics=None, root_size_gb=None,
                        swap_size_mb=None, config=None, hostname=None,
@@ -331,11 +369,18 @@ class Provisioner(_utils.GetNodeMixin):
         if isinstance(image, six.string_types):
             image = sources.GlanceImage(image)
 
-        node = self._check_node_for_deploy(node)
+        _utils.check_hostname(hostname)
+
+        try:
+            node = self._get_node(node)
+        except Exception as exc:
+            raise exceptions.InvalidNode('Cannot find node %(node)s: %(exc)s' %
+                                         {'node': node, 'exc': exc})
+
+        node, allocation = self._check_node_for_deploy(node, hostname)
         nics = _nics.NICs(self.connection, node, nics)
 
         try:
-            self._check_hostname(hostname, node=node)
             root_size_gb = _utils.get_root_disk(root_size_gb, node)
 
             image._validate(self.connection)
@@ -357,11 +402,6 @@ class Provisioner(_utils.GetNodeMixin):
             instance_info = self._clean_instance_info(node.instance_info)
             instance_info['root_gb'] = root_size_gb
             instance_info['capabilities'] = capabilities
-            if hostname:
-                instance_info[_utils.HOSTNAME_FIELD] = hostname
-            elif not instance_info.get(_utils.HOSTNAME_FIELD):
-                instance_info[_utils.HOSTNAME_FIELD] = _utils.default_hostname(
-                    node)
 
             extra = node.extra.copy()
             extra[_CREATED_PORTS] = nics.created_ports
@@ -382,9 +422,10 @@ class Provisioner(_utils.GetNodeMixin):
 
             LOG.debug('Generating a configdrive for node %s',
                       _utils.log_res(node))
+            cd = config.generate(node, _utils.hostname_for(node, allocation))
             LOG.debug('Starting provisioning of node %s', _utils.log_res(node))
             self.connection.baremetal.set_node_provision_state(
-                node, 'active', config_drive=config.generate(node))
+                node, 'active', config_drive=cd)
         except Exception:
             exc_info = sys.exc_info()
 
@@ -408,8 +449,8 @@ class Provisioner(_utils.GetNodeMixin):
             LOG.info('Deploy succeeded on node %s', _utils.log_res(node))
         else:
             # Update the node to return it's latest state
-            node = self._get_node(node, refresh=True)
-            instance = self._get_instance(node)
+            node = self.connection.baremetal.get_node(node.id)
+            instance = _instance.Instance(self.connection, node, allocation)
 
         return instance
 
@@ -425,10 +466,12 @@ class Provisioner(_utils.GetNodeMixin):
             (more precisely, until the operation times out on server side).
         :return: List of updated :py:class:`metalsmith.Instance` objects if
             all succeeded.
-        :raises: :py:class:`metalsmith.exceptions.DeploymentFailure`
-            if the deployment failed or timed out for any nodes.
+        :raises: `openstack.exceptions.ResourceTimeout` if deployment times
+            out for any node.
+        :raises: `openstack.exceptions.SDKException` if deployment fails
+            for any node.
         """
-        nodes = [self._get_node(n, accept_hostname=True) for n in nodes]
+        nodes = [self._find_node_and_allocation(n)[0] for n in nodes]
         nodes = self.connection.baremetal.wait_for_nodes_provision_state(
             nodes, 'active', timeout=timeout)
         # Using _get_instance in case the deployment started by something
@@ -464,7 +507,7 @@ class Provisioner(_utils.GetNodeMixin):
             except Exception as exc:
                 LOG.debug('Failed to remove allocation %(alloc)s for %(node)s:'
                           ' %(exc)s',
-                          {'alloc': node.allocaiton_id,
+                          {'alloc': node.allocation_id,
                            'node': _utils.log_res(node), 'exc': exc})
         elif not node.allocation_id:
             # Old-style reservations have to be cleared explicitly
@@ -491,7 +534,7 @@ class Provisioner(_utils.GetNodeMixin):
             None to return immediately.
         :return: the latest `Node` object.
         """
-        node = self._get_node(node, accept_hostname=True)
+        node = self._find_node_and_allocation(node)[0]
         if self._dry_run:
             LOG.warning("Dry run, not unprovisioning")
             return
@@ -519,16 +562,6 @@ class Provisioner(_utils.GetNodeMixin):
         """
         return self.show_instances([instance_id])[0]
 
-    def _get_instance(self, ident):
-        node = self._get_node(ident, accept_hostname=True)
-        if node.allocation_id:
-            allocation = self.connection.baremetal.get_allocation(
-                node.allocation_id)
-        else:
-            allocation = None
-        return _instance.Instance(self.connection, node,
-                                  allocation=allocation)
-
     def show_instances(self, instances):
         """Show information about instance.
 
@@ -541,8 +574,7 @@ class Provisioner(_utils.GetNodeMixin):
         :raises: :py:class:`metalsmith.exceptions.InvalidInstance`
             if one of the instances are not valid instances.
         """
-        with self._cache_node_list_for_lookup():
-            result = [self._get_instance(inst) for inst in instances]
+        result = [self._get_instance(inst) for inst in instances]
         # NOTE(dtantsur): do not accept node names as valid instances if they
         # are not deployed or being deployed.
         missing = [inst for (res, inst) in zip(result, instances)
@@ -562,3 +594,45 @@ class Provisioner(_utils.GetNodeMixin):
         instances = [i for i in map(self._get_instance, nodes)
                      if i.state != _instance.InstanceState.UNKNOWN]
         return instances
+
+    def _get_node(self, node, refresh=False):
+        """A helper to find and return a node."""
+        if isinstance(node, six.string_types):
+            return self.connection.baremetal.get_node(node)
+        elif hasattr(node, 'node'):
+            # Instance object
+            node = node.node
+        else:
+            node = node
+
+        if refresh:
+            return self.connection.baremetal.get_node(node.id)
+        else:
+            return node
+
+    def _find_node_and_allocation(self, node, refresh=False):
+        if (not isinstance(node, six.string_types)
+                or not _utils.is_hostname_safe(node)):
+            return self._get_node(node, refresh=refresh), None
+
+        try:
+            allocation = self.connection.baremetal.get_allocation(node)
+        except os_exc.ResourceNotFound:
+            return self._get_node(node, refresh=refresh), None
+        else:
+            if allocation.node_id:
+                return (self.connection.baremetal.get_node(allocation.node_id),
+                        allocation)
+            else:
+                raise exceptions.InvalidInstance(
+                    'Allocation %s exists but is not associated '
+                    'with a node' % node)
+
+    def _get_instance(self, ident):
+        node, allocation = self._find_node_and_allocation(ident)
+        if allocation is None and node.allocation_id:
+            allocation = self.connection.baremetal.get_allocation(
+                node.allocation_id)
+
+        return _instance.Instance(self.connection, node,
+                                  allocation=allocation)

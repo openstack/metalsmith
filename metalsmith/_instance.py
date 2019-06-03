@@ -82,7 +82,7 @@ class Instance(object):
     @property
     def hostname(self):
         """Node's hostname."""
-        return self._node.instance_info.get(_utils.HOSTNAME_FIELD)
+        return _utils.hostname_for(self._node, self._allocation)
 
     def ip_addresses(self):
         """Returns IP addresses for this instance.

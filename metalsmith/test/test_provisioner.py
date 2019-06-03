@@ -21,7 +21,6 @@ import testtools
 
 from metalsmith import _instance
 from metalsmith import _provisioner
-from metalsmith import _utils
 from metalsmith import exceptions
 from metalsmith import instance_config
 from metalsmith import sources
@@ -76,12 +75,8 @@ class Base(testtools.TestCase):
             fixtures.MockPatchObject(_provisioner.Provisioner, '_get_node',
                                      autospec=True)).mock
         self.mock_get_node.side_effect = (
-            lambda self, n, refresh=False, accept_hostname=False: n
+            lambda self, n, refresh=False: n
         )
-        self.useFixture(
-            fixtures.MockPatchObject(_provisioner.Provisioner,
-                                     '_cache_node_list_for_lookup',
-                                     autospec=True))
         self.api = mock.Mock(spec=['image', 'network', 'baremetal'])
         self.api.baremetal.update_node.side_effect = lambda n, **kw: n
         self.api.baremetal.patch_node.side_effect = lambda n, _p: n
@@ -93,6 +88,71 @@ class Base(testtools.TestCase):
         self.api.baremetal.wait_for_nodes_provision_state.side_effect = (
             lambda nodes, *args, **kwargs: nodes)
         self.pr.connection = self.api
+
+
+class TestGetFindNode(testtools.TestCase):
+
+    def setUp(self):
+        super(TestGetFindNode, self).setUp()
+        self.pr = _provisioner.Provisioner(mock.Mock())
+        self.api = mock.Mock(spec=['baremetal'])
+        self.pr.connection = self.api
+
+    def test__get_node_with_node(self):
+        node = mock.Mock(spec=['id', 'name'])
+        result = self.pr._get_node(node)
+        self.assertIs(result, node)
+        self.assertFalse(self.api.baremetal.get_node.called)
+
+    def test__get_node_with_node_refresh(self):
+        node = mock.Mock(spec=['id', 'name'])
+        result = self.pr._get_node(node, refresh=True)
+        self.assertIs(result, self.api.baremetal.get_node.return_value)
+        self.api.baremetal.get_node.assert_called_once_with(node.id)
+
+    def test__get_node_with_instance(self):
+        node = mock.Mock(spec=['uuid', 'node'])
+        result = self.pr._get_node(node)
+        self.assertIs(result, node.node)
+        self.assertFalse(self.api.baremetal.get_node.called)
+
+    def test__get_node_with_instance_refresh(self):
+        node = mock.Mock(spec=['uuid', 'node'])
+        result = self.pr._get_node(node, refresh=True)
+        self.assertIs(result, self.api.baremetal.get_node.return_value)
+        self.api.baremetal.get_node.assert_called_once_with(node.node.id)
+
+    def test__get_node_with_string(self):
+        result = self.pr._get_node('node')
+        self.assertIs(result, self.api.baremetal.get_node.return_value)
+        self.api.baremetal.get_node.assert_called_once_with('node')
+
+    def test__find_node_and_allocation_by_node(self):
+        node = mock.Mock(spec=['id', 'name'])
+        result, alloc = self.pr._find_node_and_allocation(node)
+        self.assertIs(result, node)
+        self.assertIsNone(alloc)
+
+    def test__find_node_and_allocation_by_hostname(self):
+        result, alloc = self.pr._find_node_and_allocation('node')
+        self.assertIs(result, self.api.baremetal.get_node.return_value)
+        self.assertIs(alloc, self.api.baremetal.get_allocation.return_value)
+        self.api.baremetal.get_node.assert_called_once_with(
+            self.api.baremetal.get_allocation.return_value.node_id)
+
+    def test__find_node_and_allocation_by_node_id(self):
+        self.api.baremetal.get_allocation.side_effect = (
+            os_exc.ResourceNotFound())
+        result, alloc = self.pr._find_node_and_allocation('node')
+        self.assertIs(result, self.api.baremetal.get_node.return_value)
+        self.assertIsNone(alloc)
+        self.api.baremetal.get_node.assert_called_once_with('node')
+
+    def test__find_node_and_allocation_by_hostname_bad_allocation(self):
+        self.api.baremetal.get_allocation.return_value.node_id = None
+        self.assertRaises(exceptions.InvalidInstance,
+                          self.pr._find_node_and_allocation, 'node')
+        self.assertFalse(self.api.baremetal.get_node.called)
 
 
 class TestReserveNode(Base):
@@ -132,9 +192,8 @@ class TestReserveNode(Base):
             self.api.baremetal.create_allocation.return_value)
         self.api.baremetal.get_node.assert_called_once_with(
             self.api.baremetal.wait_for_allocation.return_value.node_id)
-        self.api.baremetal.patch_node.assert_called_once_with(
-            node, [{'path': '/instance_info/metalsmith_hostname',
-                    'op': 'add', 'value': node.id}])
+        self.assertFalse(self.api.baremetal.patch_node.called)
+        self.assertFalse(self.api.baremetal.delete_allocation.called)
 
     def test_allocation_failed(self):
         self.api.baremetal.wait_for_allocation.side_effect = (
@@ -150,22 +209,22 @@ class TestReserveNode(Base):
             self.api.baremetal.create_allocation.return_value)
         self.assertFalse(self.api.baremetal.patch_node.called)
 
-    def test_node_update_failed(self):
-        expected = self._node()
-        self.api.baremetal.get_node.return_value = expected
-        self.api.baremetal.patch_node.side_effect = os_exc.SDKException('boom')
+    @mock.patch.object(_provisioner.LOG, 'exception', autospec=True)
+    def test_allocation_failed_clean_up_failed(self, mock_log):
+        self.api.baremetal.delete_allocation.side_effect = RuntimeError()
+        self.api.baremetal.wait_for_allocation.side_effect = (
+            os_exc.SDKException('boom'))
 
-        self.assertRaisesRegex(os_exc.SDKException, 'boom',
+        self.assertRaisesRegex(exceptions.ReservationFailed, 'boom',
                                self.pr.reserve_node, self.RSC)
 
         self.api.baremetal.create_allocation.assert_called_once_with(
             name=None, candidate_nodes=None,
             resource_class=self.RSC, traits=None)
         self.api.baremetal.delete_allocation.assert_called_once_with(
-            self.api.baremetal.wait_for_allocation.return_value)
-        self.api.baremetal.patch_node.assert_called_once_with(
-            expected, [{'path': '/instance_info/metalsmith_hostname',
-                        'op': 'add', 'value': expected.id}])
+            self.api.baremetal.create_allocation.return_value)
+        self.assertFalse(self.api.baremetal.patch_node.called)
+        mock_log.assert_called_once_with('Failed to delete failed allocation')
 
     def test_with_hostname(self):
         expected = self._node()
@@ -180,26 +239,7 @@ class TestReserveNode(Base):
             resource_class=self.RSC, traits=None)
         self.api.baremetal.get_node.assert_called_once_with(
             self.api.baremetal.wait_for_allocation.return_value.node_id)
-        self.api.baremetal.patch_node.assert_called_once_with(
-            node, [{'path': '/instance_info/metalsmith_hostname',
-                    'op': 'add', 'value': 'example.com'}])
-
-    def test_with_name_as_hostname(self):
-        expected = self._node(name='example.com')
-        self.api.baremetal.get_node.return_value = expected
-        self.api.baremetal.nodes.return_value = [expected, self._node()]
-
-        node = self.pr.reserve_node(self.RSC)
-
-        self.assertIs(expected, node)
-        self.api.baremetal.create_allocation.assert_called_once_with(
-            name=None, candidate_nodes=None,
-            resource_class=self.RSC, traits=None)
-        self.api.baremetal.get_node.assert_called_once_with(
-            self.api.baremetal.wait_for_allocation.return_value.node_id)
-        self.api.baremetal.patch_node.assert_called_once_with(
-            node, [{'path': '/instance_info/metalsmith_hostname',
-                    'op': 'add', 'value': 'example.com'}])
+        self.assertFalse(self.api.baremetal.patch_node.called)
 
     def test_with_capabilities(self):
         nodes = [
@@ -219,10 +259,28 @@ class TestReserveNode(Base):
         self.api.baremetal.get_node.assert_called_once_with(
             self.api.baremetal.wait_for_allocation.return_value.node_id)
         self.api.baremetal.patch_node.assert_called_once_with(
-            node, [{'path': '/instance_info/metalsmith_hostname',
-                    'op': 'add', 'value': node.id},
-                   {'path': '/instance_info/capabilities',
+            node, [{'path': '/instance_info/capabilities',
                     'op': 'add', 'value': {'answer': '42'}}])
+
+    def test_node_update_failed(self):
+        expected = self._node(properties={'local_gb': 100,
+                                          'capabilities': {'answer': '42'}})
+        self.api.baremetal.get_node.return_value = expected
+        self.api.baremetal.nodes.return_value = [expected]
+        self.api.baremetal.patch_node.side_effect = os_exc.SDKException('boom')
+
+        self.assertRaisesRegex(os_exc.SDKException, 'boom',
+                               self.pr.reserve_node, self.RSC,
+                               capabilities={'answer': '42'})
+
+        self.api.baremetal.create_allocation.assert_called_once_with(
+            name=None, candidate_nodes=[expected.id],
+            resource_class=self.RSC, traits=None)
+        self.api.baremetal.delete_allocation.assert_called_once_with(
+            self.api.baremetal.wait_for_allocation.return_value)
+        self.api.baremetal.patch_node.assert_called_once_with(
+            expected, [{'path': '/instance_info/capabilities',
+                        'op': 'add', 'value': {'answer': '42'}}])
 
     def test_with_traits(self):
         expected = self._node(properties={'local_gb': 100},
@@ -232,9 +290,7 @@ class TestReserveNode(Base):
         node = self.pr.reserve_node(self.RSC, traits=['foo', 'answer:42'])
 
         self.assertIs(node, expected)
-        self.api.baremetal.patch_node.assert_called_once_with(
-            node, [{'path': '/instance_info/metalsmith_hostname',
-                    'op': 'add', 'value': node.id}])
+        self.assertFalse(self.api.baremetal.patch_node.called)
 
     def test_custom_predicate(self):
         nodes = [self._node(properties={'local_gb': i})
@@ -252,9 +308,7 @@ class TestReserveNode(Base):
             resource_class=self.RSC, traits=None)
         self.api.baremetal.get_node.assert_called_once_with(
             self.api.baremetal.wait_for_allocation.return_value.node_id)
-        self.api.baremetal.patch_node.assert_called_once_with(
-            node, [{'path': '/instance_info/metalsmith_hostname',
-                    'op': 'add', 'value': node.id}])
+        self.assertFalse(self.api.baremetal.patch_node.called)
 
     def test_custom_predicate_false(self):
         nodes = [self._node() for _ in range(3)]
@@ -281,9 +335,7 @@ class TestReserveNode(Base):
             resource_class=self.RSC, traits=None)
         self.api.baremetal.get_node.assert_called_once_with(
             self.api.baremetal.wait_for_allocation.return_value.node_id)
-        self.api.baremetal.patch_node.assert_called_once_with(
-            node, [{'path': '/instance_info/metalsmith_hostname',
-                    'op': 'add', 'value': node.id}])
+        self.assertFalse(self.api.baremetal.patch_node.called)
 
     def test_provided_nodes(self):
         nodes = [self._node(id=1), self._node(id=2)]
@@ -298,9 +350,7 @@ class TestReserveNode(Base):
             resource_class=self.RSC, traits=None)
         self.api.baremetal.get_node.assert_called_once_with(
             self.api.baremetal.wait_for_allocation.return_value.node_id)
-        self.api.baremetal.patch_node.assert_called_once_with(
-            node, [{'path': '/instance_info/metalsmith_hostname',
-                    'op': 'add', 'value': node.id}])
+        self.assertFalse(self.api.baremetal.patch_node.called)
 
     def test_nodes_filtered(self):
         nodes = [self._node(resource_class='banana'),
@@ -321,9 +371,7 @@ class TestReserveNode(Base):
         self.api.baremetal.get_node.assert_called_once_with(
             self.api.baremetal.wait_for_allocation.return_value.node_id)
         self.api.baremetal.patch_node.assert_called_once_with(
-            node, [{'path': '/instance_info/metalsmith_hostname',
-                    'op': 'add', 'value': node.id},
-                   {'path': '/instance_info/capabilities',
+            node, [{'path': '/instance_info/capabilities',
                     'op': 'add', 'value': {'cat': 'meow'}}])
 
     def test_nodes_filtered_by_conductor_group(self):
@@ -349,9 +397,7 @@ class TestReserveNode(Base):
         self.api.baremetal.get_node.assert_called_once_with(
             self.api.baremetal.wait_for_allocation.return_value.node_id)
         self.api.baremetal.patch_node.assert_called_once_with(
-            node, [{'path': '/instance_info/metalsmith_hostname',
-                    'op': 'add', 'value': node.id},
-                   {'path': '/instance_info/capabilities',
+            node, [{'path': '/instance_info/capabilities',
                     'op': 'add', 'value': {'cat': 'meow'}}])
 
     def test_provided_nodes_no_match(self):
@@ -377,14 +423,18 @@ class TestProvisionNode(Base):
     def setUp(self):
         super(TestProvisionNode, self).setUp()
         self.image = self.api.image.find_image.return_value
-        self.node.instance_id = self.node.id
+        self.node.instance_id = '123456'
+        self.node.allocation_id = '123456'
+        self.allocation = mock.Mock(spec=['id', 'node_id', 'name'],
+                                    id='123456',
+                                    node_id=self.node.id)
+        self.allocation.name = 'example.com'
         self.instance_info = {
             'ramdisk': self.image.ramdisk_id,
             'kernel': self.image.kernel_id,
             'image_source': self.image.id,
             'root_gb': 99,  # 100 - 1
             'capabilities': {'boot_option': 'local'},
-            _utils.HOSTNAME_FIELD: 'control-0'
         }
         self.extra = {
             'metalsmith_created_ports': [
@@ -398,6 +448,9 @@ class TestProvisionNode(Base):
             fixtures.MockPatchObject(instance_config.GenericConfig,
                                      'generate', autospec=True)
         ).mock
+        self.api.baremetal.get_node.side_effect = lambda _n: self.node
+        self.api.baremetal.get_allocation.side_effect = (
+            lambda _a: self.allocation)
 
     def test_ok(self):
         inst = self.pr.provision_node(self.node, 'image',
@@ -413,7 +466,30 @@ class TestProvisionNode(Base):
         self.api.baremetal.update_node.assert_called_once_with(
             self.node, instance_info=self.instance_info, extra=self.extra)
         self.api.baremetal.validate_node.assert_called_once_with(self.node)
-        self.configdrive_mock.assert_called_once_with(mock.ANY, self.node)
+        self.configdrive_mock.assert_called_once_with(mock.ANY, self.node,
+                                                      self.allocation.name)
+        self.api.baremetal.set_node_provision_state.assert_called_once_with(
+            self.node, 'active', config_drive=mock.ANY)
+        self.assertFalse(self.api.network.delete_port.called)
+
+    def test_old_style_reservation(self):
+        self.node.allocation_id = None
+        self.node.instance_id = self.node.id
+        inst = self.pr.provision_node(self.node, 'image',
+                                      [{'network': 'network'}])
+
+        self.assertEqual(inst.uuid, self.node.id)
+        self.assertEqual(inst.node, self.node)
+
+        self.api.network.create_port.assert_called_once_with(
+            network_id=self.api.network.find_network.return_value.id)
+        self.api.baremetal.attach_vif_to_node.assert_called_once_with(
+            self.node, self.api.network.create_port.return_value.id)
+        self.api.baremetal.update_node.assert_called_once_with(
+            self.node, instance_info=self.instance_info, extra=self.extra)
+        self.api.baremetal.validate_node.assert_called_once_with(self.node)
+        self.configdrive_mock.assert_called_once_with(mock.ANY, self.node,
+                                                      self.node.name)
         self.api.baremetal.set_node_provision_state.assert_called_once_with(
             self.node, 'active', config_drive=mock.ANY)
         self.assertFalse(self.api.network.delete_port.called)
@@ -467,7 +543,8 @@ class TestProvisionNode(Base):
         self.assertEqual(inst.uuid, self.node.id)
         self.assertEqual(inst.node, self.node)
 
-        config.generate.assert_called_once_with(self.node)
+        config.generate.assert_called_once_with(self.node,
+                                                self.allocation.name)
         self.api.network.create_port.assert_called_once_with(
             network_id=self.api.network.find_network.return_value.id)
         self.api.baremetal.attach_vif_to_node.assert_called_once_with(
@@ -481,19 +558,29 @@ class TestProvisionNode(Base):
             self.api.baremetal.wait_for_nodes_provision_state.called)
         self.assertFalse(self.api.network.delete_port.called)
 
-    @mock.patch.object(_provisioner.Provisioner, '_find_node_by_hostname',
-                       autospec=True)
-    def test_with_hostname(self, mock_find_node):
-        mock_find_node.return_value = None
+    def test_with_hostname_override(self):
+        self.allocation.name = None
+        self.api.baremetal.get_allocation.side_effect = [
+            os_exc.ResourceNotFound(),
+            self.allocation
+        ]
+
+        def _update(allocation, name):
+            allocation.name = name
+            return allocation
+
+        self.api.baremetal.update_allocation.side_effect = _update
         hostname = 'control-0.example.com'
         inst = self.pr.provision_node(self.node, 'image',
                                       [{'network': 'network'}],
                                       hostname=hostname)
-        self.instance_info[_utils.HOSTNAME_FIELD] = hostname
 
         self.assertEqual(inst.uuid, self.node.id)
         self.assertEqual(inst.node, self.node)
+        self.assertIs(inst.allocation, self.allocation)
 
+        self.api.baremetal.update_allocation.assert_called_once_with(
+            self.allocation, name=hostname)
         self.api.network.create_port.assert_called_once_with(
             network_id=self.api.network.find_network.return_value.id)
         self.api.baremetal.attach_vif_to_node.assert_called_once_with(
@@ -501,7 +588,8 @@ class TestProvisionNode(Base):
         self.api.baremetal.update_node.assert_called_once_with(
             self.node, instance_info=self.instance_info, extra=self.extra)
         self.api.baremetal.validate_node.assert_called_once_with(self.node)
-        self.configdrive_mock.assert_called_once_with(mock.ANY, self.node)
+        self.configdrive_mock.assert_called_once_with(mock.ANY, self.node,
+                                                      hostname)
         self.api.baremetal.set_node_provision_state.assert_called_once_with(
             self.node, 'active', config_drive=mock.ANY)
         self.assertFalse(
@@ -510,14 +598,15 @@ class TestProvisionNode(Base):
 
     def test_existing_hostname(self):
         hostname = 'control-0.example.com'
-        self.node.instance_info[_utils.HOSTNAME_FIELD] = hostname
+        self.allocation.name = hostname
         inst = self.pr.provision_node(self.node, 'image',
                                       [{'network': 'network'}])
-        self.instance_info[_utils.HOSTNAME_FIELD] = hostname
 
         self.assertEqual(inst.uuid, self.node.id)
         self.assertEqual(inst.node, self.node)
+        self.assertIs(inst.allocation, self.allocation)
 
+        self.assertFalse(self.api.baremetal.update_allocation.called)
         self.api.network.create_port.assert_called_once_with(
             network_id=self.api.network.find_network.return_value.id)
         self.api.baremetal.attach_vif_to_node.assert_called_once_with(
@@ -525,7 +614,90 @@ class TestProvisionNode(Base):
         self.api.baremetal.update_node.assert_called_once_with(
             self.node, instance_info=self.instance_info, extra=self.extra)
         self.api.baremetal.validate_node.assert_called_once_with(self.node)
-        self.configdrive_mock.assert_called_once_with(mock.ANY, self.node)
+        self.configdrive_mock.assert_called_once_with(mock.ANY, self.node,
+                                                      hostname)
+        self.api.baremetal.set_node_provision_state.assert_called_once_with(
+            self.node, 'active', config_drive=mock.ANY)
+        self.assertFalse(
+            self.api.baremetal.wait_for_nodes_provision_state.called)
+        self.assertFalse(self.api.network.delete_port.called)
+
+    def test_existing_hostname_match(self):
+        hostname = 'control-0.example.com'
+        self.allocation.name = hostname
+        inst = self.pr.provision_node(self.node, 'image',
+                                      [{'network': 'network'}],
+                                      hostname=hostname)
+
+        self.assertEqual(inst.uuid, self.node.id)
+        self.assertEqual(inst.node, self.node)
+        self.assertIs(inst.allocation, self.allocation)
+
+        self.assertFalse(self.api.baremetal.update_allocation.called)
+        self.api.network.create_port.assert_called_once_with(
+            network_id=self.api.network.find_network.return_value.id)
+        self.api.baremetal.attach_vif_to_node.assert_called_once_with(
+            self.node, self.api.network.create_port.return_value.id)
+        self.api.baremetal.update_node.assert_called_once_with(
+            self.node, instance_info=self.instance_info, extra=self.extra)
+        self.api.baremetal.validate_node.assert_called_once_with(self.node)
+        self.configdrive_mock.assert_called_once_with(mock.ANY, self.node,
+                                                      hostname)
+        self.api.baremetal.set_node_provision_state.assert_called_once_with(
+            self.node, 'active', config_drive=mock.ANY)
+        self.assertFalse(
+            self.api.baremetal.wait_for_nodes_provision_state.called)
+        self.assertFalse(self.api.network.delete_port.called)
+
+    def test_existing_hostname_mismatch(self):
+        self.api.baremetal.get_allocation.side_effect = [
+            # No allocation with requested hostname
+            os_exc.ResourceNotFound(),
+            # Allocation associated with the node
+            self.allocation
+        ]
+        self.allocation.name = 'control-0.example.com'
+        self.assertRaisesRegex(exceptions.InvalidNode,
+                               'does not match the expected hostname',
+                               self.pr.provision_node,
+                               self.node, 'image', [{'network': 'network'}],
+                               hostname='control-1.example.com')
+
+        self.api.baremetal.get_allocation.assert_has_calls([
+            mock.call('control-1.example.com'),
+            mock.call(self.node.allocation_id),
+        ])
+        self.assertFalse(self.api.baremetal.create_allocation.called)
+        self.assertFalse(self.api.baremetal.update_node.called)
+        self.assertFalse(self.api.baremetal.set_node_provision_state.called)
+        self.assertFalse(self.api.baremetal.delete_allocation.called)
+
+    def test_node_name_as_hostname(self):
+        self.allocation.name = None
+
+        def _update(allocation, name):
+            allocation.name = name
+            return allocation
+
+        self.api.baremetal.update_allocation.side_effect = _update
+        inst = self.pr.provision_node(self.node, 'image',
+                                      [{'network': 'network'}])
+
+        self.assertEqual(inst.uuid, self.node.id)
+        self.assertEqual(inst.node, self.node)
+        self.assertIs(inst.allocation, self.allocation)
+
+        self.api.baremetal.update_allocation.assert_called_once_with(
+            self.allocation, name=self.node.name)
+        self.api.network.create_port.assert_called_once_with(
+            network_id=self.api.network.find_network.return_value.id)
+        self.api.baremetal.attach_vif_to_node.assert_called_once_with(
+            self.node, self.api.network.create_port.return_value.id)
+        self.api.baremetal.update_node.assert_called_once_with(
+            self.node, extra=self.extra, instance_info=self.instance_info)
+        self.api.baremetal.validate_node.assert_called_once_with(self.node)
+        self.configdrive_mock.assert_called_once_with(mock.ANY, self.node,
+                                                      self.node.name)
         self.api.baremetal.set_node_provision_state.assert_called_once_with(
             self.node, 'active', config_drive=mock.ANY)
         self.assertFalse(
@@ -534,12 +706,19 @@ class TestProvisionNode(Base):
 
     def test_name_not_valid_hostname(self):
         self.node.name = 'node_1'
+        self.allocation.name = None
+
+        def _update(allocation, name):
+            allocation.name = name
+            return allocation
+
+        self.api.baremetal.update_allocation.side_effect = _update
         inst = self.pr.provision_node(self.node, 'image',
                                       [{'network': 'network'}])
-        self.instance_info[_utils.HOSTNAME_FIELD] = '000'
 
         self.assertEqual(inst.uuid, self.node.id)
         self.assertEqual(inst.node, self.node)
+        self.assertIs(inst.allocation, self.allocation)
 
         self.api.network.create_port.assert_called_once_with(
             network_id=self.api.network.find_network.return_value.id)
@@ -548,6 +727,8 @@ class TestProvisionNode(Base):
         self.api.baremetal.update_node.assert_called_once_with(
             self.node, extra=self.extra, instance_info=self.instance_info)
         self.api.baremetal.validate_node.assert_called_once_with(self.node)
+        self.configdrive_mock.assert_called_once_with(mock.ANY, self.node,
+                                                      self.node.id)
         self.api.baremetal.set_node_provision_state.assert_called_once_with(
             self.node, 'active', config_drive=mock.ANY)
         self.assertFalse(
@@ -556,15 +737,21 @@ class TestProvisionNode(Base):
 
     def test_unreserved(self):
         self.node.instance_id = None
+        self.node.allocation_id = None
         self.api.baremetal.get_node.return_value = self.node
 
         self.pr.provision_node(self.node, 'image', [{'network': 'network'}])
 
         self.api.baremetal.create_allocation.assert_called_once_with(
-            name=None, candidate_nodes=[self.node.id],
+            name=self.node.name, candidate_nodes=[self.node.id],
             resource_class=self.node.resource_class, traits=None)
-        self.api.baremetal.get_node.assert_called_once_with(
-            self.api.baremetal.wait_for_allocation.return_value.node_id)
+        self.api.baremetal.get_node.assert_has_calls([
+            # After allocation
+            mock.call(
+                self.api.baremetal.wait_for_allocation.return_value.node_id),
+            # After deployment
+            mock.call(self.node.id)
+        ])
         self.api.network.create_port.assert_called_once_with(
             network_id=self.api.network.find_network.return_value.id)
         self.api.baremetal.attach_vif_to_node.assert_called_once_with(
@@ -577,6 +764,54 @@ class TestProvisionNode(Base):
         self.assertFalse(
             self.api.baremetal.wait_for_nodes_provision_state.called)
         self.assertFalse(self.api.network.delete_port.called)
+
+    def test_unreserved_with_hostname(self):
+        self.node.instance_id = None
+        self.node.allocation_id = None
+        self.api.baremetal.get_node.return_value = self.node
+        hostname = 'control-2.example.com'
+
+        self.pr.provision_node(self.node, 'image', [{'network': 'network'}],
+                               hostname=hostname)
+
+        self.api.baremetal.create_allocation.assert_called_once_with(
+            name=hostname, candidate_nodes=[self.node.id],
+            resource_class=self.node.resource_class, traits=None)
+        self.api.baremetal.get_node.assert_has_calls([
+            # After allocation
+            mock.call(
+                self.api.baremetal.wait_for_allocation.return_value.node_id),
+            # After deployment
+            mock.call(self.node.id)
+        ])
+        self.api.network.create_port.assert_called_once_with(
+            network_id=self.api.network.find_network.return_value.id)
+        self.api.baremetal.attach_vif_to_node.assert_called_once_with(
+            self.node, self.api.network.create_port.return_value.id)
+        self.api.baremetal.update_node.assert_called_once_with(
+            self.node, instance_info=self.instance_info, extra=self.extra)
+        self.api.baremetal.validate_node.assert_called_once_with(self.node)
+        self.api.baremetal.set_node_provision_state.assert_called_once_with(
+            self.node, 'active', config_drive=mock.ANY)
+        self.assertFalse(
+            self.api.baremetal.wait_for_nodes_provision_state.called)
+        self.assertFalse(self.api.network.delete_port.called)
+
+    def test_unreserved_without_resource_class(self):
+        self.node.instance_id = None
+        self.node.allocation_id = None
+        self.node.resource_class = None
+        self.api.baremetal.get_node.return_value = self.node
+
+        self.assertRaisesRegex(exceptions.InvalidNode,
+                               'does not have a resource class',
+                               self.pr.provision_node,
+                               self.node, 'image', [{'network': 'network'}])
+
+        self.assertFalse(self.api.baremetal.create_allocation.called)
+        self.assertFalse(self.api.baremetal.update_node.called)
+        self.assertFalse(self.api.baremetal.set_node_provision_state.called)
+        self.assertFalse(self.api.baremetal.delete_allocation.called)
 
     def test_with_ports(self):
         port_ids = [self.api.network.find_port.return_value.id] * 2
@@ -1013,11 +1248,13 @@ abcd  image
 
     def test_unreserve_dry_run(self):
         self.pr._dry_run = True
+        self.node.allocation_id = None
         self.node.instance_id = None
 
         self.pr.provision_node(self.node, 'image', [{'network': 'network'}])
 
         self.assertFalse(self.api.network.create_port.called)
+        self.assertFalse(self.api.baremetal.create_allocation.called)
         self.assertFalse(self.api.baremetal.attach_vif_to_node.called)
         self.assertFalse(self.api.baremetal.update_node.called)
         self.assertFalse(self.api.baremetal.set_node_provision_state.called)
@@ -1026,6 +1263,33 @@ abcd  image
         self.assertFalse(self.api.network.delete_port.called)
 
     def test_deploy_failure(self):
+        self.api.baremetal.set_node_provision_state.side_effect = (
+            RuntimeError('boom'))
+        self.assertRaisesRegex(RuntimeError, 'boom',
+                               self.pr.provision_node, self.node,
+                               'image', [{'network': 'n1'}, {'port': 'p1'}],
+                               wait=3600)
+
+        self.api.baremetal.update_node.assert_any_call(
+            self.node, extra={}, instance_info={})
+        self.assertFalse(
+            self.api.baremetal.wait_for_nodes_provision_state.called)
+        self.api.network.delete_port.assert_called_once_with(
+            self.api.network.create_port.return_value.id,
+            ignore_missing=False)
+        calls = [
+            mock.call(self.node,
+                      self.api.network.create_port.return_value.id),
+            mock.call(self.node, self.api.network.find_port.return_value.id)
+        ]
+        self.api.baremetal.detach_vif_from_node.assert_has_calls(
+            calls, any_order=True)
+        self.api.baremetal.delete_allocation.assert_called_once_with(
+            self.allocation.id)
+
+    def test_deploy_failure_without_allocation(self):
+        self.node.instance_id = None
+        self.node.allocation_id = None
         self.api.baremetal.set_node_provision_state.side_effect = (
             RuntimeError('boom'))
         self.assertRaisesRegex(RuntimeError, 'boom',
@@ -1048,31 +1312,6 @@ abcd  image
         self.api.baremetal.detach_vif_from_node.assert_has_calls(
             calls, any_order=True)
         self.assertFalse(self.api.baremetal.delete_allocation.called)
-
-    def test_deploy_failure_with_allocation(self):
-        self.node.allocation_id = 'id2'
-        self.api.baremetal.set_node_provision_state.side_effect = (
-            RuntimeError('boom'))
-        self.assertRaisesRegex(RuntimeError, 'boom',
-                               self.pr.provision_node, self.node,
-                               'image', [{'network': 'n1'}, {'port': 'p1'}],
-                               wait=3600)
-
-        self.api.baremetal.update_node.assert_any_call(
-            self.node, extra={}, instance_info={})
-        self.assertFalse(
-            self.api.baremetal.wait_for_nodes_provision_state.called)
-        self.api.network.delete_port.assert_called_once_with(
-            self.api.network.create_port.return_value.id,
-            ignore_missing=False)
-        calls = [
-            mock.call(self.node,
-                      self.api.network.create_port.return_value.id),
-            mock.call(self.node, self.api.network.find_port.return_value.id)
-        ]
-        self.api.baremetal.detach_vif_from_node.assert_has_calls(
-            calls, any_order=True)
-        self.api.baremetal.delete_allocation.assert_called_once_with('id2')
 
     def test_deploy_failure_no_cleanup(self):
         self.node.allocation_id = 'id2'
@@ -1096,8 +1335,10 @@ abcd  image
                                self.pr.provision_node, self.node,
                                'image', [{'network': 'network'}], wait=3600)
 
+        self.api.baremetal.delete_allocation.assert_called_once_with(
+            self.allocation.id)
         self.api.baremetal.update_node.assert_called_once_with(
-            self.node, extra={}, instance_info={}, instance_id=None)
+            self.node, extra={}, instance_info={})
         self.assertFalse(self.api.baremetal.set_node_provision_state.called)
         self.assertFalse(self.api.network.delete_port.called)
         self.assertFalse(self.api.baremetal.detach_vif_from_node.called)
@@ -1109,8 +1350,10 @@ abcd  image
                                self.pr.provision_node, self.node,
                                'image', [{'network': 'network'}], wait=3600)
 
+        self.api.baremetal.delete_allocation.assert_called_once_with(
+            self.allocation.id)
         self.api.baremetal.update_node.assert_called_once_with(
-            self.node, extra={}, instance_info={}, instance_id=None)
+            self.node, extra={}, instance_info={})
         self.assertFalse(self.api.baremetal.set_node_provision_state.called)
         self.api.network.delete_port.assert_called_once_with(
             self.api.network.create_port.return_value.id,
@@ -1152,12 +1395,16 @@ abcd  image
             self.node, self.api.network.create_port.return_value.id)
 
     def test_detach_failed_after_deploy_failure(self):
-        self.api.baremetal.detach_port_from_node.side_effect = AssertionError()
+        self.api.baremetal.detach_vif_from_node.side_effect = AssertionError()
         self._test_failure_during_deploy_failure()
 
     def test_update_failed_after_deploy_failure(self):
         self.api.baremetal.update_node.side_effect = [self.node,
                                                       AssertionError()]
+        self._test_failure_during_deploy_failure()
+
+    def test_deallocation_failed_after_deploy_failure(self):
+        self.api.baremetal.delete_allocation.side_effect = AssertionError()
         self._test_failure_during_deploy_failure()
 
     def test_wait_failure(self):
@@ -1181,7 +1428,7 @@ abcd  image
                                self.pr.provision_node,
                                self.node, 'image', [{'network': 'network'}])
         self.api.baremetal.update_node.assert_called_once_with(
-            self.node, extra={}, instance_info={}, instance_id=None)
+            self.node, extra={}, instance_info={})
         self.assertFalse(self.api.baremetal.set_node_provision_state.called)
 
     @mock.patch.object(requests, 'get', autospec=True)
@@ -1207,7 +1454,7 @@ abcd  and-not-image-again
         self.assertFalse(self.api.image.find_image.called)
         mock_get.assert_called_once_with('https://host/checksums')
         self.api.baremetal.update_node.assert_called_once_with(
-            self.node, extra={}, instance_info={}, instance_id=None)
+            self.node, extra={}, instance_info={})
         self.assertFalse(self.api.baremetal.set_node_provision_state.called)
 
     @mock.patch.object(requests, 'get', autospec=True)
@@ -1233,7 +1480,7 @@ abcd  and-not-image-again
         self.assertFalse(self.api.image.find_image.called)
         mock_get.assert_called_once_with('https://host/checksums')
         self.api.baremetal.update_node.assert_called_once_with(
-            self.node, extra={}, instance_info={}, instance_id=None)
+            self.node, extra={}, instance_info={})
         self.assertFalse(self.api.baremetal.set_node_provision_state.called)
 
     @mock.patch.object(requests, 'get', autospec=True)
@@ -1257,7 +1504,7 @@ abcd  and-not-image-again
         self.assertFalse(self.api.image.find_image.called)
         mock_get.assert_called_once_with('https://host/checksums')
         self.api.baremetal.update_node.assert_called_once_with(
-            self.node, extra={}, instance_info={}, instance_id=None)
+            self.node, extra={}, instance_info={})
         self.assertFalse(self.api.baremetal.set_node_provision_state.called)
 
     def test_invalid_network(self):
@@ -1267,7 +1514,7 @@ abcd  and-not-image-again
                                self.pr.provision_node,
                                self.node, 'image', [{'network': 'network'}])
         self.api.baremetal.update_node.assert_called_once_with(
-            self.node, extra={}, instance_info={}, instance_id=None)
+            self.node, extra={}, instance_info={})
         self.assertFalse(self.api.network.create_port.called)
         self.assertFalse(self.api.baremetal.set_node_provision_state.called)
 
@@ -1278,7 +1525,7 @@ abcd  and-not-image-again
                                self.pr.provision_node,
                                self.node, 'image', [{'port': 'port1'}])
         self.api.baremetal.update_node.assert_called_once_with(
-            self.node, extra={}, instance_info={}, instance_id=None)
+            self.node, extra={}, instance_info={})
         self.assertFalse(self.api.network.create_port.called)
         self.assertFalse(self.api.baremetal.set_node_provision_state.called)
 
@@ -1289,7 +1536,7 @@ abcd  and-not-image-again
                                self.pr.provision_node,
                                self.node, 'image', [{'subnet': 'subnet'}])
         self.api.baremetal.update_node.assert_called_once_with(
-            self.node, extra={}, instance_info={}, instance_id=None)
+            self.node, extra={}, instance_info={})
         self.assertFalse(self.api.network.create_port.called)
         self.assertFalse(self.api.baremetal.set_node_provision_state.called)
 
@@ -1301,7 +1548,7 @@ abcd  and-not-image-again
                                self.pr.provision_node,
                                self.node, 'image', [{'subnet': 'subnet'}])
         self.api.baremetal.update_node.assert_called_once_with(
-            self.node, extra={}, instance_info={}, instance_id=None)
+            self.node, extra={}, instance_info={})
         self.assertFalse(self.api.network.create_port.called)
         self.assertFalse(self.api.baremetal.set_node_provision_state.called)
 
@@ -1378,21 +1625,28 @@ abcd  and-not-image-again
                                self.pr.provision_node,
                                self.node, 'image', [{'port': 'port1'}],
                                hostname='n_1')
-        self.api.baremetal.update_node.assert_called_once_with(
-            self.node, extra={}, instance_info={}, instance_id=None)
         self.assertFalse(self.api.network.create_port.called)
         self.assertFalse(self.api.baremetal.set_node_provision_state.called)
 
-    @mock.patch.object(_provisioner.Provisioner, '_find_node_by_hostname',
-                       autospec=True)
-    def test_duplicate_hostname(self, mock_find_node):
-        mock_find_node.return_value = mock.Mock(spec=['id', 'name'])
+    def test_duplicate_hostname(self):
+        allocation = mock.Mock(spec=['id', 'name', 'node_id'],
+                               node_id='another node')
+        self.api.baremetal.get_allocation.side_effect = [allocation]
         self.assertRaisesRegex(ValueError, 'already uses hostname host',
                                self.pr.provision_node,
                                self.node, 'image', [{'port': 'port1'}],
                                hostname='host')
-        self.api.baremetal.update_node.assert_called_once_with(
-            self.node, extra={}, instance_info={}, instance_id=None)
+        self.assertFalse(self.api.network.create_port.called)
+        self.assertFalse(self.api.baremetal.set_node_provision_state.called)
+
+    def test_old_style_reservation_with_override(self):
+        self.node.allocation_id = None
+        self.node.instance_id = self.node.id
+        self.assertRaisesRegex(exceptions.InvalidNode,
+                               'does not use allocations',
+                               self.pr.provision_node,
+                               self.node, 'image', [{'port': 'port1'}],
+                               hostname='host')
         self.assertFalse(self.api.network.create_port.called)
         self.assertFalse(self.api.baremetal.set_node_provision_state.called)
 
@@ -1407,6 +1661,7 @@ abcd  and-not-image-again
 
     def test_node_with_external_instance_id(self):
         self.node.instance_id = 'nova'
+        self.node.allocation_id = None
         self.assertRaisesRegex(exceptions.InvalidNode,
                                'reserved by instance nova',
                                self.pr.provision_node,
@@ -1551,45 +1806,70 @@ class TestUnprovisionNode(Base):
         self.assertFalse(self.api.baremetal.update_node.called)
 
 
-class TestShowInstance(Base):
+class TestShowInstance(testtools.TestCase):
     def setUp(self):
         super(TestShowInstance, self).setUp()
-        self.node.provision_state = 'active'
+        self.pr = _provisioner.Provisioner(mock.Mock())
+        self.api = mock.Mock(spec=['baremetal'])
+        self.pr.connection = self.api
+
+        self.node = mock.Mock(spec=NODE_FIELDS + ['to_dict'],
+                              id='000', instance_id=None,
+                              properties={'local_gb': 100},
+                              instance_info={},
+                              is_maintenance=False, extra={},
+                              provision_state='active',
+                              allocation_id=None)
+        self.node.name = 'control-0'
+        self.api.baremetal.get_node.return_value = self.node
 
     def test_show_instance(self):
-        self.mock_get_node.side_effect = lambda n, *a, **kw: self.node
+        self.api.baremetal.get_allocation.side_effect = (
+            os_exc.ResourceNotFound())
         inst = self.pr.show_instance('id1')
-        self.mock_get_node.assert_called_once_with(self.pr, 'id1',
-                                                   accept_hostname=True)
         self.assertIsInstance(inst, _instance.Instance)
         self.assertIs(inst.node, self.node)
         self.assertIs(inst.uuid, self.node.id)
+        self.api.baremetal.get_node.assert_called_once_with('id1')
 
     def test_show_instance_with_allocation(self):
-        self.node.allocation_id = 'id2'
-        self.mock_get_node.side_effect = lambda n, *a, **kw: self.node
+        self.api.baremetal.get_allocation.return_value.node_id = '1234'
         inst = self.pr.show_instance('id1')
-        self.mock_get_node.assert_called_once_with(self.pr, 'id1',
-                                                   accept_hostname=True)
-        self.api.baremetal.get_allocation.assert_called_once_with('id2')
+        self.api.baremetal.get_allocation.assert_called_once_with('id1')
         self.assertIsInstance(inst, _instance.Instance)
         self.assertIs(inst.allocation,
                       self.api.baremetal.get_allocation.return_value)
         self.assertIs(inst.node, self.node)
         self.assertIs(inst.uuid, self.node.id)
+        self.api.baremetal.get_node.assert_called_once_with('1234')
 
     def test_show_instances(self):
-        self.mock_get_node.side_effect = [self.node, self.node]
-        result = self.pr.show_instances(['1', '2'])
-        self.mock_get_node.assert_has_calls([
-            mock.call(self.pr, '1', accept_hostname=True),
-            mock.call(self.pr, '2', accept_hostname=True)
+        self.api.baremetal.get_allocation.side_effect = [
+            os_exc.ResourceNotFound(),
+            mock.Mock(node_id='4321'),
+        ]
+        result = self.pr.show_instances(['inst-1', 'inst-2'])
+        self.api.baremetal.get_node.assert_has_calls([
+            mock.call('inst-1'),
+            mock.call('4321'),
+        ])
+        self.api.baremetal.get_allocation.assert_has_calls([
+            mock.call('inst-1'),
+            mock.call('inst-2'),
         ])
         self.assertIsInstance(result, list)
         for inst in result:
             self.assertIsInstance(inst, _instance.Instance)
         self.assertIs(result[0].node, self.node)
         self.assertIs(result[0].uuid, self.node.id)
+
+    def test_show_instance_invalid_state(self):
+        self.node.provision_state = 'manageable'
+        self.api.baremetal.get_allocation.side_effect = (
+            os_exc.ResourceNotFound())
+        self.assertRaises(exceptions.InvalidInstance,
+                          self.pr.show_instance, 'id1')
+        self.api.baremetal.get_node.assert_called_once_with('id1')
 
 
 class TestWaitForProvisioning(Base):
@@ -1617,7 +1897,8 @@ class TestListInstances(Base):
 
     def test_list(self):
         instances = self.pr.list_instances()
-        self.assertTrue(isinstance(i, _instance.Instance) for i in instances)
+        self.assertTrue(all(isinstance(i, _instance.Instance)
+                            for i in instances))
         self.assertEqual(self.nodes[:6], [i.node for i in instances])
         self.assertEqual([self.api.baremetal.get_allocation.return_value]
                          + [None] * 5,
