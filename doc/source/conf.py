@@ -21,13 +21,9 @@ sys.path.insert(0, os.path.abspath('../..'))
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 extensions = [
     'sphinxcontrib.apidoc',
+    'sphinxcontrib.rsvgconverter',
+    'openstackdocstheme',
 ]
-
-try:
-    import openstackdocstheme
-    extensions.append('openstackdocstheme')
-except ImportError:
-    openstackdocstheme = None
 
 autoclass_content = 'both'
 apidoc_module_dir = '../../metalsmith'
@@ -46,7 +42,6 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'metalsmith'
 copyright = u'2018, MetalSmith Developers '
 
 # The version info for the project you're documenting, acts as replacement for
@@ -77,21 +72,20 @@ pygments_style = 'sphinx'
 # html_theme = '_theme'
 # html_static_path = ['static']
 
-if openstackdocstheme is not None:
-    html_theme = 'openstackdocs'
-else:
-    html_theme = 'default'
+html_theme = 'openstackdocs'
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = '%sdoc' % project
+htmlhelp_basename = 'metalsmithdoc'
+
+latex_use_xindy = False
 
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, documentclass
 # [howto/manual]).
 latex_documents = [
     ('index',
-     '%s.tex' % project,
-     u'%s Documentation' % project,
+     'doc-metalsmith.tex',
+     u'MetalSmith Documentation',
      u'MetalSmith Developers', 'manual'),
 ]
 
