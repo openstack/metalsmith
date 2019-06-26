@@ -117,6 +117,7 @@
     description: |
         Integration job using Glance as image source and CentOS7 with local boot.
     parent: metalsmith-integration-base
+    timeout: 7200
     pre-run: playbooks/integration/centos-image.yaml
     vars:
       configure_instance_user: metalsmith
