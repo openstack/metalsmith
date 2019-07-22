@@ -122,9 +122,15 @@ def _parse_args(args, config):
                            'up to three times')
     parser.add_argument('--dry-run', action='store_true',
                         help='do not take any destructive actions')
-    parser.add_argument('--format', choices=list(_format.FORMATS),
+    parser.add_argument('-f', '--format', choices=list(_format.FORMATS),
                         default=_format.DEFAULT_FORMAT,
                         help='output format')
+    parser.add_argument('-c', '--column', action='append', dest='columns',
+                        choices=_format.FIELDS,
+                        help='for table output, specify column(s) to show')
+    parser.add_argument('--sort-column', choices=_format.FIELDS,
+                        help='for table output, specify a column to use '
+                             'for sorting')
 
     config.register_argparse_arguments(parser, sys.argv[1:])
 
@@ -245,7 +251,8 @@ def main(args=sys.argv[1:]):
     if args.quiet:
         formatter = _format.NULL_FORMAT
     else:
-        formatter = _format.FORMATS[args.format]
+        formatter = _format.FORMATS[args.format](columns=args.columns,
+                                                 sort_column=args.sort_column)
 
     region = config.get_one(argparse=args)
     api = _provisioner.Provisioner(cloud_region=region, dry_run=args.dry_run)

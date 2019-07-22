@@ -15,8 +15,11 @@
 
 from __future__ import print_function
 
+import collections
 import json
 import sys
+
+import prettytable
 
 from metalsmith import _utils
 
@@ -31,6 +34,10 @@ class NullFormat(object):
     Used implicitly with --quiet.
     """
 
+    def __init__(self, columns=None, sort_column=None):
+        self.columns = columns
+        self.sort_column = sort_column
+
     def deploy(self, instance):
         pass
 
@@ -38,8 +45,12 @@ class NullFormat(object):
         pass
 
 
-class DefaultFormat(object):
-    """Human-readable formatter."""
+FIELDS = ['UUID', 'Node Name', 'Allocation UUID', 'Hostname',
+          'State', 'IP Addresses']
+
+
+class ValueFormat(NullFormat):
+    """"Simple value formatter."""
 
     def deploy(self, instance):
         """Output result of the deploy."""
@@ -54,24 +65,55 @@ class DefaultFormat(object):
 
         _print(message, node=_utils.log_res(node))
 
-    def show(self, instances):
+    def _iter_rows(self, instances):
         for instance in instances:
-            _print("Node %(node)s, current state is %(state)s",
-                   node=_utils.log_res(instance.node),
-                   state=instance.state.name)
-
-            if instance.hostname:
-                _print('* Hostname: %(hostname)s', hostname=instance.hostname)
-
             if instance.is_deployed:
-                ips = instance.ip_addresses()
-                if ips:
-                    ips = '; '.join('%s=%s' % (net, ','.join(ips))
-                                    for net, ips in ips.items())
-                    _print('* IP addresses: %(ips)s', ips=ips)
+                ips = '\n'.join('%s=%s' % (net, ','.join(ips))
+                                for net, ips in
+                                instance.ip_addresses().items())
+            else:
+                ips = ''
+            row = [instance.uuid, instance.node.name or '',
+                   instance.allocation.id if instance.allocation else '',
+                   instance.hostname or '', instance.state.name, ips]
+            yield row
+
+    def show(self, instances):
+        allowed_columns = set(self.columns or FIELDS)
+        rows = (collections.OrderedDict(zip(FIELDS, row))
+                for row in self._iter_rows(instances))
+        if self.sort_column:
+            rows = sorted(rows, key=lambda row: row.get(self.sort_column))
+        for row in rows:
+            _print(' '.join(value if value is not None else ''
+                            for key, value in row.items()
+                            if key in allowed_columns))
 
 
-class JsonFormat(object):
+class DefaultFormat(ValueFormat):
+    """Human-readable formatter."""
+
+    def show(self, instances):
+        if not instances:
+            _print('')  # Compatibility with openstackclient - one empty line
+            return
+
+        pt = prettytable.PrettyTable(field_names=FIELDS)
+        pt.align = 'l'
+        if self.sort_column:
+            pt.sortby = self.sort_column
+
+        for row in self._iter_rows(instances):
+            pt.add_row(row)
+
+        if self.columns:
+            value = pt.get_string(fields=self.columns)
+        else:
+            value = pt.get_string()
+        _print(value)
+
+
+class JsonFormat(NullFormat):
     """JSON formatter."""
 
     def deploy(self, instance):
@@ -92,13 +134,15 @@ class JsonFormat(object):
 
 
 FORMATS = {
-    'default': DefaultFormat(),
-    'json': JsonFormat()
+    'default': DefaultFormat,
+    'json': JsonFormat,
+    'table': DefaultFormat,
+    'value': ValueFormat,
 }
 """Available formatters."""
 
 
-DEFAULT_FORMAT = 'default'
+DEFAULT_FORMAT = 'table'
 """Default formatter."""
 
 

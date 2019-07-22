@@ -39,9 +39,10 @@ class TestDeploy(testtools.TestCase):
         self.os_conf_fixture = self.useFixture(fixtures.MockPatchObject(
             _cmd.os_config, 'OpenStackConfig', autospec=True))
         self.mock_os_conf = self.os_conf_fixture.mock
+        self._init = False
 
     def _check(self, mock_pr, args, reserve_args, provision_args,
-               dry_run=False):
+               dry_run=False, formatter='value'):
         reserve_defaults = dict(resource_class='compute',
                                 conductor_group=None,
                                 capabilities={},
@@ -60,6 +61,11 @@ class TestDeploy(testtools.TestCase):
                                   clean_up_on_failure=True)
         provision_defaults.update(provision_args)
 
+        if not self._init:
+            self._init_instance(mock_pr)
+
+        if '--format' not in args and formatter:
+            args = ['--format', formatter] + args
         _cmd.main(args)
 
         mock_pr.assert_called_once_with(
@@ -71,16 +77,23 @@ class TestDeploy(testtools.TestCase):
             mock_pr.return_value.reserve_node.return_value,
             **provision_defaults)
 
-    @mock.patch.object(_cmd, 'logging', autospec=True)
-    def test_args_ok(self, mock_log, mock_pr):
+    def _init_instance(self, mock_pr):
         instance = mock_pr.return_value.provision_node.return_value
         instance.create_autospec(_instance.Instance)
+        instance.uuid = '123'
         instance.node.name = None
         instance.node.id = '123'
+        instance.allocation.id = '321'
         instance.state = _instance.InstanceState.ACTIVE
         instance.is_deployed = True
         instance.ip_addresses.return_value = {'private': ['1.2.3.4']}
         instance.hostname = None
+        self._init = True
+        return instance
+
+    @mock.patch.object(_cmd, 'logging', autospec=True)
+    def test_args_ok(self, mock_log, mock_pr):
+        self._init_instance(mock_pr)
 
         args = ['deploy', '--network', 'mynet', '--image', 'myimg',
                 '--resource-class', 'compute']
@@ -101,21 +114,41 @@ class TestDeploy(testtools.TestCase):
             mock_log.getLogger.mock_calls)
 
         self.mock_print.assert_has_calls([
-            mock.call(mock.ANY, node='123', state='ACTIVE'),
-            mock.call(mock.ANY, ips='private=1.2.3.4')
+            mock.call('123  321  ACTIVE private=1.2.3.4'),
         ])
 
     @mock.patch.object(_cmd, 'logging', autospec=True)
+    def test_args_default_format(self, mock_log, mock_pr):
+        self._init_instance(mock_pr)
+
+        args = ['deploy', '--network', 'mynet', '--image', 'myimg',
+                '--resource-class', 'compute']
+        self._check(mock_pr, args, {}, {}, formatter=None)
+
+        config = mock_pr.return_value.provision_node.call_args[1]['config']
+        self.assertEqual([], config.ssh_keys)
+        mock_log.basicConfig.assert_called_once_with(level=mock_log.WARNING,
+                                                     format=mock.ANY)
+
+        source = mock_pr.return_value.provision_node.call_args[1]['image']
+        self.assertIsInstance(source, sources.GlanceImage)
+        self.assertEqual("myimg", source.image)
+        self.assertEqual(
+            mock.call('metalsmith').setLevel(mock_log.WARNING).call_list() +
+            mock.call(_cmd._URLLIB3_LOGGER).setLevel(
+                mock_log.CRITICAL).call_list(),
+            mock_log.getLogger.mock_calls)
+
+    @mock.patch.object(_cmd, 'logging', autospec=True)
     def test_args_json_format(self, mock_log, mock_pr):
-        instance = mock_pr.return_value.provision_node.return_value
-        instance.create_autospec(_instance.Instance)
+        instance = self._init_instance(mock_pr)
         instance.to_dict.return_value = {'node': 'dict'}
 
-        args = ['--format', 'json', 'deploy', '--network', 'mynet',
-                '--image', 'myimg', '--resource-class', 'compute']
+        args = ['deploy', '--network', 'mynet', '--image', 'myimg',
+                '--resource-class', 'compute']
         fake_io = six.StringIO()
         with mock.patch('sys.stdout', fake_io):
-            self._check(mock_pr, args, {}, {})
+            self._check(mock_pr, args, {}, {}, formatter='json')
             self.assertEqual(json.loads(fake_io.getvalue()),
                              {'node': 'dict'})
 
@@ -128,42 +161,34 @@ class TestDeploy(testtools.TestCase):
             mock_log.getLogger.mock_calls)
 
     def test_no_ips(self, mock_pr):
-        instance = mock_pr.return_value.provision_node.return_value
-        instance.create_autospec(_instance.Instance)
-        instance.is_deployed = True
+        instance = self._init_instance(mock_pr)
         instance.ip_addresses.return_value = {}
-        instance.node.name = None
-        instance.node.id = '123'
-        instance.state = _instance.InstanceState.ACTIVE
-        instance.hostname = None
 
         args = ['deploy', '--network', 'mynet', '--image', 'myimg',
                 '--resource-class', 'compute']
         self._check(mock_pr, args, {}, {})
 
-        self.mock_print.assert_called_once_with(mock.ANY, node='123',
-                                                state='ACTIVE'),
+        self.mock_print.assert_has_calls([
+            mock.call('123  321  ACTIVE '),
+        ])
 
     def test_not_deployed_no_ips(self, mock_pr):
-        instance = mock_pr.return_value.provision_node.return_value
-        instance.create_autospec(_instance.Instance)
+        instance = self._init_instance(mock_pr)
         instance.is_deployed = False
-        instance.node.name = None
-        instance.node.id = '123'
         instance.state = _instance.InstanceState.DEPLOYING
-        instance.hostname = None
+        instance.ip_addresses.return_value = {}
 
         args = ['deploy', '--network', 'mynet', '--image', 'myimg',
                 '--resource-class', 'compute']
         self._check(mock_pr, args, {}, {})
 
-        self.mock_print.assert_called_once_with(mock.ANY, node='123',
-                                                state='DEPLOYING'),
+        self.mock_print.assert_has_calls([
+            mock.call('123  321  DEPLOYING '),
+        ])
 
     @mock.patch.object(_cmd.LOG, 'info', autospec=True)
     def test_no_logs_not_deployed(self, mock_log, mock_pr):
-        instance = mock_pr.return_value.provision_node.return_value
-        instance.create_autospec(_instance.Instance)
+        instance = self._init_instance(mock_pr)
         instance.is_deployed = False
 
         args = ['deploy', '--network', 'mynet', '--image', 'myimg',
@@ -361,23 +386,15 @@ class TestDeploy(testtools.TestCase):
         self.assertFalse(mock_pr.return_value.provision_node.called)
 
     def test_args_hostname(self, mock_pr):
-        instance = mock_pr.return_value.provision_node.return_value
-        instance.create_autospec(_instance.Instance)
-        instance.is_deployed = True
-        instance.node.name = None
-        instance.node.id = '123'
-        instance.state = _instance.InstanceState.ACTIVE
+        instance = self._init_instance(mock_pr)
         instance.hostname = 'host'
-        instance.ip_addresses.return_value = {'private': ['1.2.3.4']}
 
         args = ['deploy', '--network', 'mynet', '--image', 'myimg',
                 '--hostname', 'host', '--resource-class', 'compute']
         self._check(mock_pr, args, {'hostname': 'host'}, {})
 
         self.mock_print.assert_has_calls([
-            mock.call(mock.ANY, node='123', state='ACTIVE'),
-            mock.call(mock.ANY, hostname='host'),
-            mock.call(mock.ANY, ips='private=1.2.3.4')
+            mock.call('123  321 host ACTIVE private=1.2.3.4'),
         ])
 
     def test_args_with_candidates(self, mock_pr):
@@ -608,59 +625,98 @@ class TestShowWait(testtools.TestCase):
         self.mock_print = self.print_fixture.mock
         self.instances = [
             mock.Mock(
-                spec=_instance.Instance, hostname=hostname,
-                uuid=hostname[-1], is_deployed=(hostname[-1] == '1'),
+                spec=_instance.Instance,
+                hostname='hostname%d' % i,
+                uuid=str(i),
+                is_deployed=(i == 1),
                 state=_instance.InstanceState.ACTIVE
-                if hostname[-1] == '1' else _instance.InstanceState.DEPLOYING,
-                **{'ip_addresses.return_value': {'private': ['1.2.3.4']}})
-            for hostname in ['hostname1', 'hostname2']
+                if i == 1 else _instance.InstanceState.DEPLOYING,
+                allocation=mock.Mock(spec=['id']) if i == 1 else None,
+                **{'ip_addresses.return_value': {'private': ['1.2.3.4']}}
+            )
+            for i in (1, 2)
         ]
         for inst in self.instances:
             inst.node.id = inst.uuid
             inst.node.name = 'name-%s' % inst.uuid
+            if inst.allocation:
+                inst.allocation.id = '%s00' % inst.uuid
             inst.to_dict.return_value = {inst.node.id: inst.node.name}
 
     def test_show(self, mock_os_conf, mock_pr):
         mock_pr.return_value.show_instances.return_value = self.instances
-        args = ['show', 'uuid1', 'hostname2']
+        args = ['--format', 'value', 'show', 'uuid1', 'hostname2']
         _cmd.main(args)
 
         self.mock_print.assert_has_calls([
-            mock.call(mock.ANY, node='name-1 (UUID 1)', state='ACTIVE'),
-            mock.call(mock.ANY, hostname='hostname1'),
-            mock.call(mock.ANY, ips='private=1.2.3.4'),
-            mock.call(mock.ANY, node='name-2 (UUID 2)', state='DEPLOYING'),
-            mock.call(mock.ANY, hostname='hostname2'),
+            mock.call('1 name-1 100 hostname1 ACTIVE private=1.2.3.4'),
+            mock.call('2 name-2  hostname2 DEPLOYING '),
         ])
         mock_pr.return_value.show_instances.assert_called_once_with(
             ['uuid1', 'hostname2'])
 
     def test_list(self, mock_os_conf, mock_pr):
         mock_pr.return_value.list_instances.return_value = self.instances
-        args = ['list']
+        args = ['--format', 'value', 'list']
         _cmd.main(args)
 
         self.mock_print.assert_has_calls([
-            mock.call(mock.ANY, node='name-1 (UUID 1)', state='ACTIVE'),
-            mock.call(mock.ANY, hostname='hostname1'),
-            mock.call(mock.ANY, ips='private=1.2.3.4'),
-            mock.call(mock.ANY, node='name-2 (UUID 2)', state='DEPLOYING'),
-            mock.call(mock.ANY, hostname='hostname2'),
+            mock.call('1 name-1 100 hostname1 ACTIVE private=1.2.3.4'),
+            mock.call('2 name-2  hostname2 DEPLOYING '),
         ])
+        mock_pr.return_value.list_instances.assert_called_once_with()
+
+    def test_list_sort(self, mock_os_conf, mock_pr):
+        mock_pr.return_value.list_instances.return_value = self.instances
+        args = ['--format', 'value', '--sort-column', 'IP Addresses', 'list']
+        _cmd.main(args)
+
+        self.mock_print.assert_has_calls([
+            mock.call('2 name-2  hostname2 DEPLOYING '),
+            mock.call('1 name-1 100 hostname1 ACTIVE private=1.2.3.4'),
+        ])
+        mock_pr.return_value.list_instances.assert_called_once_with()
+
+    def test_list_one_column(self, mock_os_conf, mock_pr):
+        mock_pr.return_value.list_instances.return_value = self.instances
+        args = ['--format', 'value', '--column', 'Node Name', 'list']
+        _cmd.main(args)
+
+        self.mock_print.assert_has_calls([
+            mock.call('name-1'),
+            mock.call('name-2'),
+        ])
+        mock_pr.return_value.list_instances.assert_called_once_with()
+
+    def test_list_two_columns(self, mock_os_conf, mock_pr):
+        mock_pr.return_value.list_instances.return_value = self.instances
+        args = ['--format', 'value', '--column', 'Node Name',
+                '--column', 'Allocation UUID', 'list']
+        _cmd.main(args)
+
+        self.mock_print.assert_has_calls([
+            mock.call('name-1 100'),
+            mock.call('name-2 '),
+        ])
+        mock_pr.return_value.list_instances.assert_called_once_with()
+
+    def test_list_empty(self, mock_os_conf, mock_pr):
+        mock_pr.return_value.list_instances.return_value = []
+        args = ['--format', 'value', 'list']
+        _cmd.main(args)
+
+        self.assertFalse(self.mock_print.called)
         mock_pr.return_value.list_instances.assert_called_once_with()
 
     def test_wait(self, mock_os_conf, mock_pr):
         mock_pr.return_value.wait_for_provisioning.return_value = (
             self.instances)
-        args = ['wait', 'uuid1', 'hostname2']
+        args = ['--format', 'value', 'wait', 'uuid1', 'hostname2']
         _cmd.main(args)
 
         self.mock_print.assert_has_calls([
-            mock.call(mock.ANY, node='name-1 (UUID 1)', state='ACTIVE'),
-            mock.call(mock.ANY, hostname='hostname1'),
-            mock.call(mock.ANY, ips='private=1.2.3.4'),
-            mock.call(mock.ANY, node='name-2 (UUID 2)', state='DEPLOYING'),
-            mock.call(mock.ANY, hostname='hostname2'),
+            mock.call('1 name-1 100 hostname1 ACTIVE private=1.2.3.4'),
+            mock.call('2 name-2  hostname2 DEPLOYING '),
         ])
         mock_pr.return_value.wait_for_provisioning.assert_called_once_with(
             ['uuid1', 'hostname2'], timeout=None)
@@ -668,18 +724,24 @@ class TestShowWait(testtools.TestCase):
     def test_wait_custom_timeout(self, mock_os_conf, mock_pr):
         mock_pr.return_value.wait_for_provisioning.return_value = (
             self.instances)
-        args = ['wait', '--timeout', '42', 'uuid1', 'hostname2']
+        args = ['--format', 'value', 'wait', '--timeout', '42',
+                'uuid1', 'hostname2']
         _cmd.main(args)
 
         self.mock_print.assert_has_calls([
-            mock.call(mock.ANY, node='name-1 (UUID 1)', state='ACTIVE'),
-            mock.call(mock.ANY, hostname='hostname1'),
-            mock.call(mock.ANY, ips='private=1.2.3.4'),
-            mock.call(mock.ANY, node='name-2 (UUID 2)', state='DEPLOYING'),
-            mock.call(mock.ANY, hostname='hostname2'),
+            mock.call('1 name-1 100 hostname1 ACTIVE private=1.2.3.4'),
+            mock.call('2 name-2  hostname2 DEPLOYING '),
         ])
         mock_pr.return_value.wait_for_provisioning.assert_called_once_with(
             ['uuid1', 'hostname2'], timeout=42)
+
+    def test_show_table(self, mock_os_conf, mock_pr):
+        mock_pr.return_value.show_instances.return_value = self.instances
+        args = ['show', 'uuid1', 'hostname2']
+        _cmd.main(args)
+
+        mock_pr.return_value.show_instances.assert_called_once_with(
+            ['uuid1', 'hostname2'])
 
     def test_show_json(self, mock_os_conf, mock_pr):
         mock_pr.return_value.show_instances.return_value = self.instances
@@ -691,6 +753,21 @@ class TestShowWait(testtools.TestCase):
             self.assertEqual(json.loads(fake_io.getvalue()),
                              {'hostname1': {'1': 'name-1'},
                               'hostname2': {'2': 'name-2'}})
+
+    def test_list_table(self, mock_os_conf, mock_pr):
+        mock_pr.return_value.list_instances.return_value = self.instances
+        args = ['list']
+        _cmd.main(args)
+
+        mock_pr.return_value.list_instances.assert_called_once_with()
+
+    def test_list_table_empty(self, mock_os_conf, mock_pr):
+        mock_pr.return_value.list_instances.return_value = []
+        args = ['list']
+        _cmd.main(args)
+
+        self.mock_print.assert_called_once_with('')
+        mock_pr.return_value.list_instances.assert_called_once_with()
 
     def test_list_json(self, mock_os_conf, mock_pr):
         mock_pr.return_value.list_instances.return_value = self.instances
