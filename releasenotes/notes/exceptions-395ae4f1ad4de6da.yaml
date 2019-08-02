@@ -1,0 +1,8 @@
+---
+upgrade:
+  - |
+    Changes to consistently using exceptions from ``metalsmith.exceptions``
+    rathen than exposing OpenStackSDK exceptions.
+deprecations:
+  - |
+    The exception ``InvalidInstance`` has been renamed to ``InstanceNotFound``.

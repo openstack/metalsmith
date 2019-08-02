@@ -13,11 +13,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import contextlib
+import logging
 import re
+import sys
 
+from openstack import exceptions as os_exc
 import six
 
 from metalsmith import exceptions
+
+
+LOG = logging.getLogger(__name__)
 
 
 def log_res(res):
@@ -122,3 +129,19 @@ def hostname_for(node, allocation=None):
         return allocation.name
     else:
         return default_hostname(node)
+
+
+@contextlib.contextmanager
+def reraise_os_exc(reraise_as, failure_message='Clean up failed'):
+    exc_info = sys.exc_info()
+    is_expected = isinstance(exc_info[1], os_exc.SDKException)
+
+    try:
+        yield is_expected
+    except Exception:
+        LOG.exception(failure_message)
+
+    if is_expected:
+        raise reraise_as(str(exc_info[1]))
+    else:
+        six.reraise(*exc_info)

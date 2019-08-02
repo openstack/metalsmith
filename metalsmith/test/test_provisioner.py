@@ -21,6 +21,7 @@ import testtools
 
 from metalsmith import _instance
 from metalsmith import _provisioner
+from metalsmith import _utils
 from metalsmith import exceptions
 from metalsmith import instance_config
 from metalsmith import sources
@@ -133,6 +134,13 @@ class TestGetFindNode(testtools.TestCase):
         self.assertIs(result, node)
         self.assertIsNone(alloc)
 
+    def test__find_node_and_allocation_by_node_not_found(self):
+        node = mock.Mock(spec=['id', 'name'])
+        self.api.baremetal.get_node.side_effect = os_exc.ResourceNotFound
+        self.assertRaises(exceptions.InstanceNotFound,
+                          self.pr._find_node_and_allocation, node,
+                          refresh=True)
+
     def test__find_node_and_allocation_by_hostname(self):
         result, alloc = self.pr._find_node_and_allocation('node')
         self.assertIs(result, self.api.baremetal.get_node.return_value)
@@ -148,9 +156,16 @@ class TestGetFindNode(testtools.TestCase):
         self.assertIsNone(alloc)
         self.api.baremetal.get_node.assert_called_once_with('node')
 
+    def test__find_node_and_allocation_by_hostname_node_in_allocation(self):
+        self.api.baremetal.get_node.side_effect = os_exc.ResourceNotFound
+        self.assertRaises(exceptions.InstanceNotFound,
+                          self.pr._find_node_and_allocation, 'node')
+        self.api.baremetal.get_node.assert_called_once_with(
+            self.api.baremetal.get_allocation.return_value.node_id)
+
     def test__find_node_and_allocation_by_hostname_bad_allocation(self):
         self.api.baremetal.get_allocation.return_value.node_id = None
-        self.assertRaises(exceptions.InvalidInstance,
+        self.assertRaises(exceptions.InstanceNotFound,
                           self.pr._find_node_and_allocation, 'node')
         self.assertFalse(self.api.baremetal.get_node.called)
 
@@ -195,6 +210,19 @@ class TestReserveNode(Base):
         self.assertFalse(self.api.baremetal.patch_node.called)
         self.assertFalse(self.api.baremetal.delete_allocation.called)
 
+    def test_create_allocation_failed(self):
+        self.api.baremetal.create_allocation.side_effect = (
+            os_exc.SDKException('boom'))
+
+        self.assertRaisesRegex(exceptions.ReservationFailed, 'boom',
+                               self.pr.reserve_node, self.RSC)
+
+        self.api.baremetal.create_allocation.assert_called_once_with(
+            name=None, candidate_nodes=None,
+            resource_class=self.RSC, traits=None)
+        self.assertFalse(self.api.baremetal.delete_allocation.called)
+        self.assertFalse(self.api.baremetal.patch_node.called)
+
     def test_allocation_failed(self):
         self.api.baremetal.wait_for_allocation.side_effect = (
             os_exc.SDKException('boom'))
@@ -209,7 +237,7 @@ class TestReserveNode(Base):
             self.api.baremetal.create_allocation.return_value)
         self.assertFalse(self.api.baremetal.patch_node.called)
 
-    @mock.patch.object(_provisioner.LOG, 'exception', autospec=True)
+    @mock.patch.object(_utils.LOG, 'exception', autospec=True)
     def test_allocation_failed_clean_up_failed(self, mock_log):
         self.api.baremetal.delete_allocation.side_effect = RuntimeError()
         self.api.baremetal.wait_for_allocation.side_effect = (
@@ -269,7 +297,27 @@ class TestReserveNode(Base):
         self.api.baremetal.nodes.return_value = [expected]
         self.api.baremetal.patch_node.side_effect = os_exc.SDKException('boom')
 
-        self.assertRaisesRegex(os_exc.SDKException, 'boom',
+        self.assertRaisesRegex(exceptions.ReservationFailed, 'boom',
+                               self.pr.reserve_node, self.RSC,
+                               capabilities={'answer': '42'})
+
+        self.api.baremetal.create_allocation.assert_called_once_with(
+            name=None, candidate_nodes=[expected.id],
+            resource_class=self.RSC, traits=None)
+        self.api.baremetal.delete_allocation.assert_called_once_with(
+            self.api.baremetal.wait_for_allocation.return_value)
+        self.api.baremetal.patch_node.assert_called_once_with(
+            expected, [{'path': '/instance_info/capabilities',
+                        'op': 'add', 'value': {'answer': '42'}}])
+
+    def test_node_update_unexpected_exception(self):
+        expected = self._node(properties={'local_gb': 100,
+                                          'capabilities': {'answer': '42'}})
+        self.api.baremetal.get_node.return_value = expected
+        self.api.baremetal.nodes.return_value = [expected]
+        self.api.baremetal.patch_node.side_effect = RuntimeError('boom')
+
+        self.assertRaisesRegex(RuntimeError, 'boom',
                                self.pr.reserve_node, self.RSC,
                                capabilities={'answer': '42'})
 
@@ -350,6 +398,16 @@ class TestReserveNode(Base):
             resource_class=self.RSC, traits=None)
         self.api.baremetal.get_node.assert_called_once_with(
             self.api.baremetal.wait_for_allocation.return_value.node_id)
+        self.assertFalse(self.api.baremetal.patch_node.called)
+
+    def test_provided_node_not_found(self):
+        self.mock_get_node.side_effect = os_exc.ResourceNotFound
+
+        self.assertRaises(exceptions.InvalidNode, self.pr.reserve_node,
+                          self.RSC, candidates=['node1'])
+
+        self.assertFalse(self.api.baremetal.nodes.called)
+        self.assertFalse(self.api.baremetal.create_allocation.called)
         self.assertFalse(self.api.baremetal.patch_node.called)
 
     def test_nodes_filtered(self):
@@ -1776,6 +1834,16 @@ class TestUnprovisionNode(Base):
         wait_mock.assert_called_once_with([self.node], 'available',
                                           timeout=3600)
 
+    def test_with_wait_failed(self):
+        for caught, expected in [(os_exc.ResourceTimeout,
+                                  exceptions.DeploymentTimeout),
+                                 (os_exc.SDKException,
+                                  exceptions.DeploymentFailed)]:
+            self.api.baremetal.wait_for_nodes_provision_state.side_effect = (
+                caught)
+            self.assertRaises(expected, self.pr.unprovision_node,
+                              self.node, wait=3600)
+
     def test_without_allocation(self):
         self.node.allocation_id = None
         # Check that unrelated extra fields are not touched.
@@ -1867,7 +1935,7 @@ class TestShowInstance(testtools.TestCase):
         self.node.provision_state = 'manageable'
         self.api.baremetal.get_allocation.side_effect = (
             os_exc.ResourceNotFound())
-        self.assertRaises(exceptions.InvalidInstance,
+        self.assertRaises(exceptions.InstanceNotFound,
                           self.pr.show_instance, 'id1')
         self.api.baremetal.get_node.assert_called_once_with('id1')
 
@@ -1880,6 +1948,17 @@ class TestWaitForProvisioning(Base):
         result = self.pr.wait_for_provisioning([node])
         self.assertEqual([node], [inst.node for inst in result])
         self.assertIsInstance(result[0], _instance.Instance)
+
+    def test_exceptions(self):
+        node = mock.Mock(spec=NODE_FIELDS)
+
+        for caught, expected in [(os_exc.ResourceTimeout,
+                                  exceptions.DeploymentTimeout),
+                                 (os_exc.SDKException,
+                                  exceptions.DeploymentFailed)]:
+            self.api.baremetal.wait_for_nodes_provision_state.side_effect = (
+                caught)
+            self.assertRaises(expected, self.pr.wait_for_provisioning, [node])
 
 
 class TestListInstances(Base):

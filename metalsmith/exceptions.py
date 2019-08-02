@@ -67,28 +67,6 @@ class CapabilitiesNotFound(ReservationFailed):
         super(CapabilitiesNotFound, self).__init__(message)
 
 
-class TraitsNotFound(ReservationFailed):
-    """DEPRECATED."""
-
-    def __init__(self, message, traits):
-        self.requested_traits = traits
-        super(TraitsNotFound, self).__init__(message)
-
-
-class ValidationFailed(ReservationFailed):
-    """Validation failed for all requested nodes."""
-
-
-class NoNodesReserved(ReservationFailed):
-    """DEPRECATED."""
-
-    def __init__(self, nodes):
-        self.nodes = nodes
-        message = ('All the candidate nodes are already reserved '
-                   'or failed validation')
-        super(NoNodesReserved, self).__init__(message)
-
-
 class InvalidImage(Error):
     """Requested image is invalid and cannot be used."""
 
@@ -105,13 +83,18 @@ class InvalidNode(Error):
     """This node cannot be deployed onto."""
 
 
-class DeploymentFailure(Error):
-    """DEPRECATED."""
-
-    def __init__(self, message, nodes):
-        self.nodes = nodes
-        super(DeploymentFailure, self).__init__(message)
+class DeploymentFailed(Error):
+    """Deployment failed."""
 
 
-class InvalidInstance(Error):
-    """The node(s) does not have a metalsmith instance associated."""
+class DeploymentTimeout(DeploymentFailed):
+    """Timeout during deployment."""
+
+
+class InstanceNotFound(Error):
+    """Instance not found or node doesn't have an instance associated."""
+
+
+# Deprecated aliases
+DeploymentFailure = DeploymentFailed
+InvalidInstance = InstanceNotFound

@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import logging
-import sys
 
 from openstack import connection
 from openstack import exceptions as os_exc
@@ -113,7 +112,10 @@ class Provisioner(object):
                          candidates, predicate):
         """Build a list of candidate nodes for allocation."""
         if candidates:
-            nodes = [self._get_node(node) for node in candidates]
+            try:
+                nodes = [self._get_node(node) for node in candidates]
+            except os_exc.ResourceNotFound as exc:
+                raise exceptions.InvalidNode(str(exc))
         else:
             nodes = list(self.connection.baremetal.nodes(
                 details=True,
@@ -149,9 +151,14 @@ class Provisioner(object):
                   'with traits %(traits)s and candidate nodes %(candidates)s',
                   {'rsc': resource_class, 'traits': traits,
                    'candidates': candidates})
-        allocation = self.connection.baremetal.create_allocation(
-            name=hostname, candidate_nodes=candidates,
-            resource_class=resource_class, traits=traits)
+        try:
+            allocation = self.connection.baremetal.create_allocation(
+                name=hostname, candidate_nodes=candidates,
+                resource_class=resource_class, traits=traits)
+        except os_exc.SDKException as exc:
+            # Re-raise the expected exception class
+            raise exceptions.ReservationFailed(
+                'Failed to create an allocation: %s' % exc)
 
         node = None
         try:
@@ -171,18 +178,15 @@ class Provisioner(object):
                 node = self._patch_reserved_node(node, allocation, hostname,
                                                  capabilities)
         except Exception as exc:
-            exc_info = sys.exc_info()
-
-            try:
+            with _utils.reraise_os_exc(
+                    exceptions.ReservationFailed,
+                    'Failed to delete failed allocation') as expected:
                 LOG.error('Processing allocation %(alloc)s for node %(node)s '
                           'failed: %(exc)s; deleting allocation',
                           {'alloc': _utils.log_res(allocation),
-                           'node': _utils.log_res(node), 'exc': exc})
+                           'node': _utils.log_res(node), 'exc': exc},
+                          exc_info=not expected)
                 self.connection.baremetal.delete_allocation(allocation)
-            except Exception:
-                LOG.exception('Failed to delete failed allocation')
-
-            six.reraise(*exc_info)
 
         LOG.debug('Reserved node: %s', node)
         return node, allocation
@@ -427,17 +431,12 @@ class Provisioner(object):
             self.connection.baremetal.set_node_provision_state(
                 node, 'active', config_drive=cd)
         except Exception:
-            exc_info = sys.exc_info()
-
-            if clean_up_on_failure:
-                try:
+            with _utils.reraise_os_exc(
+                    exceptions.DeploymentFailed) as expected:
+                if clean_up_on_failure:
                     LOG.error('Deploy attempt failed on node %s, cleaning up',
-                              _utils.log_res(node))
+                              _utils.log_res(node), exc_info=not expected)
                     self._clean_up(node, nics=nics)
-                except Exception:
-                    LOG.exception('Clean up failed')
-
-            six.reraise(*exc_info)
 
         LOG.info('Provisioning started on node %s', _utils.log_res(node))
 
@@ -466,14 +465,20 @@ class Provisioner(object):
             (more precisely, until the operation times out on server side).
         :return: List of updated :py:class:`metalsmith.Instance` objects if
             all succeeded.
-        :raises: `openstack.exceptions.ResourceTimeout` if deployment times
-            out for any node.
-        :raises: `openstack.exceptions.SDKException` if deployment fails
-            for any node.
+        :raises: :py:class:`metalsmith.exceptions.DeploymentFailed`
+            if deployment fails or times out.
+        :raises: :py:class:`metalsmith.exceptions.InstanceNotFound`
+            if requested nodes cannot be found.
         """
         nodes = [self._find_node_and_allocation(n)[0] for n in nodes]
-        nodes = self.connection.baremetal.wait_for_nodes_provision_state(
-            nodes, 'active', timeout=timeout)
+        try:
+            nodes = self.connection.baremetal.wait_for_nodes_provision_state(
+                nodes, 'active', timeout=timeout)
+        except os_exc.ResourceTimeout as exc:
+            raise exceptions.DeploymentTimeout(str(exc))
+        except os_exc.SDKException as exc:
+            raise exceptions.DeploymentFailed(str(exc))
+
         # Using _get_instance in case the deployment started by something
         # external that uses allocations.
         return [self._get_instance(node) for node in nodes]
@@ -533,6 +538,12 @@ class Provisioner(object):
         :param wait: How many seconds to wait for the process to finish,
             None to return immediately.
         :return: the latest `Node` object.
+        :raises: :py:class:`metalsmith.exceptions.DeploymentFailed`
+            if undeployment fails.
+        :raises: :py:class:`metalsmith.exceptions.DeploymentTimeout`
+            if undeployment times out.
+        :raises: :py:class:`metalsmith.exceptions.InstanceNotFound`
+            if requested node cannot be found.
         """
         node = self._find_node_and_allocation(node)[0]
         if self._dry_run:
@@ -540,16 +551,23 @@ class Provisioner(object):
             return
 
         self._clean_up(node)
-        node = self.connection.baremetal.set_node_provision_state(
-            node, 'deleted', wait=False)
+        try:
+            node = self.connection.baremetal.set_node_provision_state(
+                node, 'deleted', wait=False)
 
-        LOG.info('Deleting started for node %s', _utils.log_res(node))
+            LOG.info('Deleting started for node %s', _utils.log_res(node))
 
-        if wait is not None:
+            if wait is None:
+                return node
+
             node = self.connection.baremetal.wait_for_nodes_provision_state(
                 [node], 'available', timeout=wait)[0]
-            LOG.info('Node %s undeployed successfully', _utils.log_res(node))
+        except os_exc.ResourceTimeout as exc:
+            raise exceptions.DeploymentTimeout(str(exc))
+        except os_exc.SDKException as exc:
+            raise exceptions.DeploymentFailed(str(exc))
 
+        LOG.info('Node %s undeployed successfully', _utils.log_res(node))
         return node
 
     def show_instance(self, instance_id):
@@ -557,7 +575,7 @@ class Provisioner(object):
 
         :param instance_id: hostname, UUID or node name.
         :return: :py:class:`metalsmith.Instance` object.
-        :raises: :py:class:`metalsmith.exceptions.InvalidInstance`
+        :raises: :py:class:`metalsmith.exceptions.InstanceNotFound`
             if the instance is not a valid instance.
         """
         return self.show_instances([instance_id])[0]
@@ -571,8 +589,9 @@ class Provisioner(object):
         :param instances: list of hostnames, UUIDs or node names.
         :return: list of :py:class:`metalsmith.Instance` objects in the same
             order as ``instances``.
-        :raises: :py:class:`metalsmith.exceptions.InvalidInstance`
-            if one of the instances are not valid instances.
+        :raises: :py:class:`metalsmith.exceptions.InstanceNotFound`
+            if one of the instances cannot be found or the found node is
+            not a valid instance.
         """
         result = [self._get_instance(inst) for inst in instances]
         # NOTE(dtantsur): do not accept node names as valid instances if they
@@ -580,7 +599,7 @@ class Provisioner(object):
         missing = [inst for (res, inst) in zip(result, instances)
                    if res.state == _instance.InstanceState.UNKNOWN]
         if missing:
-            raise exceptions.InvalidInstance(
+            raise exceptions.InstanceNotFound(
                 "Node(s)/instance(s) %s are not valid instances"
                 % ', '.join(map(str, missing)))
         return result
@@ -611,28 +630,41 @@ class Provisioner(object):
             return node
 
     def _find_node_and_allocation(self, node, refresh=False):
-        if (not isinstance(node, six.string_types)
-                or not _utils.is_hostname_safe(node)):
-            return self._get_node(node, refresh=refresh), None
-
         try:
-            allocation = self.connection.baremetal.get_allocation(node)
-        except os_exc.ResourceNotFound:
-            return self._get_node(node, refresh=refresh), None
-        else:
-            if allocation.node_id:
+            if (not isinstance(node, six.string_types)
+                    or not _utils.is_hostname_safe(node)):
+                return self._get_node(node, refresh=refresh), None
+
+            try:
+                allocation = self.connection.baremetal.get_allocation(node)
+            except os_exc.ResourceNotFound:
+                return self._get_node(node, refresh=refresh), None
+        except os_exc.ResourceNotFound as exc:
+            raise exceptions.InstanceNotFound(str(exc))
+
+        if allocation.node_id:
+            try:
                 return (self.connection.baremetal.get_node(allocation.node_id),
                         allocation)
-            else:
-                raise exceptions.InvalidInstance(
-                    'Allocation %s exists but is not associated '
-                    'with a node' % node)
+            except os_exc.ResourceNotFound:
+                raise exceptions.InstanceNotFound(
+                    'Node %(node)s associated with allocation '
+                    '%(alloc)s was not found' %
+                    {'node': allocation.node_id,
+                     'alloc': allocation.id})
+        else:
+            raise exceptions.InstanceNotFound(
+                'Allocation %s exists but is not associated '
+                'with a node' % node)
 
     def _get_instance(self, ident):
         node, allocation = self._find_node_and_allocation(ident)
         if allocation is None and node.allocation_id:
-            allocation = self.connection.baremetal.get_allocation(
-                node.allocation_id)
+            try:
+                allocation = self.connection.baremetal.get_allocation(
+                    node.allocation_id)
+            except os_exc.ResourceNotFound as exc:
+                raise exceptions.InstanceNotFound(str(exc))
 
         return _instance.Instance(self.connection, node,
                                   allocation=allocation)
