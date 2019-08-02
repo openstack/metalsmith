@@ -16,10 +16,8 @@
 import json
 
 import mock
-from openstack.baremetal import configdrive
 import testtools
 
-import metalsmith
 from metalsmith import instance_config
 
 
@@ -43,15 +41,12 @@ class TestGenericConfig(testtools.TestCase):
                       'meta': {}}
         expected_m.update(expected_metadata)
 
-        with mock.patch.object(configdrive, 'build', autospec=True) as mb:
-            result = config.build_configdrive(self.node, hostname)
-            mb.assert_called_once_with(expected_m, mock.ANY)
-            self.assertIs(result, mb.return_value)
-            user_data = mb.call_args[1].get('user_data')
+        result = config.generate(self.node, hostname)
+        self.assertEqual(expected_m, result['meta_data'])
 
+        user_data = result['user_data']
         if expected_userdata:
             self.assertIsNotNone(user_data)
-            user_data = user_data.decode('utf-8')
             if cloud_init:
                 header, user_data = user_data.split('\n', 1)
                 self.assertEqual('#cloud-config', header)
@@ -144,7 +139,3 @@ class TestCloudInitConfig(TestGenericConfig):
         config = self.CLASS()
         config.user_data = "string"
         self.assertRaises(TypeError, config.populate_user_data)
-
-
-class TestDeprecatedInstanceConfig(TestCloudInitConfig):
-    CLASS = metalsmith.InstanceConfig
