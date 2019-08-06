@@ -406,6 +406,8 @@ class Provisioner(object):
             instance_info = self._clean_instance_info(node.instance_info)
             instance_info['root_gb'] = root_size_gb
             instance_info['capabilities'] = capabilities
+            if hostname:
+                instance_info['display_name'] = hostname
 
             extra = node.extra.copy()
             extra[_CREATED_PORTS] = nics.created_ports

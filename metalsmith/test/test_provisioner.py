@@ -629,6 +629,7 @@ class TestProvisionNode(Base):
 
         self.api.baremetal.update_allocation.side_effect = _update
         hostname = 'control-0.example.com'
+        self.instance_info['display_name'] = hostname
         inst = self.pr.provision_node(self.node, 'image',
                                       [{'network': 'network'}],
                                       hostname=hostname)
@@ -682,6 +683,7 @@ class TestProvisionNode(Base):
 
     def test_existing_hostname_match(self):
         hostname = 'control-0.example.com'
+        self.instance_info['display_name'] = hostname
         self.allocation.name = hostname
         inst = self.pr.provision_node(self.node, 'image',
                                       [{'network': 'network'}],
@@ -828,6 +830,7 @@ class TestProvisionNode(Base):
         self.node.allocation_id = None
         self.api.baremetal.get_node.return_value = self.node
         hostname = 'control-2.example.com'
+        self.instance_info['display_name'] = hostname
 
         self.pr.provision_node(self.node, 'image', [{'network': 'network'}],
                                hostname=hostname)
