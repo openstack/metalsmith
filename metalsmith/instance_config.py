@@ -16,9 +16,6 @@
 import copy
 import json
 import logging
-import warnings
-
-from openstack.baremetal import configdrive
 
 from metalsmith import _utils
 
@@ -87,30 +84,6 @@ class GenericConfig(object):
         """
         return self.user_data
 
-    def build_configdrive(self, node, hostname=None):
-        """Make the config drive ISO.
-
-        Deprecated, use :py:meth:`generate` with openstacksdk's
-        ``openstack.baremetal.configdrive.build`` instead.
-
-        :param node: `Node` object.
-        :param hostname: Desired hostname (defaults to node's name or ID).
-        :return: configdrive contents as a base64-encoded string.
-        """
-        warnings.warn("build_configdrive is deprecated, use generate with "
-                      "openstacksdk's openstack.baremetal.configdrive.build "
-                      "instead", DeprecationWarning)
-        cd = self.generate(node, hostname)
-        metadata = cd.pop('meta_data')
-        user_data = cd.pop('user_data')
-        if user_data:
-            user_data = user_data.encode('utf-8')
-
-        LOG.debug('Generating configdrive tree for node %(node)s with '
-                  'metadata %(meta)s', {'node': _utils.log_res(node),
-                                        'meta': metadata})
-        return configdrive.build(metadata, user_data=user_data, **cd)
-
 
 class CloudInitConfig(GenericConfig):
     """Configuration of the target instance using cloud-init.
@@ -170,12 +143,3 @@ class CloudInitConfig(GenericConfig):
 
         if user_data:
             return "#cloud-config\n" + json.dumps(user_data)
-
-
-class InstanceConfig(CloudInitConfig):
-    """DEPRECATED, use :class:`.GenericConfig` or :class:`.CloudInitConfig`."""
-
-    def __init__(self, *args, **kwargs):
-        warnings.warn('InstanceConfig is deprecated, use GenericConfig or '
-                      'CloudInitConfig instead', DeprecationWarning)
-        super(InstanceConfig, self).__init__(*args, **kwargs)
