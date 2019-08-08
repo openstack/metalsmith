@@ -28,7 +28,7 @@ LOG = logging.getLogger(__name__)
 class NICs(object):
     """Requested NICs."""
 
-    def __init__(self, connection, node, nics):
+    def __init__(self, connection, node, nics, hostname=None):
         if nics is None:
             nics = []
 
@@ -43,6 +43,7 @@ class NICs(object):
         self._connection = connection
         self._nics = nics
         self._validated = None
+        self._hostname = hostname
         self.created_ports = []
         self.attached_ports = []
 
@@ -137,6 +138,8 @@ class NICs(object):
         port_args = {'network_id': network.id}
         if nic.get('fixed_ip'):
             port_args['fixed_ips'] = [{'ip_address': nic['fixed_ip']}]
+        if self._hostname:
+            port_args['name'] = '%s-%s' % (self._hostname, network.name)
 
         return port_args
 
@@ -166,8 +169,11 @@ class NICs(object):
                 'Cannot find network %(net)s for subnet %(sub)s: %(error)s' %
                 {'net': subnet.network_id, 'sub': nic['subnet'], 'error': exc})
 
-        return {'network_id': network.id,
-                'fixed_ips': [{'subnet_id': subnet.id}]}
+        port_args = {'network_id': network.id,
+                     'fixed_ips': [{'subnet_id': subnet.id}]}
+        if self._hostname:
+            port_args['name'] = '%s-%s' % (self._hostname, network.name)
+        return port_args
 
 
 def detach_and_delete_ports(connection, node, created_ports, attached_ports):

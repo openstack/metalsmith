@@ -382,7 +382,8 @@ class Provisioner(object):
                                          {'node': node, 'exc': exc})
 
         node, allocation = self._check_node_for_deploy(node, hostname)
-        nics = _nics.NICs(self.connection, node, nics)
+        nics = _nics.NICs(self.connection, node, nics,
+                          hostname=allocation and allocation.name or None)
 
         try:
             root_size_gb = _utils.get_root_disk(root_size_gb, node)
