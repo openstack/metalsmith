@@ -13,17 +13,48 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import mock
 import testtools
 
+from metalsmith import exceptions
 from metalsmith import sources
 
 
 class TestDetect(testtools.TestCase):
 
-    def test_glance(self):
+    def test_glance_whole_disk(self):
         source = sources.detect('foobar')
         self.assertIsInstance(source, sources.GlanceImage)
         self.assertEqual(source.image, 'foobar')
+
+        conn = mock.Mock(spec=['image'])
+        conn.image.find_image.return_value = mock.Mock(
+            id=42, kernel_id=None, ramdisk_id=None)
+        source._validate(conn, None)
+        self.assertEqual({'image_source': 42}, source._node_updates(conn))
+
+    def test_glance_partition(self):
+        source = sources.detect('foobar')
+        self.assertIsInstance(source, sources.GlanceImage)
+        self.assertEqual(source.image, 'foobar')
+
+        conn = mock.Mock(spec=['image'])
+        conn.image.find_image.return_value = mock.Mock(
+            id=42, kernel_id=1, ramdisk_id=2)
+        source._validate(conn, 9)
+        self.assertEqual({'image_source': 42, 'kernel': 1, 'ramdisk': 2},
+                         source._node_updates(conn))
+
+    def test_glance_partition_missing_root(self):
+        source = sources.detect('foobar')
+        self.assertIsInstance(source, sources.GlanceImage)
+        self.assertEqual(source.image, 'foobar')
+
+        conn = mock.Mock(spec=['image'])
+        conn.image.find_image.return_value = mock.Mock(
+            id=42, kernel_id=1, ramdisk_id=2)
+        self.assertRaises(exceptions.UnknownRootDiskSize,
+                          source._validate, conn, None)
 
     def test_glance_invalid_arguments(self):
         for kwargs in [{'kernel': 'foo'},
@@ -43,6 +74,8 @@ class TestDetect(testtools.TestCase):
         self.assertEqual(source.location, 'file:///image')
         self.assertEqual(source.checksum, 'abcd')
 
+        source._validate(mock.Mock(), None)
+
     def test_file_partition_disk(self):
         source = sources.detect('file:///image', checksum='abcd',
                                 kernel='file:///kernel',
@@ -52,6 +85,15 @@ class TestDetect(testtools.TestCase):
         self.assertEqual(source.checksum, 'abcd')
         self.assertEqual(source.kernel_location, 'file:///kernel')
         self.assertEqual(source.ramdisk_location, 'file:///ramdisk')
+
+        source._validate(mock.Mock(), 9)
+
+    def test_file_partition_disk_missing_root(self):
+        source = sources.detect('file:///image', checksum='abcd',
+                                kernel='file:///kernel',
+                                ramdisk='file:///ramdisk')
+        self.assertRaises(exceptions.UnknownRootDiskSize,
+                          source._validate, mock.Mock(), None)
 
     def test_file_partition_inconsistency(self):
         for kwargs in [{'kernel': 'foo'},
@@ -69,11 +111,15 @@ class TestDetect(testtools.TestCase):
         self.assertEqual(source.url, 'http:///image')
         self.assertEqual(source.checksum, 'abcd')
 
+        source._validate(mock.Mock(), None)
+
     def test_https_whole_disk(self):
         source = sources.detect('https:///image', checksum='abcd')
         self.assertIs(source.__class__, sources.HttpWholeDiskImage)
         self.assertEqual(source.url, 'https:///image')
         self.assertEqual(source.checksum, 'abcd')
+
+        source._validate(mock.Mock(), None)
 
     def test_https_whole_disk_checksum(self):
         source = sources.detect('https:///image',
@@ -91,6 +137,15 @@ class TestDetect(testtools.TestCase):
         self.assertEqual(source.checksum, 'abcd')
         self.assertEqual(source.kernel_url, 'http:///kernel')
         self.assertEqual(source.ramdisk_url, 'http:///ramdisk')
+
+        source._validate(mock.Mock(), 9)
+
+    def test_http_partition_disk_missing_root(self):
+        source = sources.detect('http:///image', checksum='abcd',
+                                kernel='http:///kernel',
+                                ramdisk='http:///ramdisk')
+        self.assertRaises(exceptions.UnknownRootDiskSize,
+                          source._validate, mock.Mock(), None)
 
     def test_https_partition_disk(self):
         source = sources.detect('https:///image', checksum='abcd',

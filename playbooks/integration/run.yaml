@@ -14,6 +14,7 @@
       vars:
         metalsmith_image: "{{ metalsmith_whole_disk_image }}"
         metalsmith_image_checksum: "{{ metalsmith_whole_disk_checksum | default('') }}"
+        metalsmith_root_size:
         # NOTE(dtantsur): cannot specify swap with whole disk images
         metalsmith_swap_size:
 

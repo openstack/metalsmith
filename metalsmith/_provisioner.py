@@ -388,7 +388,7 @@ class Provisioner(object):
         try:
             root_size_gb = _utils.get_root_disk(root_size_gb, node)
 
-            image._validate(self.connection)
+            image._validate(self.connection, root_size_gb)
 
             nics.validate()
 
@@ -405,7 +405,8 @@ class Provisioner(object):
             capabilities['boot_option'] = 'netboot' if netboot else 'local'
 
             instance_info = self._clean_instance_info(node.instance_info)
-            instance_info['root_gb'] = root_size_gb
+            if root_size_gb is not None:
+                instance_info['root_gb'] = root_size_gb
             instance_info['capabilities'] = capabilities
             if hostname:
                 instance_info['display_name'] = hostname

@@ -56,9 +56,9 @@ def get_root_disk(root_size_gb, node):
         try:
             assert int(node.properties['local_gb']) > 0
         except KeyError:
-            raise exceptions.UnknownRootDiskSize(
-                'No local_gb for node %s and no root partition size '
-                'specified' % log_res(node))
+            LOG.debug('No local_gb for node %s and no root partition size '
+                      'specified', log_res(node))
+            return
         except (TypeError, ValueError, AssertionError):
             raise exceptions.UnknownRootDiskSize(
                 'The local_gb for node %(node)s is invalid: '
