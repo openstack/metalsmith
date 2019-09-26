@@ -1,0 +1,5 @@
+---
+fixes:
+  - |
+    No longer requires root size for whole disk images. This requirement has
+    been removed from ironic.

@@ -34,7 +34,7 @@ LOG = logging.getLogger(__name__)
 @six.add_metaclass(abc.ABCMeta)
 class _Source(object):
 
-    def _validate(self, connection):
+    def _validate(self, connection, root_size_gb):
         """Validate the source."""
 
     @abc.abstractmethod
@@ -53,7 +53,7 @@ class GlanceImage(_Source):
         self.image = image
         self._image_obj = None
 
-    def _validate(self, connection):
+    def _validate(self, connection, root_size_gb):
         if self._image_obj is not None:
             return
         try:
@@ -64,8 +64,13 @@ class GlanceImage(_Source):
                 'Cannot find image %(image)s: %(error)s' %
                 {'image': self.image, 'error': exc})
 
+        if (root_size_gb is None and
+                any(getattr(self._image_obj, x, None) is not None
+                    for x in ('kernel_id', 'ramdisk_id'))):
+            raise exceptions.UnknownRootDiskSize(
+                'Partition images require root partition size')
+
     def _node_updates(self, connection):
-        self._validate(connection)
         LOG.debug('Image: %s', self._image_obj)
 
         updates = {
@@ -108,7 +113,7 @@ class HttpWholeDiskImage(_Source):
         self.checksum = checksum
         self.checksum_url = checksum_url
 
-    def _validate(self, connection):
+    def _validate(self, connection, root_size_gb):
         # TODO(dtantsur): should we validate image URLs here? Ironic will do it
         # as well, and images do not have to be accessible from where
         # metalsmith is running.
@@ -140,7 +145,6 @@ class HttpWholeDiskImage(_Source):
                 {'fname': fname, 'url': self.checksum_url})
 
     def _node_updates(self, connection):
-        self._validate(connection)
         LOG.debug('Image: %(image)s, checksum %(checksum)s',
                   {'image': self.url, 'checksum': self.checksum})
         return {
@@ -169,6 +173,12 @@ class HttpPartitionImage(HttpWholeDiskImage):
                                                  checksum_url=checksum_url)
         self.kernel_url = kernel_url
         self.ramdisk_url = ramdisk_url
+
+    def _validate(self, connection, root_size_gb):
+        super(HttpPartitionImage, self)._validate(connection, root_size_gb)
+        if root_size_gb is None:
+            raise exceptions.UnknownRootDiskSize(
+                'Partition images require root partition size')
 
     def _node_updates(self, connection):
         updates = super(HttpPartitionImage, self)._node_updates(connection)
@@ -236,6 +246,12 @@ class FilePartitionImage(FileWholeDiskImage):
             ramdisk_location = 'file://' + ramdisk_location
         self.kernel_location = kernel_location
         self.ramdisk_location = ramdisk_location
+
+    def _validate(self, connection, root_size_gb):
+        super(FilePartitionImage, self)._validate(connection, root_size_gb)
+        if root_size_gb is None:
+            raise exceptions.UnknownRootDiskSize(
+                'Partition images require root partition size')
 
     def _node_updates(self, connection):
         updates = super(FilePartitionImage, self)._node_updates(connection)
