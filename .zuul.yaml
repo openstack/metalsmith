@@ -23,6 +23,7 @@
       - openstack/glance
       - openstack/swift
       - openstack/ironic
+      - openstack/ironic-python-agent-builder
       - openstack/metalsmith
     vars:
       ironic_bm_logs: /opt/stack/logs/ironic-bm-logs
