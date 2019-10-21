@@ -172,7 +172,7 @@
     templates:
       - check-requirements
       - openstack-python-jobs
-      - openstack-python3-train-jobs
+      - openstack-python3-ussuri-jobs
       - openstack-lower-constraints-jobs
       - openstack-cover-jobs
       - publish-openstack-docs-pti
