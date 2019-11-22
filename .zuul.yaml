@@ -112,6 +112,7 @@
       centos_kernel_file: ~/CentOS-7-x86_64-GenericCloud.kernel
       centos_partition_file: ~/CentOS-7-x86_64-GenericCloud-root.qcow2
       metalsmith_root_size: 9
+      metalsmith_python: python3
 
 - job:
     name: metalsmith-integration-glance-localboot-centos7
@@ -130,16 +131,13 @@
       metalsmith_traits: [CUSTOM_GOLD]
 
 - job:
-    name: metalsmith-integration-glance-netboot-cirros-iscsi-py3
+    name: metalsmith-integration-glance-netboot-cirros-iscsi
     description: |
         Integration job using Glance as image source and CirrOS with netboot.
     parent: metalsmith-integration-base
     vars:
-      devstack_localrc:
-        USE_PYTHON3: true
       metalsmith_netboot: true
       metalsmith_precreate_port: true
-      metalsmith_python: python3
 
 - job:
     name: metalsmith-integration-glance-netboot-cirros-direct
@@ -154,7 +152,7 @@
         IRONIC_DEFAULT_DEPLOY_INTERFACE: direct
 
 - job:
-    name: metalsmith-integration-http-netboot-cirros-direct-py3
+    name: metalsmith-integration-http-netboot-cirros-direct
     description: |
         Integration job using HTTP as image source and direct deploy.
     parent: metalsmith-integration-base
@@ -162,16 +160,13 @@
     vars:
       metalsmith_netboot: true
       metalsmith_precreate_port: true
-      metalsmith_python: python3
       metalsmith_use_http: true
       devstack_localrc:
         IRONIC_DEFAULT_DEPLOY_INTERFACE: direct
-        USE_PYTHON3: true
 
 - project:
     templates:
       - check-requirements
-      - openstack-python-jobs
       - openstack-python3-ussuri-jobs
       - openstack-lower-constraints-jobs
       - openstack-cover-jobs
@@ -180,12 +175,12 @@
     check:
       jobs:
         - metalsmith-integration-glance-localboot-centos7
-        - metalsmith-integration-glance-netboot-cirros-iscsi-py3
+        - metalsmith-integration-glance-netboot-cirros-iscsi
         - metalsmith-integration-glance-netboot-cirros-direct
-        - metalsmith-integration-http-netboot-cirros-direct-py3
+        - metalsmith-integration-http-netboot-cirros-direct
     gate:
       jobs:
         - metalsmith-integration-glance-localboot-centos7
-        - metalsmith-integration-glance-netboot-cirros-iscsi-py3
+        - metalsmith-integration-glance-netboot-cirros-iscsi
         - metalsmith-integration-glance-netboot-cirros-direct
-        - metalsmith-integration-http-netboot-cirros-direct-py3
+        - metalsmith-integration-http-netboot-cirros-direct
