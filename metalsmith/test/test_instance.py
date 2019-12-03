@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import mock
-import six
 
 from metalsmith import _instance
 from metalsmith.test import test_provisioner
@@ -136,7 +135,7 @@ class TestInstanceStates(test_provisioner.Base):
                           'uuid': self.node.id},
                          to_dict)
         # States are converted to strings
-        self.assertIsInstance(to_dict['state'], six.string_types)
+        self.assertIsInstance(to_dict['state'], str)
 
     @mock.patch.object(_instance.Instance, 'ip_addresses', autospec=True)
     def test_to_dict_with_allocation(self, mock_ips):
@@ -156,4 +155,4 @@ class TestInstanceStates(test_provisioner.Base):
                           'uuid': self.node.id},
                          to_dict)
         # States are converted to strings
-        self.assertIsInstance(to_dict['state'], six.string_types)
+        self.assertIsInstance(to_dict['state'], str)

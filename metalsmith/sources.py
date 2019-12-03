@@ -18,11 +18,11 @@
 import abc
 import logging
 import os
+from urllib import parse as urlparse
 
 import openstack.exceptions
 import requests
-import six
-from six.moves.urllib import parse as urlparse
+
 
 from metalsmith import _utils
 from metalsmith import exceptions
@@ -31,8 +31,7 @@ from metalsmith import exceptions
 LOG = logging.getLogger(__name__)
 
 
-@six.add_metaclass(abc.ABCMeta)
-class _Source(object):
+class _Source(object, metaclass=abc.ABCMeta):
 
     def _validate(self, connection, root_size_gb):
         """Validate the source."""

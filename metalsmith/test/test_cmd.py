@@ -13,12 +13,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import io
 import json
 import tempfile
 
 import fixtures
 import mock
-import six
 import testtools
 
 from metalsmith import _cmd
@@ -146,7 +146,7 @@ class TestDeploy(testtools.TestCase):
 
         args = ['deploy', '--network', 'mynet', '--image', 'myimg',
                 '--resource-class', 'compute']
-        fake_io = six.StringIO()
+        fake_io = io.StringIO()
         with mock.patch('sys.stdout', fake_io):
             self._check(mock_pr, args, {}, {}, formatter='json')
             self.assertEqual(json.loads(fake_io.getvalue()),
@@ -601,7 +601,7 @@ class TestUndeploy(testtools.TestCase):
         node.to_dict.return_value = {'node': 'dict'}
 
         args = ['--format', 'json', 'undeploy', '123456']
-        fake_io = six.StringIO()
+        fake_io = io.StringIO()
         with mock.patch('sys.stdout', fake_io):
             _cmd.main(args)
             self.assertEqual(json.loads(fake_io.getvalue()),
@@ -747,7 +747,7 @@ class TestShowWait(testtools.TestCase):
         mock_pr.return_value.show_instances.return_value = self.instances
         args = ['--format', 'json', 'show', 'uuid1', 'hostname2']
 
-        fake_io = six.StringIO()
+        fake_io = io.StringIO()
         with mock.patch('sys.stdout', fake_io):
             _cmd.main(args)
             self.assertEqual(json.loads(fake_io.getvalue()),
@@ -773,7 +773,7 @@ class TestShowWait(testtools.TestCase):
         mock_pr.return_value.list_instances.return_value = self.instances
         args = ['--format', 'json', 'list']
 
-        fake_io = six.StringIO()
+        fake_io = io.StringIO()
         with mock.patch('sys.stdout', fake_io):
             _cmd.main(args)
             self.assertEqual(json.loads(fake_io.getvalue()),
@@ -786,7 +786,7 @@ class TestShowWait(testtools.TestCase):
             self.instances)
         args = ['--format', 'json', 'wait', 'uuid1', 'hostname2']
 
-        fake_io = six.StringIO()
+        fake_io = io.StringIO()
         with mock.patch('sys.stdout', fake_io):
             _cmd.main(args)
             self.assertEqual(json.loads(fake_io.getvalue()),

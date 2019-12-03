@@ -19,7 +19,6 @@ import re
 import sys
 
 from openstack import exceptions as os_exc
-import six
 
 from metalsmith import exceptions
 
@@ -89,7 +88,7 @@ def is_hostname_safe(hostname):
     :param hostname: The hostname to be validated.
     :returns: True if valid. False if not.
     """
-    if not isinstance(hostname, six.string_types) or len(hostname) > 255:
+    if not isinstance(hostname, str) or len(hostname) > 255:
         return False
 
     return _HOSTNAME_RE.match(hostname) is not None
@@ -144,4 +143,4 @@ def reraise_os_exc(reraise_as, failure_message='Clean up failed'):
     if is_expected:
         raise reraise_as(str(exc_info[1]))
     else:
-        six.reraise(*exc_info)
+        raise exc_info[1]

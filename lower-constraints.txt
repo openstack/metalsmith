@@ -10,6 +10,5 @@ pbr==2.0.0
 PrettyTable==0.7.2
 Pygments==2.2.0
 requests==2.18.4
-six==1.10.0
 stestr==1.0.0
 testtools==2.2.0

@@ -17,8 +17,6 @@ import abc
 import collections
 import logging
 
-import six
-
 from metalsmith import _utils
 from metalsmith import exceptions
 
@@ -26,8 +24,7 @@ from metalsmith import exceptions
 LOG = logging.getLogger(__name__)
 
 
-@six.add_metaclass(abc.ABCMeta)
-class Filter(object):
+class Filter(object, metaclass=abc.ABCMeta):
     """Base class for filters."""
 
     @abc.abstractmethod

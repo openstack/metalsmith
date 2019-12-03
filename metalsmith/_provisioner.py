@@ -17,7 +17,6 @@ import logging
 
 from openstack import connection
 from openstack import exceptions as os_exc
-import six
 
 from metalsmith import _instance
 from metalsmith import _nics
@@ -143,7 +142,7 @@ class Provisioner(object):
         """Create an allocation with given parameters."""
         if candidates:
             candidates = [
-                (node.id if not isinstance(node, six.string_types) else node)
+                (node.id if not isinstance(node, str) else node)
                 for node in candidates
             ]
 
@@ -370,7 +369,7 @@ class Provisioner(object):
         """
         if config is None:
             config = instance_config.GenericConfig()
-        if isinstance(image, six.string_types):
+        if isinstance(image, str):
             image = sources.GlanceImage(image)
 
         _utils.check_hostname(hostname)
@@ -620,7 +619,7 @@ class Provisioner(object):
 
     def _get_node(self, node, refresh=False):
         """A helper to find and return a node."""
-        if isinstance(node, six.string_types):
+        if isinstance(node, str):
             return self.connection.baremetal.get_node(node)
         elif hasattr(node, 'node'):
             # Instance object
@@ -635,7 +634,7 @@ class Provisioner(object):
 
     def _find_node_and_allocation(self, node, refresh=False):
         try:
-            if (not isinstance(node, six.string_types)
+            if (not isinstance(node, str)
                     or not _utils.is_hostname_safe(node)):
                 return self._get_node(node, refresh=refresh), None
 
