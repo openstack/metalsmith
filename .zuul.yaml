@@ -31,7 +31,6 @@
         dstat: true
         etcd3: true
         mysql: true
-        peakmem_tracker: true
         rabbit: true
         tls-proxy: true
         # Keystone services
