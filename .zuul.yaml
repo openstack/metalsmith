@@ -96,6 +96,7 @@
         IRONIC_VM_SPECS_CPU: 2
         IRONIC_VM_SPECS_DISK: 10
         IRONIC_VM_SPECS_RAM: 1024
+        LIBVIRT_STORAGE_POOL_PATH: /opt/libvirt/images
         SWIFT_ENABLE_TEMPURLS: true
         SWIFT_HASH: 54bd5642300c4b45-846f8636a70a07d2
         SWIFT_START_ALL_SERVICES: false
@@ -104,12 +105,6 @@
       centos_glance_kernel_image: test-centos-kernel
       centos_glance_root_image: test-centos-partition
       centos_glance_whole_disk_image: test-centos-wholedisk
-      centos_image_file: ~/CentOS-7-x86_64-GenericCloud.qcow2
-      centos_image_name: CentOS-7-x86_64-GenericCloud
-      centos_image_url: https://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud.qcow2.xz
-      centos_initramfs_file: ~/CentOS-7-x86_64-GenericCloud.initramfs
-      centos_kernel_file: ~/CentOS-7-x86_64-GenericCloud.kernel
-      centos_partition_file: ~/CentOS-7-x86_64-GenericCloud-root.qcow2
       metalsmith_root_size: 9
       metalsmith_python: python3
 

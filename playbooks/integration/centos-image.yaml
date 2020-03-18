@@ -3,6 +3,13 @@
   environment:
     OS_CLOUD: devstack-admin
 
+  vars:
+    centos_image_file: ~/centos-download.qcow2
+    centos_initramfs_file: ~/centos.initramfs
+    centos_kernel_file: ~/centos.kernel
+    centos_partition_file: ~/centos-root.qcow2
+    centos_image_url: https://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud.qcow2.xz
+
   tasks:
     - name: Install guestfish
       package:
@@ -29,6 +36,13 @@
     - name: Print filesystems from the image
       command: virt-filesystems -a {{ centos_image_file }} -l --extra --block-devices
 
+    - name: Upload the CentOS whole-disk image
+      command: >
+          openstack image create --disk-format qcow2
+          --public --file {{ centos_image_file }}
+          {{ centos_glance_whole_disk_image }}
+      when: centos_glance_whole_disk_image is defined
+
     - name: Create a temporary directory for extraction
       tempfile:
         state: directory
@@ -40,19 +54,39 @@
           virt-get-kernel -a {{ centos_image_file }}
           -o {{ temp_dir.path }} --unversioned-names
 
-    - name: Copy the kernel and ramdisk to the target directory
-      copy:
-        src: "{{ temp_dir.path }}/{{ item.src }}"
-        dest: "{{ item.dest }}"
-        remote_src: yes
+    - name: Upload the CentOS kernel image
+      command: >
+          openstack image create --disk-format aki --container-format aki \
+          --public --file {{ temp_dir.path }}/vmlinuz -f value -c id
+          {{ centos_glance_kernel_image }}
+      register: centos_kernel_id
+      failed_when: centos_kernel_id.stdout == ""
+      when: centos_glance_kernel_image is defined
+
+    - name: Upload the CentOS initramfs image
+      command: >
+          openstack image create --disk-format ari --container-format ari \
+          --public --file {{ temp_dir.path }}/initramfs -f value -c id
+          {{ centos_glance_initramds_image }}
+      register: centos_initramfs_id
+      failed_when: centos_initramfs_id.stdout == ""
+      when: centos_glance_initramds_image is defined
+
+    - name: Delete the kernel and ramdisk image files
+      file:
+        state: absent
+        path: "{{ temp_dir.path }}/{{ item }}"
       with_items:
-        - src: vmlinuz
-          dest: "{{ centos_kernel_file }}"
-        - src: initramfs
-          dest: "{{ centos_initramfs_file }}"
+        - vmlinuz
+        - initramfs
 
     - name: Extract the root file system
       command: virt-tar-out -a {{ centos_image_file }} / {{ temp_dir.path }}/root.tar
+
+    - name: Delete the whole-disk image file
+      file:
+        state: absent
+        path: "{{ centos_image_file }}"
 
     - name: Extract /etc/fstab and /etc/selinux/config
       command: >
@@ -96,31 +130,6 @@
         state: absent
         path: "{{ temp_dir.path }}"
 
-    - name: Upload the CentOS whole-disk image
-      command: >
-          openstack image create --disk-format qcow2
-          --public --file {{ centos_image_file }}
-          {{ centos_glance_whole_disk_image }}
-      when: centos_glance_whole_disk_image is defined
-
-    - name: Upload the CentOS kernel image
-      command: >
-          openstack image create --disk-format aki --container-format aki \
-          --public --file {{ centos_kernel_file }} -f value -c id
-          {{ centos_glance_kernel_image }}
-      register: centos_kernel_id
-      failed_when: centos_kernel_id.stdout == ""
-      when: centos_glance_kernel_image is defined
-
-    - name: Upload the CentOS initramfs image
-      command: >
-          openstack image create --disk-format ari --container-format ari \
-          --public --file {{ centos_initramfs_file }} -f value -c id
-          {{ centos_glance_initramds_image }}
-      register: centos_initramfs_id
-      failed_when: centos_initramfs_id.stdout == ""
-      when: centos_glance_initramds_image is defined
-
     - name: Upload the CentOS partition image
       command: >
           openstack image create --disk-format qcow2
@@ -129,3 +138,8 @@
           --property ramdisk_id={{ centos_initramfs_id.stdout }}
           {{ centos_glance_root_image }}
       when: centos_glance_root_image is defined
+
+    - name: Remove the partition image file
+      file:
+        state: absent
+        path: "{{ centos_partition_file }}"
