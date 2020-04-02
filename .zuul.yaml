@@ -116,6 +116,9 @@
     timeout: 7200
     pre-run: playbooks/integration/centos-image.yaml
     vars:
+      devstack_localrc:
+        # NOTE(dtantsur): required to store the larger CentOS image
+        SWIFT_LOOPBACK_DISK_SIZE: '4G'
       configure_instance_user: metalsmith
       metalsmith_netboot: false
       metalsmith_precreate_port: false
