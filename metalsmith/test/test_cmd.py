@@ -16,9 +16,9 @@
 import io
 import json
 import tempfile
+from unittest import mock
 
 import fixtures
-import mock
 import testtools
 
 from metalsmith import _cmd

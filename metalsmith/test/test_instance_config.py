@@ -14,8 +14,8 @@
 # limitations under the License.
 
 import json
+from unittest import mock
 
-import mock
 import testtools
 
 from metalsmith import instance_config
