@@ -2,7 +2,7 @@ coverage==4.0
 doc8==0.6.0
 enum34==1.0.4
 fixtures==3.0.0
-flake8-import-order==0.13
+flake8-import-order==0.17.1
 hacking==3.0.0
 mock==2.0
 openstacksdk==0.29.0
