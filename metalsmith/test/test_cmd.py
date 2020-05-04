@@ -108,8 +108,8 @@ class TestDeploy(testtools.TestCase):
         self.assertIsInstance(source, sources.GlanceImage)
         self.assertEqual("myimg", source.image)
         self.assertEqual(
-            mock.call('metalsmith').setLevel(mock_log.WARNING).call_list() +
-            mock.call(_cmd._URLLIB3_LOGGER).setLevel(
+            mock.call('metalsmith').setLevel(mock_log.WARNING).call_list()
+            + mock.call(_cmd._URLLIB3_LOGGER).setLevel(
                 mock_log.CRITICAL).call_list(),
             mock_log.getLogger.mock_calls)
 
@@ -134,8 +134,8 @@ class TestDeploy(testtools.TestCase):
         self.assertIsInstance(source, sources.GlanceImage)
         self.assertEqual("myimg", source.image)
         self.assertEqual(
-            mock.call('metalsmith').setLevel(mock_log.WARNING).call_list() +
-            mock.call(_cmd._URLLIB3_LOGGER).setLevel(
+            mock.call('metalsmith').setLevel(mock_log.WARNING).call_list()
+            + mock.call(_cmd._URLLIB3_LOGGER).setLevel(
                 mock_log.CRITICAL).call_list(),
             mock_log.getLogger.mock_calls)
 
@@ -155,8 +155,8 @@ class TestDeploy(testtools.TestCase):
         mock_log.basicConfig.assert_called_once_with(level=mock_log.WARNING,
                                                      format=mock.ANY)
         self.assertEqual(
-            mock.call('metalsmith').setLevel(mock_log.WARNING).call_list() +
-            mock.call(_cmd._URLLIB3_LOGGER).setLevel(
+            mock.call('metalsmith').setLevel(mock_log.WARNING).call_list()
+            + mock.call(_cmd._URLLIB3_LOGGER).setLevel(
                 mock_log.CRITICAL).call_list(),
             mock_log.getLogger.mock_calls)
 
@@ -212,8 +212,8 @@ class TestDeploy(testtools.TestCase):
         mock_log.basicConfig.assert_called_once_with(level=mock_log.DEBUG,
                                                      format=mock.ANY)
         self.assertEqual(
-            mock.call('metalsmith').setLevel(mock_log.DEBUG).call_list() +
-            mock.call(_cmd._URLLIB3_LOGGER).setLevel(
+            mock.call('metalsmith').setLevel(mock_log.DEBUG).call_list()
+            + mock.call(_cmd._URLLIB3_LOGGER).setLevel(
                 mock_log.INFO).call_list(),
             mock_log.getLogger.mock_calls)
 
@@ -226,8 +226,8 @@ class TestDeploy(testtools.TestCase):
         mock_log.basicConfig.assert_called_once_with(level=mock_log.CRITICAL,
                                                      format=mock.ANY)
         self.assertEqual(
-            mock.call('metalsmith').setLevel(mock_log.CRITICAL).call_list() +
-            mock.call(_cmd._URLLIB3_LOGGER).setLevel(
+            mock.call('metalsmith').setLevel(mock_log.CRITICAL).call_list()
+            + mock.call(_cmd._URLLIB3_LOGGER).setLevel(
                 mock_log.CRITICAL).call_list(),
             mock_log.getLogger.mock_calls)
 
@@ -242,8 +242,8 @@ class TestDeploy(testtools.TestCase):
         mock_log.basicConfig.assert_called_once_with(level=mock_log.WARNING,
                                                      format=mock.ANY)
         self.assertEqual(
-            mock.call('metalsmith').setLevel(mock_log.INFO).call_list() +
-            mock.call(_cmd._URLLIB3_LOGGER).setLevel(
+            mock.call('metalsmith').setLevel(mock_log.INFO).call_list()
+            + mock.call(_cmd._URLLIB3_LOGGER).setLevel(
                 mock_log.CRITICAL).call_list(),
             mock_log.getLogger.mock_calls)
 
@@ -256,8 +256,8 @@ class TestDeploy(testtools.TestCase):
         mock_log.basicConfig.assert_called_once_with(level=mock_log.INFO,
                                                      format=mock.ANY)
         self.assertEqual(
-            mock.call('metalsmith').setLevel(mock_log.DEBUG).call_list() +
-            mock.call(_cmd._URLLIB3_LOGGER).setLevel(
+            mock.call('metalsmith').setLevel(mock_log.DEBUG).call_list()
+            + mock.call(_cmd._URLLIB3_LOGGER).setLevel(
                 mock_log.CRITICAL).call_list(),
             mock_log.getLogger.mock_calls)
 
@@ -270,8 +270,8 @@ class TestDeploy(testtools.TestCase):
         mock_log.basicConfig.assert_called_once_with(level=mock_log.DEBUG,
                                                      format=mock.ANY)
         self.assertEqual(
-            mock.call('metalsmith').setLevel(mock_log.DEBUG).call_list() +
-            mock.call(_cmd._URLLIB3_LOGGER).setLevel(
+            mock.call('metalsmith').setLevel(mock_log.DEBUG).call_list()
+            + mock.call(_cmd._URLLIB3_LOGGER).setLevel(
                 mock_log.INFO).call_list(),
             mock_log.getLogger.mock_calls)
 

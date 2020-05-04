@@ -63,9 +63,9 @@ class GlanceImage(_Source):
                 'Cannot find image %(image)s: %(error)s' %
                 {'image': self.image, 'error': exc})
 
-        if (root_size_gb is None and
-                any(getattr(self._image_obj, x, None) is not None
-                    for x in ('kernel_id', 'ramdisk_id'))):
+        if (root_size_gb is None
+                and any(getattr(self._image_obj, x, None) is not None
+                        for x in ('kernel_id', 'ramdisk_id'))):
             raise exceptions.UnknownRootDiskSize(
                 'Partition images require root partition size')
 
