@@ -13,15 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import unittest
 from unittest import mock
-
-import testtools
 
 from metalsmith import _scheduler
 from metalsmith import exceptions
 
 
-class TestRunFilters(testtools.TestCase):
+class TestRunFilters(unittest.TestCase):
 
     def setUp(self):
         super(TestRunFilters, self).setUp()
@@ -74,7 +73,7 @@ class TestRunFilters(testtools.TestCase):
         filters[2].fail.assert_called_once_with()
 
 
-class TestCapabilitiesFilter(testtools.TestCase):
+class TestCapabilitiesFilter(unittest.TestCase):
 
     def test_fail_no_capabilities(self):
         fltr = _scheduler.CapabilitiesFilter({'profile': 'compute'})

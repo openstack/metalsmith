@@ -16,10 +16,8 @@
 import io
 import json
 import tempfile
+import unittest
 from unittest import mock
-
-import fixtures
-import testtools
 
 from metalsmith import _cmd
 from metalsmith import _instance
@@ -28,17 +26,26 @@ from metalsmith import instance_config
 from metalsmith import sources
 
 
+class Base(unittest.TestCase):
+    def setUp(self):
+        super(Base, self).setUp()
+
+        print_fixture = mock.patch(
+            'metalsmith._format._print', autospec=True)
+        self.mock_print = print_fixture.start()
+        self.addCleanup(print_fixture.stop)
+
+
 @mock.patch.object(_provisioner, 'Provisioner', autospec=True)
-class TestDeploy(testtools.TestCase):
+class TestDeploy(Base):
     def setUp(self):
         super(TestDeploy, self).setUp()
-        self.print_fixture = self.useFixture(fixtures.MockPatch(
-            'metalsmith._format._print', autospec=True))
-        self.mock_print = self.print_fixture.mock
 
-        self.os_conf_fixture = self.useFixture(fixtures.MockPatchObject(
-            _cmd.os_config, 'OpenStackConfig', autospec=True))
-        self.mock_os_conf = self.os_conf_fixture.mock
+        os_conf_fixture = mock.patch.object(
+            _cmd.os_config, 'OpenStackConfig', autospec=True)
+        self.mock_os_conf = os_conf_fixture.start()
+        self.addCleanup(os_conf_fixture.stop)
+
         self._init = False
 
     def _check(self, mock_pr, args, reserve_args, provision_args,
@@ -530,13 +537,7 @@ class TestDeploy(testtools.TestCase):
 
 @mock.patch.object(_provisioner, 'Provisioner', autospec=True)
 @mock.patch.object(_cmd.os_config, 'OpenStackConfig', autospec=True)
-class TestUndeploy(testtools.TestCase):
-    def setUp(self):
-        super(TestUndeploy, self).setUp()
-        self.print_fixture = self.useFixture(fixtures.MockPatch(
-            'metalsmith._format._print', autospec=True))
-        self.mock_print = self.print_fixture.mock
-
+class TestUndeploy(Base):
     def test_ok(self, mock_os_conf, mock_pr):
         node = mock_pr.return_value.unprovision_node.return_value
         node.id = '123'
@@ -617,12 +618,9 @@ class TestUndeploy(testtools.TestCase):
 
 @mock.patch.object(_provisioner, 'Provisioner', autospec=True)
 @mock.patch.object(_cmd.os_config, 'OpenStackConfig', autospec=True)
-class TestShowWait(testtools.TestCase):
+class TestShowWait(Base):
     def setUp(self):
         super(TestShowWait, self).setUp()
-        self.print_fixture = self.useFixture(fixtures.MockPatch(
-            'metalsmith._format._print', autospec=True))
-        self.mock_print = self.print_fixture.mock
         self.instances = [
             mock.Mock(
                 spec=_instance.Instance,

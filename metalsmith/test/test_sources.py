@@ -13,15 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import unittest
 from unittest import mock
-
-import testtools
 
 from metalsmith import exceptions
 from metalsmith import sources
 
 
-class TestDetect(testtools.TestCase):
+class TestDetect(unittest.TestCase):
 
     def test_glance_whole_disk(self):
         source = sources.detect('foobar')

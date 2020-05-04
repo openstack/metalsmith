@@ -13,12 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import unittest
 from unittest import mock
 
-import fixtures
 from openstack import exceptions as os_exc
 import requests
-import testtools
 
 from metalsmith import _instance
 from metalsmith import _provisioner
@@ -34,7 +33,7 @@ NODE_FIELDS = ['name', 'id', 'instance_info', 'instance_id', 'is_maintenance',
                'allocation_id']
 
 
-class TestInit(testtools.TestCase):
+class TestInit(unittest.TestCase):
     def test_missing_auth(self):
         self.assertRaisesRegex(TypeError, 'must be provided',
                                _provisioner.Provisioner)
@@ -58,7 +57,7 @@ class TestInit(testtools.TestCase):
         mock_conn.assert_called_once_with(config=region)
 
 
-class Base(testtools.TestCase):
+class Base(unittest.TestCase):
 
     def setUp(self):
         super(Base, self).setUp()
@@ -73,9 +72,11 @@ class Base(testtools.TestCase):
         self.node.name = 'control-0'
 
     def _reset_api_mock(self):
-        self.mock_get_node = self.useFixture(
-            fixtures.MockPatchObject(_provisioner.Provisioner, '_get_node',
-                                     autospec=True)).mock
+        get_node_patcher = mock.patch.object(
+            _provisioner.Provisioner, '_get_node', autospec=True)
+        self.mock_get_node = get_node_patcher.start()
+        self.addCleanup(get_node_patcher.stop)
+
         self.mock_get_node.side_effect = (
             lambda self, n, refresh=False: n
         )
@@ -92,7 +93,7 @@ class Base(testtools.TestCase):
         self.pr.connection = self.api
 
 
-class TestGetFindNode(testtools.TestCase):
+class TestGetFindNode(unittest.TestCase):
 
     def setUp(self):
         super(TestGetFindNode, self).setUp()
@@ -503,10 +504,12 @@ class TestProvisionNode(Base):
                 self.api.network.create_port.return_value.id
             ],
         }
-        self.configdrive_mock = self.useFixture(
-            fixtures.MockPatchObject(instance_config.GenericConfig,
-                                     'generate', autospec=True)
-        ).mock
+
+        configdrive_patcher = mock.patch.object(
+            instance_config.GenericConfig, 'generate', autospec=True)
+        self.configdrive_mock = configdrive_patcher.start()
+        self.addCleanup(configdrive_patcher.stop)
+
         self.api.baremetal.get_node.side_effect = lambda _n: self.node
         self.api.baremetal.get_allocation.side_effect = (
             lambda _a: self.allocation)
@@ -1934,7 +1937,7 @@ class TestUnprovisionNode(Base):
         self.assertFalse(self.api.baremetal.update_node.called)
 
 
-class TestShowInstance(testtools.TestCase):
+class TestShowInstance(unittest.TestCase):
     def setUp(self):
         super(TestShowInstance, self).setUp()
         self.pr = _provisioner.Provisioner(mock.Mock())

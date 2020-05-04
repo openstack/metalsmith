@@ -14,14 +14,13 @@
 # limitations under the License.
 
 import json
+import unittest
 from unittest import mock
-
-import testtools
 
 from metalsmith import instance_config
 
 
-class TestGenericConfig(testtools.TestCase):
+class TestGenericConfig(unittest.TestCase):
     CLASS = instance_config.GenericConfig
 
     def setUp(self):
