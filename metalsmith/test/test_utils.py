@@ -13,12 +13,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import testtools
+import unittest
 
 from metalsmith import _utils
 
 
-class TestIsHostnameSafe(testtools.TestCase):
+class TestIsHostnameSafe(unittest.TestCase):
 
     def test_valid(self):
         self.assertTrue(_utils.is_hostname_safe('spam'))
