@@ -44,16 +44,6 @@ master_doc = 'index'
 # General information about the project.
 copyright = u'2018, MetalSmith Developers '
 
-# The version info for the project you're documenting, acts as replacement for
-# |version| and |release|, also used in various other places throughout the
-# built documents.
-#
-from metalsmith import version as ms_version  # noqa
-# The full version, including alpha/beta/rc tags.
-release = ms_version.version_info.release_string()
-# The short X.Y version.
-version = ms_version.version_info.version_string()
-
 # If true, '()' will be appended to :func: etc. cross-reference text.
 add_function_parentheses = True
 
@@ -62,7 +52,11 @@ add_function_parentheses = True
 add_module_names = True
 
 # The name of the Pygments (syntax highlighting) style to use.
-pygments_style = 'sphinx'
+pygments_style = 'native'
+
+openstackdocs_repo_name = 'openstack/metalsmith'
+openstackdocs_bug_project = 'metalsmith'
+openstackdocs_bug_tag = ''
 
 # -- Options for HTML output --------------------------------------------------
 
