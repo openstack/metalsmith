@@ -8,8 +8,11 @@
     run: playbooks/integration/run.yaml
     irrelevant-files:
       - ^.*\.rst$
+      - ^api-ref/.*$
       - ^doc/.*$
       - ^lower-constraints.txt$
+      - ^install-guide/.*$
+      - ^ironic/tests/.*$
       - ^metalsmith/test/.*$
       - ^releasenotes/.*$
       - ^setup.cfg$
