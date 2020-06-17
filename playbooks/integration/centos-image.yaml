@@ -19,7 +19,7 @@
         url: "{{ centos_image_url }}"
         dest: "{{ centos_image_file }}.xz"
       register: centos_image_result
-      until: centos_image_result | succeeded
+      until: centos_image_result is succeeded
       retries: 3
       delay: 10
 
