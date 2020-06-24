@@ -2,6 +2,7 @@
 metalsmith_candidates: []
 metalsmith_capabilities: {}
 metalsmith_conductor_group:
+metalsmith_debug: false
 metalsmith_extra_args:
 metalsmith_image_checksum:
 metalsmith_image_kernel:
@@ -11,6 +12,7 @@ metalsmith_nics: []
 metalsmith_resource_class:
 metalsmith_root_size:
 metalsmith_ssh_public_keys: []
+metalsmith_state: present
 metalsmith_swap_size:
 metalsmith_traits: []
 metalsmith_user_name: metalsmith

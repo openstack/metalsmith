@@ -58,8 +58,14 @@ options:
         type: str
       name:
         description:
-          - The name of an existing node to provision
+          - The name of an existing node to provision, this name is appended
+            to the candidates list
         type: str
+      candidates:
+        description:
+          - List of nodes (UUIDs or names) to be considered for deployment
+        type: list
+        elements: str
       image:
         description:
           - Details of the image you want to provision onto the node
@@ -127,7 +133,6 @@ options:
       ssh_public_keys:
         description:
           - SSH public keys to load
-        type: str
       resource_class:
         description:
           - Node resource class to provision
@@ -179,6 +184,7 @@ options:
       - Maximum number of instances to provision at once. Set to 0 to have no
         concurrency limit
     type: int
+    default: 0
   log_level:
     description:
       - Set the logging level for the log which is available in the
@@ -238,12 +244,10 @@ def _get_source(instance):
 def reserve(provisioner, instances, clean_up):
     nodes = []
     for instance in instances:
+        candidates = instance.get('candidates', [])
         if instance.get('name') is not None:
-            # NOTE(dtantsur): metalsmith accepts list of instances to pick
-            # from. We implement a simplest case when a user can pick a
-            # node by its name (actually, UUID will also work).
-            candidates = [instance['name']]
-        else:
+            candidates.append(instance['name'])
+        if not candidates:
             candidates = None
         try:
             node = provisioner.reserve_node(

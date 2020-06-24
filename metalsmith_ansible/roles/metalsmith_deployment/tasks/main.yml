@@ -1,86 +1,42 @@
 ---
 
-- name: Start provisioning of instances
-  command: >
-    metalsmith {{ extra_args }} deploy --no-wait
-    {% for cap_name, cap_value in capabilities.items() %}
-      --capability {{ cap_name }}={{ cap_value }}
-    {% endfor %}
-    {% for trait in traits %}
-      --trait {{ trait }}
-    {% endfor %}
-    {% for nic in nics %}
-      {% for nic_type, nic_value in nic.items() %}
-        --{{ nic_type }} {{ nic_value }}
-      {% endfor %}
-    {% endfor %}
-    {% if root_size %}
-      --root-size {{ root_size }}
-    {% endif %}
-    {% if swap_size %}
-      --swap-size {{ swap_size }}
-    {% endif %}
-    {% for ssh_key in ssh_public_keys %}
-      --ssh-public-key {{ ssh_key }}
-    {% endfor %}
-    --image {{ image }}
-    {% if image_checksum %}
-      --image-checksum {{ image_checksum }}
-    {% endif %}
-    {% if image_kernel %}
-      --image-kernel {{ image_kernel }}
-    {% endif %}
-    {% if image_ramdisk %}
-      --image-ramdisk {{ image_ramdisk }}
-    {% endif %}
-    --hostname {{ instance.hostname }}
-    {% if netboot %}
-    --netboot
-    {% endif %}
-    {% if user_name %}
-    --user-name {{ user_name }}
-    {% endif %}
-    {% if resource_class %}
-    --resource-class {{ resource_class }}
-    {% endif %}
-    {% if conductor_group %}
-    --conductor-group {{ conductor_group }}
-    {% endif %}
-    {% for node in candidates %}
-      --candidate {{ node }}
-    {% endfor %}
-  when: state == 'present'
-  vars:
-    candidates: "{{ instance.candidates | default(metalsmith_candidates) }}"
-    capabilities: "{{ instance.capabilities | default(metalsmith_capabilities) }}"
-    conductor_group: "{{ instance.conductor_group | default(metalsmith_conductor_group) }}"
-    extra_args: "{{ instance.extra_args | default(metalsmith_extra_args) }}"
-    image: "{{ instance.image | default(metalsmith_image) }}"
-    image_checksum: "{{ instance.image_checksum | default(metalsmith_image_checksum) }}"
-    image_kernel: "{{ instance.image_kernel | default(metalsmith_image_kernel) }}"
-    image_ramdisk: "{{ instance.image_ramdisk | default(metalsmith_image_ramdisk) }}"
-    netboot: "{{ instance.netboot | default(metalsmith_netboot) }}"
-    nics: "{{ instance.nics | default(metalsmith_nics) }}"
-    resource_class: "{{ instance.resource_class | default(metalsmith_resource_class) }}"
-    root_size: "{{ instance.root_size | default(metalsmith_root_size) }}"
-    ssh_public_keys: "{{ instance.ssh_public_keys | default(metalsmith_ssh_public_keys) }}"
-    state: "{{ instance.state | default('present') }}"
-    swap_size: "{{ instance.swap_size | default(metalsmith_swap_size) }}"
-    traits: "{{ instance.traits | default(metalsmith_traits) }}"
-    user_name: "{{ instance.user_name | default(metalsmith_user_name) }}"
-  with_items: "{{ metalsmith_instances }}"
-  loop_control:
-    label: "{{ instance.hostname or instance }}"
-    loop_var: instance
+- name: Build instance defaults
+  metalsmith_deployment_defaults:
+    instances: "{{ metalsmith_instances }}"
+    defaults:
+      candidates: "{{ metalsmith_candidates }}"
+      capabilities: "{{ metalsmith_capabilities }}"
+      conductor_group: "{{ metalsmith_conductor_group }}"
+      extra_args: "{{ metalsmith_extra_args }}"
+      image: "{{ metalsmith_image }}"
+      image_checksum: "{{ metalsmith_image_checksum }}"
+      image_kernel: "{{ metalsmith_image_kernel }}"
+      image_ramdisk: "{{ metalsmith_image_ramdisk }}"
+      netboot: "{{ metalsmith_netboot }}"
+      nics: "{{ metalsmith_nics }}"
+      resource_class: "{{ metalsmith_resource_class }}"
+      root_size: "{{ metalsmith_root_size }}"
+      ssh_public_keys: "{{ metalsmith_ssh_public_keys }}"
+      swap_size: "{{ metalsmith_swap_size }}"
+      traits: "{{ metalsmith_traits }}"
+      user_name: "{{ metalsmith_user_name }}"
+  register: instances
 
-- name: Wait for provisioning of instances
-  command: >
-    metalsmith {{ metalsmith_extra_args }} wait
-    {% if metalsmith_provisioning_timeout %}
-    --timeout {{ metalsmith_provisioning_timeout }}
-    {% endif %}
-    {% for instance in metalsmith_instances %}
-      {% if (instance.state | default('present')) == 'present' %}
-        {{ instance.hostname }}
-      {% endif %}
-    {% endfor %}
+- name: Show instances data
+  debug:
+    msg: "{{ instances.instances | to_yaml }}"
+  when: metalsmith_debug|bool
+
+- name: Provision instances
+  metalsmith_instances:
+    instances: "{{ instances.instances }}"
+    state: "{{ metalsmith_state }}"
+    wait: true
+    timeout: "{{ metalsmith_provisioning_timeout }}"
+    log_level: "{{ 'debug' if metalsmith_debug|bool else 'info' }}"
+  register: baremetal_reserved
+
+- name: Metalsmith log for reserve instances
+  debug:
+    var: baremetal_reserved.logging
+  when: metalsmith_debug|bool

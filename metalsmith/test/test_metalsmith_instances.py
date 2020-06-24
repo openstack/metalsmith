@@ -56,6 +56,7 @@ class TestMetalsmithInstances(unittest.TestCase):
         provisioner = mock.Mock()
         instances = [{
             'name': 'node',
+            'candidates': ['other_node'],
             'resource_class': 'boxen',
             'capabilities': {'foo': 'bar'},
             'traits': ['this', 'that'],
@@ -72,7 +73,7 @@ class TestMetalsmithInstances(unittest.TestCase):
         result = mi.reserve(provisioner, instances, True)
         provisioner.reserve_node.assert_has_calls([
             mock.call(
-                candidates=['node'],
+                candidates=['other_node', 'node'],
                 capabilities={'foo': 'bar'},
                 conductor_group='group',
                 resource_class='boxen',

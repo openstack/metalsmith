@@ -19,7 +19,7 @@
   include_role:
     name: metalsmith_deployment
   vars:
-    metalsmith_extra_args: --debug
+    metalsmith_debug: true
     metalsmith_resource_class: baremetal
     metalsmith_instances:
       - hostname: test

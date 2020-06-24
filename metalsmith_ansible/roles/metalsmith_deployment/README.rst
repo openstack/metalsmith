@@ -19,6 +19,8 @@ The following optional variables provide the defaults for Instance_ attributes:
     the default for ``capabilities``.
 ``metalsmith_conductor_group``
     the default for ``conductor_group``.
+``metalsmith_debug``
+    Show extra debug information, defaults to ``false``.
 ``metalsmith_extra_args``
     the default for ``extra_args``.
 ``metalsmith_image``
@@ -39,6 +41,9 @@ The following optional variables provide the defaults for Instance_ attributes:
     the default for ``root_size``.
 ``metalsmith_ssh_public_keys``
     the default for ``ssh_public_keys``.
+``metalsmith_state``
+    the default state for instances, valid values are ``reserved``, ``absent``
+    or the default value ``present``.
 ``metalsmith_swap_size``
     the default for ``swap_size``.
 ``metalsmith_traits``
@@ -62,6 +67,7 @@ Each instances has the following attributes:
 
 ``extra_args`` (defaults to ``metalsmith_extra_args``)
     additional arguments to pass to the ``metalsmith`` CLI on all calls.
+    (No longer supported, will raise an error if used)
 ``image`` (defaults to ``metalsmith_image``)
     UUID, name or HTTP(s) URL of the image to use for deployment. Mandatory.
 ``image_checksum`` (defaults to ``metalsmith_image_checksum``)
