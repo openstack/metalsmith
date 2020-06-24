@@ -1,1 +1,1 @@
-.. include:: ../../../roles/metalsmith_deployment/README.rst
+.. include:: ../../../metalsmith_ansible/roles/metalsmith_deployment/README.rst
