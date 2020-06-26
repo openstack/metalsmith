@@ -186,6 +186,26 @@ options:
     - error
 '''
 
+EXAMPLES = '''
+- name: Provision instances
+  metalsmith_instances:
+    instances:
+    - name: node-0
+      hostname: compute-0
+      image: overcloud-full
+    state: present
+    wait: true
+    clean_up: false
+    timeout: 1200
+    concurrency: 20
+    log_level: info
+  register: baremetal_provisioned
+
+- name: Metalsmith log for provision instances
+  debug:
+    var: baremetal_provisioned.logging
+'''
+
 
 METALSMITH_LOG_MAP = {
     'debug': logging.DEBUG,

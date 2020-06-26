@@ -1,5 +1,5 @@
-Metalsmith Deployment
-=====================
+Role - metalsmith_deployment
+============================
 
 This role deploys instances using **metalsmith** CLI.
 
