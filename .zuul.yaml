@@ -85,7 +85,7 @@
       devstack_localrc:
         IRONIC_BAREMETAL_BASIC_OPS: true
         IRONIC_BUILD_DEPLOY_RAMDISK: false
-        IRONIC_DEFAULT_DEPLOY_INTERFACE: iscsi
+        IRONIC_DEFAULT_DEPLOY_INTERFACE: direct
         IRONIC_DEPLOY_DRIVER: ipmi
         IRONIC_RAMDISK_TYPE: tinyipa
         IRONIC_VM_COUNT: 1
@@ -114,8 +114,15 @@
     pre-run: playbooks/integration/centos-image.yaml
     vars:
       devstack_localrc:
-        # NOTE(dtantsur): required to store the larger CentOS image
-        SWIFT_LOOPBACK_DISK_SIZE: '4G'
+        # NOTE(dtantsur): we need to use streaming, otherwise the image won't
+        # fit in RAM.
+        IRONIC_AGENT_IMAGE_DOWNLOAD_SOURCE: http
+      devstack_services:
+        # Since we're using streaming, try non-swift backends.
+        s-account: false
+        s-container: false
+        s-object: false
+        s-proxy: false
       configure_instance_user: metalsmith
       metalsmith_netboot: false
       metalsmith_precreate_port: false
@@ -130,6 +137,8 @@
         Integration job using Glance as image source and CirrOS with netboot.
     parent: metalsmith-integration-base
     vars:
+      devstack_localrc:
+        IRONIC_DEFAULT_DEPLOY_INTERFACE: iscsi
       metalsmith_netboot: true
       metalsmith_precreate_port: true
 
@@ -142,8 +151,6 @@
     vars:
       metalsmith_netboot: true
       metalsmith_precreate_port: false
-      devstack_localrc:
-        IRONIC_DEFAULT_DEPLOY_INTERFACE: direct
 
 - job:
     name: metalsmith-integration-http-netboot-cirros-direct
@@ -155,8 +162,6 @@
       metalsmith_netboot: true
       metalsmith_precreate_port: true
       metalsmith_use_http: true
-      devstack_localrc:
-        IRONIC_DEFAULT_DEPLOY_INTERFACE: direct
 
 - project:
     templates:
