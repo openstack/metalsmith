@@ -21,6 +21,7 @@
       - ^tox.ini$
     timeout: 5400
     required-projects:
+      - openstack/diskimage-builder
       - openstack/keystone
       - openstack/neutron
       - openstack/glance
@@ -140,6 +141,35 @@
       metalsmith_traits: [CUSTOM_GOLD]
 
 - job:
+    name: metalsmith-integration-glance-localboot-centos8-uefi
+    description: |
+        Integration job using Glance as image source and CentOS8 with local boot
+        and UEFI. Images are built with diskimage-builder.
+    parent: metalsmith-integration-base
+    timeout: 7200
+    run: playbooks/integration/centos8-integration.yaml
+    vars:
+      devstack_localrc:
+        # NOTE(dtantsur): we need to use streaming, otherwise the image won't
+        # fit in RAM.
+        IRONIC_AGENT_IMAGE_DOWNLOAD_SOURCE: http
+        IRONIC_BOOT_MODE: uefi
+        IRONIC_VM_SPECS_RAM: 3072
+      devstack_services:
+        # Since we're using streaming, try non-swift backends.
+        s-account: false
+        s-container: false
+        s-object: false
+        s-proxy: false
+      configure_instance_user: metalsmith
+      metalsmith_netboot: false
+      metalsmith_precreate_port: false
+      metalsmith_partition_image: test-centos-partition
+      metalsmith_whole_disk_image: test-centos-wholedisk
+      metalsmith_swap_size: 1024
+      metalsmith_traits: [CUSTOM_GOLD]
+
+- job:
     name: metalsmith-integration-glance-netboot-cirros-iscsi
     description: |
         Integration job using Glance as image source and CirrOS with netboot.
@@ -183,6 +213,8 @@
     check:
       jobs:
         - metalsmith-integration-glance-localboot-centos7
+        - metalsmith-integration-glance-localboot-centos8-uefi:
+            voting: false
         - metalsmith-integration-glance-netboot-cirros-iscsi
         - metalsmith-integration-glance-netboot-cirros-direct
         - metalsmith-integration-http-netboot-cirros-direct
