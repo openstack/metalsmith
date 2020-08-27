@@ -1,4 +1,3 @@
-#!/usr/bin/python
 # Copyright 2020 Red Hat, Inc.
 # All Rights Reserved.
 #
@@ -13,9 +12,6 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
-
-from __future__ import absolute_import
-__metaclass__ = type
 
 from concurrent import futures
 import io
@@ -33,18 +29,10 @@ from metalsmith import sources
 import yaml
 
 
-ANSIBLE_METADATA = {
-    'metadata_version': '1.1',
-    'status': ['preview'],
-    'supported_by': 'community'
-}
-
-
 DOCUMENTATION = '''
 ---
 module: metalsmith_instances
 short_description: Manage baremetal instances with metalsmith
-version_added: "2.9"
 author: "Steve Baker (@stevebaker)"
 description:
   - Provision and unprovision ironic baremetal instances using metalsmith,
@@ -180,7 +168,7 @@ options:
       - An integer value representing the number of seconds to wait for the
         node provision to complete.
     type: int
-    default: 3660
+    default: 3600
   concurrency:
     description:
       - Maximum number of instances to provision at once. Set to 0 to have no
