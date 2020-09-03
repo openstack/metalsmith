@@ -58,6 +58,12 @@
         q-meta: true
         q-metering: true
         q-svc: true
+        # OVN services
+        ovn-controller: false
+        ovn-northd: false
+        ovs-vswitchd: false
+        ovsdb-server: false
+        q-ovn-metadata-agent: false
         # Swift services
         s-account: true
         s-container: true
@@ -83,6 +89,9 @@
       devstack_plugins:
         ironic: https://opendev.org/openstack/ironic
       devstack_localrc:
+        Q_AGENT: openvswitch
+        Q_ML2_TENANT_NETWORK_TYPE: vxlan
+        Q_ML2_PLUGIN_MECHANISM_DRIVERS: openvswitch
         IRONIC_BAREMETAL_BASIC_OPS: true
         IRONIC_BUILD_DEPLOY_RAMDISK: false
         IRONIC_DEFAULT_DEPLOY_INTERFACE: direct
