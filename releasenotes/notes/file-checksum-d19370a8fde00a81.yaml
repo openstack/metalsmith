@@ -1,0 +1,8 @@
+---
+fixes:
+  - |
+    Checksums are no longer required (nor used) with file images.
+deprecations:
+  - |
+    Providing checksums for file images is deprecated. No deploy implementation
+    actually supports them.

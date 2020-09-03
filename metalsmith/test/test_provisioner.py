@@ -1102,13 +1102,12 @@ abcd  image
 
     def test_with_file_whole_disk(self):
         self.instance_info['image_source'] = 'file:///foo/img'
-        self.instance_info['image_checksum'] = 'abcd'
         del self.instance_info['kernel']
         del self.instance_info['ramdisk']
 
         inst = self.pr.provision_node(
             self.node,
-            sources.FileWholeDiskImage('file:///foo/img', checksum='abcd'),
+            sources.FileWholeDiskImage('file:///foo/img'),
             [{'network': 'network'}])
 
         self.assertEqual(inst.uuid, self.node.id)
@@ -1132,7 +1131,6 @@ abcd  image
 
     def test_with_file_partition(self):
         self.instance_info['image_source'] = 'file:///foo/img'
-        self.instance_info['image_checksum'] = 'abcd'
         self.instance_info['kernel'] = 'file:///foo/vmlinuz'
         self.instance_info['ramdisk'] = 'file:///foo/initrd'
 
@@ -1140,8 +1138,7 @@ abcd  image
             self.node,
             sources.FilePartitionImage('/foo/img',
                                        '/foo/vmlinuz',
-                                       '/foo/initrd',
-                                       checksum='abcd'),
+                                       '/foo/initrd'),
             [{'network': 'network'}])
 
         self.assertEqual(inst.uuid, self.node.id)

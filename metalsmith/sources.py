@@ -19,6 +19,7 @@ import abc
 import logging
 import os
 from urllib import parse as urlparse
+import warnings
 
 import openstack.exceptions
 import requests
@@ -196,24 +197,26 @@ class FileWholeDiskImage(_Source):
         available at the same location to all conductors in the same group.
     """
 
-    def __init__(self, location, checksum):
+    def __init__(self, location, checksum=None):
         """Create a local file source.
 
         :param location: Location of the image, optionally starting with
             ``file://``.
-        :param checksum: MD5 checksum of the image.
+        :param checksum: MD5 checksum of the image. DEPRECATED: checksums do
+            not actually work with file images.
         """
         if not location.startswith('file://'):
             location = 'file://' + location
         self.location = location
         self.checksum = checksum
+        if self.checksum:
+            warnings.warn("Checksums cannot be used with file images",
+                          DeprecationWarning)
 
     def _node_updates(self, connection):
-        LOG.debug('Image: %(image)s, checksum %(checksum)s',
-                  {'image': self.location, 'checksum': self.checksum})
+        LOG.debug('Image: %s', self.location)
         return {
             'image_source': self.location,
-            'image_checksum': self.checksum,
         }
 
 
@@ -227,7 +230,8 @@ class FilePartitionImage(FileWholeDiskImage):
         available at the same location to all conductors in the same group.
     """
 
-    def __init__(self, location, kernel_location, ramdisk_location, checksum):
+    def __init__(self, location, kernel_location, ramdisk_location,
+                 checksum=None):
         """Create a local file source.
 
         :param location: Location of the image, optionally starting with
@@ -236,7 +240,8 @@ class FilePartitionImage(FileWholeDiskImage):
             optionally starting with ``file://``.
         :param ramdisk_location: Location of the ramdisk of the image,
             optionally starting with ``file://``.
-        :param checksum: MD5 checksum of the image.
+        :param checksum: MD5 checksum of the image. DEPRECATED: checksums do
+            not actually work with file images.
         """
         super(FilePartitionImage, self).__init__(location, checksum)
         if not kernel_location.startswith('file://'):
@@ -289,14 +294,13 @@ def detect(image, kernel=None, ramdisk=None, checksum=None):
 
     kernel_type = _link_type(kernel)
     ramdisk_type = _link_type(ramdisk)
-    if not checksum:
-        raise ValueError('checksum is required for HTTP and file images')
+    if image_type == 'http' and not checksum:
+        raise ValueError('checksum is required for HTTP images')
 
     if image_type == 'file':
         if (kernel_type not in (None, 'file')
-                or ramdisk_type not in (None, 'file')
-                or checksum_type == 'http'):
-            raise ValueError('kernal, ramdisk and checksum can only be files '
+                or ramdisk_type not in (None, 'file')):
+            raise ValueError('kernel and ramdisk can only be files '
                              'for file images')
 
         if kernel or ramdisk:

@@ -64,25 +64,25 @@ class TestDetect(unittest.TestCase):
                                    sources.detect, 'foobar', **kwargs)
 
     def test_checksum_required(self):
-        for tp in ('file', 'http', 'https'):
+        for tp in ('http', 'https'):
             self.assertRaisesRegex(ValueError, 'checksum is required',
                                    sources.detect, '%s://foo' % tp)
 
     def test_file_whole_disk(self):
-        source = sources.detect('file:///image', checksum='abcd')
+        source = sources.detect('file:///image')
         self.assertIs(source.__class__, sources.FileWholeDiskImage)
         self.assertEqual(source.location, 'file:///image')
-        self.assertEqual(source.checksum, 'abcd')
+        self.assertIsNone(source.checksum)
 
         source._validate(mock.Mock(), None)
 
     def test_file_partition_disk(self):
-        source = sources.detect('file:///image', checksum='abcd',
+        source = sources.detect('file:///image',
                                 kernel='file:///kernel',
                                 ramdisk='file:///ramdisk')
         self.assertIs(source.__class__, sources.FilePartitionImage)
         self.assertEqual(source.location, 'file:///image')
-        self.assertEqual(source.checksum, 'abcd')
+        self.assertIsNone(source.checksum)
         self.assertEqual(source.kernel_location, 'file:///kernel')
         self.assertEqual(source.ramdisk_location, 'file:///ramdisk')
 
@@ -99,8 +99,7 @@ class TestDetect(unittest.TestCase):
         for kwargs in [{'kernel': 'foo'},
                        {'ramdisk': 'foo'},
                        {'kernel': 'http://foo'},
-                       {'ramdisk': 'http://foo'},
-                       {'checksum': 'http://foo'}]:
+                       {'ramdisk': 'http://foo'}]:
             kwargs.setdefault('checksum', 'abcd')
             self.assertRaisesRegex(ValueError, 'can only be files',
                                    sources.detect, 'file:///image', **kwargs)
