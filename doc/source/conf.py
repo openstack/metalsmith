@@ -14,7 +14,10 @@
 import os
 import sys
 
+# Add the project
 sys.path.insert(0, os.path.abspath('../..'))
+# Add the extensions
+sys.path.insert(0, os.path.join(os.path.abspath('.'), '_exts'))
 # -- General configuration ----------------------------------------------------
 
 # Add any Sphinx extension module names here, as strings. They can be
@@ -23,6 +26,7 @@ extensions = [
     'sphinxcontrib.apidoc',
     'sphinxcontrib.rsvgconverter',
     'openstackdocstheme',
+    'ansible-autodoc'
 ]
 
 autoclass_content = 'both'
