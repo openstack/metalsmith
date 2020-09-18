@@ -3,7 +3,6 @@
     description: |
         Base job for devstack-based metalsmith jobs.
     parent: devstack-minimal
-    pre-run: playbooks/integration/pre.yaml
     post-run: playbooks/integration/post.yaml
     run: playbooks/integration/run.yaml
     irrelevant-files:
@@ -120,7 +119,6 @@
         Integration job using Glance as image source and CentOS7 with local boot.
     parent: metalsmith-integration-base
     timeout: 7200
-    pre-run: playbooks/integration/centos-image.yaml
     vars:
       devstack_localrc:
         # NOTE(dtantsur): we need to use streaming, otherwise the image won't

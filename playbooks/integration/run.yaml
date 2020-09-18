@@ -1,4 +1,7 @@
 ---
+- name: Perform initial setup
+  include: initial-setup.yaml
+
 - hosts: all
   environment:
     OS_CLOUD: devstack-admin
@@ -6,8 +9,15 @@
   tasks:
     - include_tasks: ssh-key.yaml
 
+    - include_tasks: centos-image.yaml
+      when:
+        - metalsmith_whole_disk_image is defined
+        - metalsmith_partition_image is defined
+
     - include_tasks: cirros-image.yaml
-      when: metalsmith_whole_disk_image is not defined
+      when:
+        - metalsmith_whole_disk_image is undefined
+        - metalsmith_partition_image is undefined
 
     - name: Test a whole-disk image
       include_tasks: exercise.yaml
