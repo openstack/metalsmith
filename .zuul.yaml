@@ -3,6 +3,7 @@
     description: |
         Base job for devstack-based metalsmith jobs.
     parent: devstack-minimal
+    nodeset: openstack-single-node-focal
     post-run: playbooks/integration/post.yaml
     run: playbooks/integration/run.yaml
     irrelevant-files:
@@ -30,7 +31,7 @@
     vars:
       ironic_bm_logs: /opt/stack/logs/ironic-bm-logs
       devstack_services:
-        dstat: true
+        dstat: false
         etcd3: true
         mysql: true
         rabbit: true
