@@ -31,7 +31,7 @@
     vars:
       ironic_bm_logs: /opt/stack/logs/ironic-bm-logs
       devstack_services:
-        dstat: true
+        dstat: false
         etcd3: true
         mysql: true
         rabbit: true
@@ -148,6 +148,7 @@
     vars:
       devstack_localrc:
         IRONIC_DEFAULT_DEPLOY_INTERFACE: iscsi
+        IRONIC_ENABLED_DEPLOY_INTERFACES: "iscsi,direct,fake"
       metalsmith_netboot: true
       metalsmith_precreate_port: true
 
