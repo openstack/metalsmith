@@ -18,9 +18,14 @@ import io
 import logging
 
 from ansible.module_utils.basic import AnsibleModule
-from ansible.module_utils.openstack import openstack_cloud_from_module
-from ansible.module_utils.openstack import openstack_full_argument_spec
-from ansible.module_utils.openstack import openstack_module_kwargs
+try:
+    from ansible.module_utils.openstack import openstack_cloud_from_module
+    from ansible.module_utils.openstack import openstack_full_argument_spec
+    from ansible.module_utils.openstack import openstack_module_kwargs
+except ImportError:
+    openstack_cloud_from_module = None
+    openstack_full_argument_spec = None
+    openstack_module_kwargs = None
 
 import metalsmith
 from metalsmith import instance_config
@@ -364,6 +369,10 @@ def _configure_logging(log_level):
 
 
 def main():
+    if not openstack_full_argument_spec:
+        raise RuntimeError(
+            'This module requires ansible-collections-openstack')
+
     argument_spec = openstack_full_argument_spec(
         **yaml.safe_load(DOCUMENTATION)['options']
     )
