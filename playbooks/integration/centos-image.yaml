@@ -1,145 +1,149 @@
 ---
-- hosts: all
-  environment:
-    OS_CLOUD: devstack-admin
-
-  vars:
+- name: Set facts for centos image builds
+  set_fact:
     centos_image_file: ~/centos-download.qcow2
     centos_initramfs_file: ~/centos.initramfs
     centos_kernel_file: ~/centos.kernel
     centos_partition_file: ~/centos-root.qcow2
     centos_image_url: https://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud.qcow2.xz
 
-  tasks:
-    - name: Install guestfish
-      package:
-        name: libguestfs-tools
-        state: present
-      become: true
+- name: Install guestfish
+  package:
+    name: libguestfs-tools
+    state: present
+  become: true
 
-    - name: Make kernel files readable (workaround for Ubuntu)
-      shell: chmod 0644 /boot/vmlinuz-*
-      become: true
+- name: Make kernel files readable (workaround for Ubuntu)
+  shell: chmod 0644 /boot/vmlinuz-*
+  become: true
 
-    - name: Download the CentOS image
-      get_url:
-        url: "{{ centos_image_url }}"
-        dest: "{{ centos_image_file }}.xz"
-      register: centos_image_result
-      until: centos_image_result is succeeded
-      retries: 3
-      delay: 10
+- name: Download the CentOS image
+  get_url:
+    url: "{{ centos_image_url }}"
+    dest: "{{ centos_image_file }}.xz"
+  register: centos_image_result
+  until: centos_image_result is succeeded
+  retries: 3
+  delay: 10
 
-    - name: Unpack the CentOS image
-      command: xz -d {{ centos_image_file }}.xz
+- name: Unpack the CentOS image
+  command: xz -d {{ centos_image_file }}.xz
 
-    - name: Print filesystems from the image
-      command: virt-filesystems -a {{ centos_image_file }} -l --extra --block-devices
+- name: Print filesystems from the image
+  command: virt-filesystems -a {{ centos_image_file }} -l --extra --block-devices
 
-    - name: Upload the CentOS whole-disk image
-      command: >
-          openstack image create --disk-format qcow2
-          --public --file {{ centos_image_file }}
-          {{ centos_glance_whole_disk_image }}
-      when: centos_glance_whole_disk_image is defined
+- name: Upload the CentOS whole-disk image
+  command: >
+      openstack image create --disk-format qcow2
+      --public --file {{ centos_image_file }}
+      {{ centos_glance_whole_disk_image }}
+  environment:
+    OS_CLOUD: devstack-admin
+  when: centos_glance_whole_disk_image is defined
 
-    - name: Create a temporary directory for extraction
-      tempfile:
-        state: directory
-        suffix: boot
-      register: temp_dir
+- name: Create a temporary directory for extraction
+  tempfile:
+    state: directory
+    suffix: boot
+  register: temp_dir
 
-    - name: Extract kernel/ramdisk from the image
-      command: >
-          virt-get-kernel -a {{ centos_image_file }}
-          -o {{ temp_dir.path }} --unversioned-names
+- name: Extract kernel/ramdisk from the image
+  command: >
+      virt-get-kernel -a {{ centos_image_file }}
+      -o {{ temp_dir.path }} --unversioned-names
 
-    - name: Upload the CentOS kernel image
-      command: >
-          openstack image create --disk-format aki --container-format aki \
-          --public --file {{ temp_dir.path }}/vmlinuz -f value -c id
-          {{ centos_glance_kernel_image }}
-      register: centos_kernel_id
-      failed_when: centos_kernel_id.stdout == ""
-      when: centos_glance_kernel_image is defined
+- name: Upload the CentOS kernel image
+  command: >
+      openstack image create --disk-format aki --container-format aki \
+      --public --file {{ temp_dir.path }}/vmlinuz -f value -c id
+      {{ centos_glance_kernel_image }}
+  register: centos_kernel_id
+  failed_when: centos_kernel_id.stdout == ""
+  environment:
+    OS_CLOUD: devstack-admin
+  when: centos_glance_kernel_image is defined
 
-    - name: Upload the CentOS initramfs image
-      command: >
-          openstack image create --disk-format ari --container-format ari \
-          --public --file {{ temp_dir.path }}/initramfs -f value -c id
-          {{ centos_glance_initramds_image }}
-      register: centos_initramfs_id
-      failed_when: centos_initramfs_id.stdout == ""
-      when: centos_glance_initramds_image is defined
+- name: Upload the CentOS initramfs image
+  command: >
+      openstack image create --disk-format ari --container-format ari \
+      --public --file {{ temp_dir.path }}/initramfs -f value -c id
+      {{ centos_glance_initramds_image }}
+  register: centos_initramfs_id
+  failed_when: centos_initramfs_id.stdout == ""
+  environment:
+    OS_CLOUD: devstack-admin
+  when: centos_glance_initramds_image is defined
 
-    - name: Delete the kernel and ramdisk image files
-      file:
-        state: absent
-        path: "{{ temp_dir.path }}/{{ item }}"
-      with_items:
-        - vmlinuz
-        - initramfs
+- name: Delete the kernel and ramdisk image files
+  file:
+    state: absent
+    path: "{{ temp_dir.path }}/{{ item }}"
+  with_items:
+    - vmlinuz
+    - initramfs
 
-    - name: Extract the root file system
-      command: virt-tar-out -a {{ centos_image_file }} / {{ temp_dir.path }}/root.tar
+- name: Extract the root file system
+  command: virt-tar-out -a {{ centos_image_file }} / {{ temp_dir.path }}/root.tar
 
-    - name: Delete the whole-disk image file
-      file:
-        state: absent
-        path: "{{ centos_image_file }}"
+- name: Delete the whole-disk image file
+  file:
+    state: absent
+    path: "{{ centos_image_file }}"
 
-    - name: Extract /etc/fstab and /etc/selinux/config
-      command: >
-          tar -f {{ temp_dir.path }}/root.tar
-          -C {{ temp_dir.path }} --extract {{ item }}
-      with_items:
-        - ./etc/fstab
-        - ./etc/selinux/config
+- name: Extract /etc/fstab and /etc/selinux/config
+  command: >
+      tar -f {{ temp_dir.path }}/root.tar
+      -C {{ temp_dir.path }} --extract {{ item }}
+  with_items:
+    - ./etc/fstab
+    - ./etc/selinux/config
 
-    - name: Remove /etc/fstab and /etc/selinux/config from the archive
-      command: tar -f {{ temp_dir.path }}/root.tar --delete {{ item }}
-      with_items:
-        - ./etc/fstab
-        - ./etc/selinux/config
+- name: Remove /etc/fstab and /etc/selinux/config from the archive
+  command: tar -f {{ temp_dir.path }}/root.tar --delete {{ item }}
+  with_items:
+    - ./etc/fstab
+    - ./etc/selinux/config
 
-    - name: Edit /etc/fstab to replace UUID with LABEL
-      command: sed -i 's/UUID=[^ ]* /\/dev\/vda2 /' {{ temp_dir.path}}/etc/fstab
+- name: Edit /etc/fstab to replace UUID with LABEL
+  command: sed -i 's/UUID=[^ ]* /\/dev\/vda2 /' {{ temp_dir.path}}/etc/fstab
 
-    - name: Rewrite /etc/selinux/config to disable selinux
-      copy:
-        dest: "{{ temp_dir.path }}/etc/selinux/config"
-        content: "SELINUX=disabled"
+- name: Rewrite /etc/selinux/config to disable selinux
+  copy:
+    dest: "{{ temp_dir.path }}/etc/selinux/config"
+    content: "SELINUX=disabled"
 
-    - name: Add edited /etc/fstab and /etc/selinux/config back
-      command: >
-          tar -f {{ temp_dir.path }}/root.tar
-          -C {{ temp_dir.path }}
-          --append {{ item }} --owner root --group root
-      with_items:
-        - ./etc/fstab
-        - ./etc/selinux/config
+- name: Add edited /etc/fstab and /etc/selinux/config back
+  command: >
+      tar -f {{ temp_dir.path }}/root.tar
+      -C {{ temp_dir.path }}
+      --append {{ item }} --owner root --group root
+  with_items:
+    - ./etc/fstab
+    - ./etc/selinux/config
 
-    - name: Pack the root file system into a partition image
-      command: virt-make-fs {{ temp_dir.path }}/root.tar {{ centos_partition_file }}
+- name: Pack the root file system into a partition image
+  command: virt-make-fs {{ temp_dir.path }}/root.tar {{ centos_partition_file }}
 
-    - name: Print filesystems from the image
-      command: virt-filesystems -a {{ centos_partition_file }} -l --extra --block-devices
+- name: Print filesystems from the image
+  command: virt-filesystems -a {{ centos_partition_file }} -l --extra --block-devices
 
-    - name: Remove the temporary directory
-      file:
-        state: absent
-        path: "{{ temp_dir.path }}"
+- name: Remove the temporary directory
+  file:
+    state: absent
+    path: "{{ temp_dir.path }}"
 
-    - name: Upload the CentOS partition image
-      command: >
-          openstack image create --disk-format qcow2
-          --public --file {{ centos_partition_file }}
-          --property kernel_id={{ centos_kernel_id.stdout }}
-          --property ramdisk_id={{ centos_initramfs_id.stdout }}
-          {{ centos_glance_root_image }}
-      when: centos_glance_root_image is defined
+- name: Upload the CentOS partition image
+  command: >
+      openstack image create --disk-format qcow2
+      --public --file {{ centos_partition_file }}
+      --property kernel_id={{ centos_kernel_id.stdout }}
+      --property ramdisk_id={{ centos_initramfs_id.stdout }}
+      {{ centos_glance_root_image }}
+  environment:
+    OS_CLOUD: devstack-admin
+  when: centos_glance_root_image is defined
 
-    - name: Remove the partition image file
-      file:
-        state: absent
-        path: "{{ centos_partition_file }}"
+- name: Remove the partition image file
+  file:
+    state: absent
+    path: "{{ centos_partition_file }}"
