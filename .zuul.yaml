@@ -119,7 +119,7 @@
     description: |
         Integration job using Glance as image source and CentOS7 with local boot.
     parent: metalsmith-integration-base
-    timeout: 7200
+    timeout: 9000
     vars:
       devstack_localrc:
         # NOTE(dtantsur): we need to use streaming, otherwise the image won't
