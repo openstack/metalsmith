@@ -1,0 +1,76 @@
+---
+- name: "Set centos image facts"
+  set_fact:
+    centos_image_file: ~/centos8-wholedisk.qcow2
+    centos_initramfs_file: ~/centos8-partition.initrd
+    centos_kernel_file: ~/centos8-partition.vmlinuz
+    centos_partition_file: ~/centos8-partition.qcow2
+
+- name: Install kpartx
+  package:
+    name: kpartx
+    state: present
+  become: true
+
+- name: Install DIB
+  pip:
+    name: diskimage-builder
+  become: true
+  vars:
+    ansible_python_interpreter: /usr/bin/{{ metalsmith_python | default('python') }}
+
+- name: Make kernel files readable (workaround for Ubuntu)
+  shell: chmod 0644 /boot/vmlinuz-*
+  become: true
+
+- name: Build a centos8 wholedisk image
+  command: disk-image-create centos grub2 vm block-device-efi -o centos8-wholedisk
+  environment:
+    OS_RELEASE: 8
+
+- name: Build a centos8 partition image
+  command: disk-image-create centos grub2 baremetal -o centos8-partition
+  environment:
+    OS_RELEASE: 8
+
+- name: Upload the CentOS whole-disk image
+  command: >
+      openstack image create --disk-format qcow2
+      --public --file {{ centos_image_file }}
+      {{ centos_glance_whole_disk_image }}
+  environment:
+    OS_CLOUD: devstack-admin
+  when: centos_glance_whole_disk_image is defined
+
+- name: Upload the CentOS kernel image
+  command: >
+      openstack image create --disk-format aki --container-format aki \
+      --public --file {{ centos_kernel_file }} -f value -c id
+      {{ centos_glance_kernel_image }}
+  register: centos_kernel_id
+  failed_when: centos_kernel_id.stdout == ""
+  environment:
+    OS_CLOUD: devstack-admin
+  when: centos_glance_kernel_image is defined
+
+- name: Upload the CentOS initramfs image
+  command: >
+      openstack image create --disk-format ari --container-format ari \
+      --public --file {{ centos_initramfs_file }} -f value -c id
+      {{ centos_glance_initramds_image }}
+  register: centos_initramfs_id
+  failed_when: centos_initramfs_id.stdout == ""
+  environment:
+    OS_CLOUD: devstack-admin
+  when: centos_glance_initramds_image is defined
+
+- name: Upload the CentOS partition image
+  command: >
+      openstack image create --disk-format qcow2
+      --public --file {{ centos_partition_file }}
+      --property kernel_id={{ centos_kernel_id.stdout }}
+      --property ramdisk_id={{ centos_initramfs_id.stdout }}
+      {{ centos_glance_root_image }}
+  environment:
+    OS_CLOUD: devstack-admin
+  when: centos_glance_root_image is defined
