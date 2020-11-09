@@ -151,6 +151,23 @@ options:
           - Allow password-less sudo for the user
         default: yes
         type: bool
+      config_drive:
+        description:
+          - Extra data to add to the boot config-drive cloud-init
+        type: dict
+        suboptions:
+          cloud_config:
+            description:
+              - Dict of cloud-init cloud-config data for tasks to run on node
+                boot. The 'users' directive can be used to configure extra
+                users other than the 'user_name' admin user.
+            type: dict
+          meta_data:
+            description:
+              - Extra metadata to include with the config-drive cloud-init
+                metadata. This will be added to the generated metadata
+                'public_keys', 'uuid', 'name', and 'hostname'.
+            type: dict
   clean_up:
     description:
       - Clean up resources on failure
@@ -330,7 +347,12 @@ def _provision_instance(provisioner, instance, nodes, timeout, wait):
 
     image = _get_source(instance)
     ssh_keys = instance.get('ssh_public_keys')
-    config = instance_config.CloudInitConfig(ssh_keys=ssh_keys)
+    config_drive = instance.get('config_drive', {})
+    cloud_config = config_drive.get('cloud_config')
+    meta_data = config_drive.get('meta_data')
+    config = instance_config.CloudInitConfig(ssh_keys=ssh_keys,
+                                             user_data=cloud_config,
+                                             meta_data=meta_data)
     if instance.get('user_name'):
         config.add_user(instance.get('user_name'), admin=True,
                         sudo=instance.get('passwordless_sudo', True))

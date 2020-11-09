@@ -60,6 +60,18 @@ Each instances has the following attributes:
     list of nodes (UUIDs or names) to be considered for deployment.
 ``capabilities`` (defaults to ``metalsmith_capabilities``)
     node capabilities to request when scheduling.
+``config_drive``
+    extra data to add to the boot config-drive cloud-init:
+
+    ``cloud_config``
+        Dict of cloud-init cloud-config data for tasks to run on node
+        boot. The 'users' directive can be used to configure extra
+        users other than the 'user_name' admin user.
+    ``meta_data``
+        Extra metadata to include with the config-drive cloud-init
+        metadata. This will be added to the generated metadata
+        ``public_keys``, ``uuid``, ``name``, and ``hostname``.
+
 ``conductor_group`` (defaults to ``metalsmith_conductor_group``)
     conductor group to pick nodes from.
 

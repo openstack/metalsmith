@@ -78,6 +78,13 @@ class TestGenericConfig(unittest.TestCase):
         config = self.CLASS(user_data='{"answer": 42}')
         self._check(config, {}, {"answer": 42}, cloud_init=False)
 
+    def test_custom_metadata(self):
+        config = self.CLASS(meta_data={"foo": "bar"})
+        self._check(config, {"foo": "bar"}, cloud_init=False)
+
+    def test_custom_metadata_not_dict(self):
+        self.assertRaises(TypeError, self.CLASS, meta_data="foobar")
+
 
 class TestCloudInitConfig(TestGenericConfig):
     CLASS = instance_config.CloudInitConfig

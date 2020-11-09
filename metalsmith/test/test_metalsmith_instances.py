@@ -126,7 +126,11 @@ class TestMetalsmithInstances(unittest.TestCase):
             'netboot': True,
             'ssh_public_keys': 'abcd',
             'user_name': 'centos',
-            'passwordless_sudo': False
+            'passwordless_sudo': False,
+            'config_drive': {
+                'meta_data': {'foo': 'bar'},
+                'cloud_config': {'bootcmd': ['echo henlo world']}
+            }
         }, {
             'name': 'node-3',
             'hostname': 'overcloud-controller-3',
@@ -191,8 +195,10 @@ class TestMetalsmithInstances(unittest.TestCase):
             ),
         ])
         mock_config.assert_has_calls([
-            mock.call(ssh_keys=None),
-            mock.call(ssh_keys='abcd'),
+            mock.call(ssh_keys=None, user_data=None, meta_data=None),
+            mock.call(ssh_keys='abcd',
+                      user_data={'bootcmd': ['echo henlo world']},
+                      meta_data={'foo': 'bar'})
         ])
         config.add_user.assert_called_once_with(
             'centos', admin=True, sudo=False)

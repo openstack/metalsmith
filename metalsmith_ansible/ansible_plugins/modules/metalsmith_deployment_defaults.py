@@ -73,6 +73,7 @@ def transform(module, instances, defaults):
         value(src, 'image_checksum', image, 'checksum')
         value(src, 'image_kernel', image, 'kernel')
         value(src, 'image_ramdisk', image, 'ramdisk')
+        value(src, 'config_drive', dest)
 
         # keys in metalsmith_instances not currently in metalsmith_deployment:
         # passwordless_sudo
