@@ -44,7 +44,7 @@ class GenericConfig(object):
         if meta_data and not isinstance(meta_data, dict):
             raise TypeError('Custom meta_data must be a dictionary, '
                             'got %r' % meta_data)
-        self.meta_data = meta_data
+        self.meta_data = meta_data or {}
 
     def generate(self, node, hostname=None):
         """Generate the config drive information.
@@ -67,10 +67,7 @@ class GenericConfig(object):
         else:
             ssh_keys = self.ssh_keys
 
-        meta_data = {}
-        if self.meta_data:
-            meta_data.update(self.meta_data)
-
+        meta_data = self.meta_data.copy()
         meta_data.update({
             'public_keys': ssh_keys,
             'uuid': node.id,

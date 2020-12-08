@@ -153,19 +153,19 @@ options:
         type: bool
       config_drive:
         description:
-          - Extra data to add to the boot config-drive cloud-init
+          - Extra data to add to the config-drive generated for this instance
         type: dict
         suboptions:
           cloud_config:
             description:
-              - Dict of cloud-init cloud-config data for tasks to run on node
+              - Dict of cloud-init cloud-config tasks to run on node
                 boot. The 'users' directive can be used to configure extra
                 users other than the 'user_name' admin user.
             type: dict
           meta_data:
             description:
-              - Extra metadata to include with the config-drive cloud-init
-                metadata. This will be added to the generated metadata
+              - Extra metadata to include with the config-drive metadata.
+                This will be added to the generated metadata
                 'public_keys', 'uuid', 'name', and 'hostname'.
             type: dict
   clean_up:
