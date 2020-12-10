@@ -1,0 +1,7 @@
+---
+features:
+  - |
+    Add new metalsmith_instances instance option ``config_drive``.
+    This has sub-options ``cloud_config` and ``meta_data`` and allows
+    customization of data packaged in the config-drive to be consumed by
+    cloud-init.

@@ -35,11 +35,16 @@ class GenericConfig(object):
 
     :ivar ssh_keys: List of SSH public keys.
     :ivar user_data: User data as a string.
+    :ivar meta_data: Dict of data to add to the generated ``meta_data``
     """
 
-    def __init__(self, ssh_keys=None, user_data=None):
+    def __init__(self, ssh_keys=None, user_data=None, meta_data=None):
         self.ssh_keys = ssh_keys or []
         self.user_data = user_data
+        if meta_data and not isinstance(meta_data, dict):
+            raise TypeError('Custom meta_data must be a dictionary, '
+                            'got %r' % meta_data)
+        self.meta_data = meta_data
 
     def generate(self, node, hostname=None):
         """Generate the config drive information.
@@ -62,17 +67,24 @@ class GenericConfig(object):
         else:
             ssh_keys = self.ssh_keys
 
-        metadata = {'public_keys': ssh_keys,
-                    'uuid': node.id,
-                    'name': node.name,
-                    'hostname': hostname,
-                    'launch_index': 0,
-                    'availability_zone': '',
-                    'files': [],
-                    'meta': {}}
+        meta_data = {}
+        if self.meta_data:
+            meta_data.update(self.meta_data)
+
+        meta_data.update({
+            'public_keys': ssh_keys,
+            'uuid': node.id,
+            'name': node.name,
+            'hostname': hostname
+        })
+        meta_data.setdefault('launch_index', 0)
+        meta_data.setdefault('availability_zone', '')
+        meta_data.setdefault('files', [])
+        meta_data.setdefault('meta', {})
+
         user_data = self.populate_user_data()
 
-        return {'meta_data': metadata,
+        return {'meta_data': meta_data,
                 'user_data': user_data}
 
     def populate_user_data(self):
@@ -91,15 +103,16 @@ class CloudInitConfig(GenericConfig):
     Compared to :class:`GenericConfig`, this adds support for managing users.
 
     :ivar ssh_keys: List of SSH public keys.
-    :ivar user_data: Cloud-init script as a dictionary.
-    :ivar users: Users to add on first boot.
+    :ivar user_data: Cloud-init cloud-config data as a dictionary.
+    :ivar meta_data: Dict of data to add to the generated ``meta_data``
     """
 
-    def __init__(self, ssh_keys=None, user_data=None):
+    def __init__(self, ssh_keys=None, user_data=None, meta_data=None):
         if user_data is not None and not isinstance(user_data, dict):
             raise TypeError('Custom user data must be a dictionary for '
                             'CloudInitConfig, got %r' % user_data)
-        super(CloudInitConfig, self).__init__(ssh_keys, user_data or {})
+        super(CloudInitConfig, self).__init__(ssh_keys, user_data or {},
+                                              meta_data=meta_data)
         self.users = []
 
     def add_user(self, name, admin=True, password_hash=None, sudo=False,
