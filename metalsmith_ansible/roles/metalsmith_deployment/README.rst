@@ -61,15 +61,15 @@ Each instances has the following attributes:
 ``capabilities`` (defaults to ``metalsmith_capabilities``)
     node capabilities to request when scheduling.
 ``config_drive``
-    extra data to add to the boot config-drive cloud-init:
+    extra data to add to the config-drive generated for this instance:
 
     ``cloud_config``
-        Dict of cloud-init cloud-config data for tasks to run on node
+        Dict of cloud-init cloud-config tasks to run on node
         boot. The 'users' directive can be used to configure extra
         users other than the 'user_name' admin user.
     ``meta_data``
-        Extra metadata to include with the config-drive cloud-init
-        metadata. This will be added to the generated metadata
+        Extra metadata to include with the config-drive metadata.
+        This will be added to the generated metadata
         ``public_keys``, ``uuid``, ``name``, and ``hostname``.
 
 ``conductor_group`` (defaults to ``metalsmith_conductor_group``)
