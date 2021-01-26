@@ -491,7 +491,7 @@ class Provisioner(object):
                 for key, value in instance_info.items()
                 if key in _PRESERVE_INSTANCE_INFO_KEYS}
 
-    def _clean_up(self, node, nics=None):
+    def _clean_up(self, node, nics=None, remove_instance_info=True):
         if nics is None:
             created_ports = node.extra.get(_CREATED_PORTS, [])
             attached_ports = node.extra.get(_ATTACHED_PORTS, [])
@@ -521,14 +521,20 @@ class Provisioner(object):
             # Old-style reservations have to be cleared explicitly
             kwargs['instance_id'] = None
 
-        LOG.debug('Updating node %(node)s with empty instance info (was '
-                  '%(iinfo)s) and extras %(extra)s',
-                  {'node': _utils.log_res(node),
-                   'iinfo': node.instance_info,
-                   'extra': extra})
         try:
-            self.connection.baremetal.update_node(
-                node, instance_info={}, extra=extra, **kwargs)
+            if remove_instance_info:
+                LOG.debug('Updating node %(node)s with empty instance info '
+                          '(was %(iinfo)s) and extras %(extra)s',
+                          {'node': _utils.log_res(node),
+                           'iinfo': node.instance_info,
+                           'extra': extra})
+                self.connection.baremetal.update_node(
+                    node, instance_info={}, extra=extra, **kwargs)
+            else:
+                LOG.debug('Updating node %(node)s with extras %(extra)s',
+                          {'node': _utils.log_res(node), 'extra': extra})
+                self.connection.baremetal.update_node(
+                    node, extra=extra, **kwargs)
         except Exception as exc:
             LOG.debug('Failed to clear node %(node)s extra: %(exc)s',
                       {'node': _utils.log_res(node), 'exc': exc})
@@ -553,7 +559,7 @@ class Provisioner(object):
             LOG.warning("Dry run, not unprovisioning")
             return
 
-        self._clean_up(node)
+        self._clean_up(node, remove_instance_info=False)
         try:
             node = self.connection.baremetal.set_node_provision_state(
                 node, 'deleted', wait=False)

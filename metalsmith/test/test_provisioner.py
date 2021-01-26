@@ -1837,7 +1837,7 @@ class TestUnprovisionNode(Base):
         self.assertFalse(
             self.api.baremetal.wait_for_nodes_provision_state.called)
         self.api.baremetal.update_node.assert_called_once_with(
-            self.node, instance_info={}, extra={'foo': 'bar'})
+            self.node, extra={'foo': 'bar'})
         self.assertFalse(self.api.baremetal.delete_allocation.called)
         # We cannot delete an allocation for an active node, it will be deleted
         # automatically.
@@ -1859,7 +1859,7 @@ class TestUnprovisionNode(Base):
         self.assertFalse(
             self.api.baremetal.wait_for_nodes_provision_state.called)
         self.api.baremetal.update_node.assert_called_once_with(
-            self.node, instance_info={}, extra={'foo': 'bar'})
+            self.node, extra={'foo': 'bar'})
         self.api.baremetal.delete_allocation.assert_called_once_with('123')
 
     def test_with_attached(self):
@@ -1876,7 +1876,7 @@ class TestUnprovisionNode(Base):
         self.assertFalse(
             self.api.baremetal.wait_for_nodes_provision_state.called)
         self.api.baremetal.update_node.assert_called_once_with(
-            self.node, instance_info={}, extra={})
+            self.node, extra={})
 
     def test_with_wait(self):
         result = self.pr.unprovision_node(self.node, wait=3600)
@@ -1889,7 +1889,7 @@ class TestUnprovisionNode(Base):
         self.api.baremetal.set_node_provision_state.assert_called_once_with(
             self.node, 'deleted', wait=False)
         self.api.baremetal.update_node.assert_called_once_with(
-            self.node, instance_info={}, extra={})
+            self.node, extra={})
         wait_mock = self.api.baremetal.wait_for_nodes_provision_state
         wait_mock.assert_called_once_with([self.node], 'available',
                                           timeout=3600)
@@ -1920,7 +1920,7 @@ class TestUnprovisionNode(Base):
         self.assertFalse(
             self.api.baremetal.wait_for_nodes_provision_state.called)
         self.api.baremetal.update_node.assert_called_once_with(
-            self.node, instance_info={}, extra={'foo': 'bar'},
+            self.node, extra={'foo': 'bar'},
             instance_id=None)
         self.assertFalse(self.api.baremetal.delete_allocation.called)
 
