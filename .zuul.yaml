@@ -115,6 +115,7 @@
       metalsmith_root_size: 9
       metalsmith_python: python3
 
+# NOTE(TheJulia): This job can be removed once removed from ironic's CI.
 - job:
     name: metalsmith-integration-glance-localboot-centos7
     description: |
@@ -139,6 +140,7 @@
       metalsmith_whole_disk_image: test-centos-wholedisk
       metalsmith_swap_size: 1024
       metalsmith_traits: [CUSTOM_GOLD]
+
 
 - job:
     name: metalsmith-integration-glance-localboot-centos8-uefi
@@ -211,15 +213,13 @@
       - release-notes-jobs-python3
     check:
       jobs:
-        - metalsmith-integration-glance-localboot-centos7
-        - metalsmith-integration-glance-localboot-centos8-uefi:
-            voting: false
+        - metalsmith-integration-glance-localboot-centos8-uefi
         - metalsmith-integration-glance-netboot-cirros-iscsi
         - metalsmith-integration-glance-netboot-cirros-direct
         - metalsmith-integration-http-netboot-cirros-direct
     gate:
       jobs:
-        - metalsmith-integration-glance-localboot-centos7
+        - metalsmith-integration-glance-localboot-centos8-uefi
         - metalsmith-integration-glance-netboot-cirros-iscsi
         - metalsmith-integration-glance-netboot-cirros-direct
         - metalsmith-integration-http-netboot-cirros-direct
