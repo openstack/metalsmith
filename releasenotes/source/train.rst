@@ -1,5 +1,5 @@
 =============================================
- Train (0.12.0 - 0.15.x) Series Release Notes
+ Train Series (0.12.0 - 0.15.x) Release Notes
 =============================================
 
 .. release-notes::
