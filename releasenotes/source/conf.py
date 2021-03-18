@@ -62,8 +62,8 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'MetalSmith Release Notes'
-copyright = u'2018, MetalSmith Developers'
+project = 'MetalSmith Release Notes'
+copyright = '2018, MetalSmith Developers'
 
 # Release notes are version independent.
 # The short X.Y version.

@@ -46,7 +46,7 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-copyright = u'2018, MetalSmith Developers '
+copyright = '2018, MetalSmith Developers '
 
 # If true, '()' will be appended to :func: etc. cross-reference text.
 add_function_parentheses = True
@@ -83,8 +83,8 @@ latex_use_xindy = False
 latex_documents = [
     ('index',
      'doc-metalsmith.tex',
-     u'MetalSmith Documentation',
-     u'MetalSmith Developers', 'manual'),
+     'MetalSmith Documentation',
+     'MetalSmith Developers', 'manual'),
 ]
 
 # Example configuration for intersphinx: refer to the Python standard library.
