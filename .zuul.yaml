@@ -172,19 +172,7 @@
       metalsmith_traits: [CUSTOM_GOLD]
 
 - job:
-    name: metalsmith-integration-glance-netboot-cirros-iscsi
-    description: |
-        Integration job using Glance as image source and CirrOS with netboot.
-    parent: metalsmith-integration-base
-    vars:
-      devstack_localrc:
-        IRONIC_DEFAULT_DEPLOY_INTERFACE: iscsi
-        IRONIC_ENABLED_DEPLOY_INTERFACES: "iscsi,direct,fake"
-      metalsmith_netboot: true
-      metalsmith_precreate_port: true
-
-- job:
-    name: metalsmith-integration-glance-netboot-cirros-direct
+    name: metalsmith-integration-glance-netboot-cirros
     description: |
         Integration job using Glance as image source and direct deploy.
     parent: metalsmith-integration-base
@@ -194,7 +182,7 @@
       metalsmith_precreate_port: false
 
 - job:
-    name: metalsmith-integration-http-netboot-cirros-direct
+    name: metalsmith-integration-http-netboot-cirros
     description: |
         Integration job using HTTP as image source and direct deploy.
     parent: metalsmith-integration-base
@@ -214,12 +202,10 @@
     check:
       jobs:
         - metalsmith-integration-glance-localboot-centos8-uefi
-        - metalsmith-integration-glance-netboot-cirros-iscsi
-        - metalsmith-integration-glance-netboot-cirros-direct
-        - metalsmith-integration-http-netboot-cirros-direct
+        - metalsmith-integration-glance-netboot-cirros
+        - metalsmith-integration-http-netboot-cirros
     gate:
       jobs:
         - metalsmith-integration-glance-localboot-centos8-uefi
-        - metalsmith-integration-glance-netboot-cirros-iscsi
-        - metalsmith-integration-glance-netboot-cirros-direct
-        - metalsmith-integration-http-netboot-cirros-direct
+        - metalsmith-integration-glance-netboot-cirros
+        - metalsmith-integration-http-netboot-cirros
