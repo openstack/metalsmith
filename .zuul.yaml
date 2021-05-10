@@ -25,7 +25,8 @@
       - openstack/glance
       - openstack/swift
       - openstack/ironic
-      - openstack/ironic-python-agent-builder
+      - name: openstack/ironic-python-agent-builder
+        override-checkout: stable/wallaby
       - openstack/metalsmith
     vars:
       ironic_bm_logs: /opt/stack/logs/ironic-bm-logs
