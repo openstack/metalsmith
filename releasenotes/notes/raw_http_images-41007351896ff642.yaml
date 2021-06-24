@@ -1,0 +1,9 @@
+---
+fixes:
+  - |
+    Images sourced by HTTP would never have the node instance_info
+    `image_disk_format` set to `raw` because the image file is not processed by
+    ironic. This would result in errors for large images, or
+    ironic-python-agent never using streaming to copy the image to disk.  To
+    work around this, `image_disk_format` is set to `raw` when the image URL
+    ends with a `.raw` file extension.

@@ -95,7 +95,8 @@ class HttpWholeDiskImage(_Source):
     specifically, by **ironic-conductor** processes).
     """
 
-    def __init__(self, url, checksum=None, checksum_url=None):
+    def __init__(self, url, checksum=None, checksum_url=None,
+                 disk_format=None):
         """Create an HTTP source.
 
         :param url: URL of the image.
@@ -104,6 +105,8 @@ class HttpWholeDiskImage(_Source):
         :param checksum_url: URL of the checksum file for the image. Has to
             be in the standard format of the ``md5sum`` tool. Mutually
             exclusive with ``checksum``.
+        :param disk_format: Optional value to set for ``instance_info``
+            ``image_disk_format``.
         """
         if (checksum and checksum_url) or (not checksum and not checksum_url):
             raise TypeError('Exactly one of checksum and checksum_url has '
@@ -112,6 +115,7 @@ class HttpWholeDiskImage(_Source):
         self.url = url
         self.checksum = checksum
         self.checksum_url = checksum_url
+        self.disk_format = disk_format
 
     def _validate(self, connection, root_size_gb):
         # TODO(dtantsur): should we validate image URLs here? Ironic will do it
@@ -147,17 +151,20 @@ class HttpWholeDiskImage(_Source):
     def _node_updates(self, connection):
         LOG.debug('Image: %(image)s, checksum %(checksum)s',
                   {'image': self.url, 'checksum': self.checksum})
-        return {
+        updates = {
             'image_source': self.url,
             'image_checksum': self.checksum,
         }
+        if self.disk_format:
+            updates['image_disk_format'] = self.disk_format
+        return updates
 
 
 class HttpPartitionImage(HttpWholeDiskImage):
     """A partition image from an HTTP(s) location."""
 
     def __init__(self, url, kernel_url, ramdisk_url, checksum=None,
-                 checksum_url=None):
+                 checksum_url=None, disk_format=None):
         """Create an HTTP source.
 
         :param url: URL of the root disk image.
@@ -168,9 +175,12 @@ class HttpPartitionImage(HttpWholeDiskImage):
         :param checksum_url: URL of the checksum file for the root disk image.
             Has to be in the standard format of the ``md5sum`` tool. Mutually
             exclusive with ``checksum``.
+        :param disk_format: Optional value to set for ``instance_info``
+            ``image_disk_format``.
         """
         super(HttpPartitionImage, self).__init__(url, checksum=checksum,
-                                                 checksum_url=checksum_url)
+                                                 checksum_url=checksum_url,
+                                                 disk_format=disk_format)
         self.kernel_url = kernel_url
         self.ramdisk_url = ramdisk_url
 
@@ -321,6 +331,10 @@ def detect(image, kernel=None, ramdisk=None, checksum=None):
             kwargs = {'checksum_url': checksum}
         else:
             kwargs = {'checksum': checksum}
+
+        # Assume raw image based on file extension
+        if image.endswith('.raw'):
+            kwargs['disk_format'] = 'raw'
 
         if kernel or ramdisk:
             return HttpPartitionImage(image,

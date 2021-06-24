@@ -111,6 +111,23 @@ class TestDetect(unittest.TestCase):
         self.assertEqual(source.checksum, 'abcd')
 
         source._validate(mock.Mock(), None)
+        self.assertEqual({
+            'image_checksum': 'abcd',
+            'image_source': 'http:///image'
+        }, source._node_updates(None))
+
+    def test_http_whole_disk_raw(self):
+        source = sources.detect('http:///image.raw', checksum='abcd')
+        self.assertIs(source.__class__, sources.HttpWholeDiskImage)
+        self.assertEqual(source.url, 'http:///image.raw')
+        self.assertEqual(source.checksum, 'abcd')
+
+        source._validate(mock.Mock(), None)
+        self.assertEqual({
+            'image_checksum': 'abcd',
+            'image_source': 'http:///image.raw',
+            'image_disk_format': 'raw'
+        }, source._node_updates(None))
 
     def test_https_whole_disk(self):
         source = sources.detect('https:///image', checksum='abcd')
@@ -138,6 +155,31 @@ class TestDetect(unittest.TestCase):
         self.assertEqual(source.ramdisk_url, 'http:///ramdisk')
 
         source._validate(mock.Mock(), 9)
+        self.assertEqual({
+            'image_checksum': 'abcd',
+            'image_source': 'http:///image',
+            'kernel': 'http:///kernel',
+            'ramdisk': 'http:///ramdisk'
+        }, source._node_updates(None))
+
+    def test_http_partition_disk_raw(self):
+        source = sources.detect('http:///image.raw', checksum='abcd',
+                                kernel='http:///kernel',
+                                ramdisk='http:///ramdisk')
+        self.assertIs(source.__class__, sources.HttpPartitionImage)
+        self.assertEqual(source.url, 'http:///image.raw')
+        self.assertEqual(source.checksum, 'abcd')
+        self.assertEqual(source.kernel_url, 'http:///kernel')
+        self.assertEqual(source.ramdisk_url, 'http:///ramdisk')
+
+        source._validate(mock.Mock(), 9)
+        self.assertEqual({
+            'image_checksum': 'abcd',
+            'image_source': 'http:///image.raw',
+            'kernel': 'http:///kernel',
+            'ramdisk': 'http:///ramdisk',
+            'image_disk_format': 'raw'
+        }, source._node_updates(None))
 
     def test_http_partition_disk_missing_root(self):
         source = sources.detect('http:///image', checksum='abcd',
