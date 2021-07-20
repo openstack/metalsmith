@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import collections
+import collections.abc
 import logging
 
 from openstack import exceptions as sdk_exc
@@ -32,11 +32,11 @@ class NICs(object):
         if nics is None:
             nics = []
 
-        if not isinstance(nics, collections.Sequence):
+        if not isinstance(nics, collections.abc.Sequence):
             raise TypeError("NICs must be a list of dicts")
 
         for nic in nics:
-            if not isinstance(nic, collections.Mapping):
+            if not isinstance(nic, collections.abc.Mapping):
                 raise TypeError("Each NIC must be a dict got %s" % nic)
 
         self._node = node
