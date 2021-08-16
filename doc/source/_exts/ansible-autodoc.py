@@ -14,7 +14,7 @@
 # under the License.
 
 
-import imp
+import importlib
 import os
 
 from docutils import core
@@ -97,7 +97,11 @@ class AnsibleAutoPluginDirective(Directive):
 
     @staticmethod
     def load_module(filename):
-        return imp.load_source('__ansible_module__', filename)
+        spec = importlib.util.spec_from_file_location('__ansible_module__',
+                                                      filename)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
 
     @staticmethod
     def build_documentation(module):
