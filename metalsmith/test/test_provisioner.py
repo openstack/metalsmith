@@ -20,6 +20,7 @@ from openstack import exceptions as os_exc
 import requests
 
 from metalsmith import _instance
+from metalsmith import _network_metadata
 from metalsmith import _provisioner
 from metalsmith import _utils
 from metalsmith import exceptions
@@ -510,6 +511,12 @@ class TestProvisionNode(Base):
         self.configdrive_mock = configdrive_patcher.start()
         self.addCleanup(configdrive_patcher.stop)
 
+        create_network_metadata_patches = mock.patch.object(
+            _network_metadata, 'create_network_metadata', autospec=True
+        )
+        self.network_metadata_mock = create_network_metadata_patches.start()
+        self.addCleanup(create_network_metadata_patches.stop)
+
         self.api.baremetal.get_node.side_effect = lambda _n: self.node
         self.api.baremetal.get_allocation.side_effect = (
             lambda _a: self.allocation)
@@ -531,7 +538,8 @@ class TestProvisionNode(Base):
             self.node, instance_info=self.instance_info, extra=self.extra)
         self.api.baremetal.validate_node.assert_called_once_with(self.node)
         self.configdrive_mock.assert_called_once_with(mock.ANY, self.node,
-                                                      self.allocation.name)
+                                                      self.allocation.name,
+                                                      mock.ANY)
         self.api.baremetal.set_node_provision_state.assert_called_once_with(
             self.node, 'active', config_drive=mock.ANY)
         self.assertFalse(self.api.network.delete_port.called)
@@ -553,7 +561,7 @@ class TestProvisionNode(Base):
             self.node, instance_info=self.instance_info, extra=self.extra)
         self.api.baremetal.validate_node.assert_called_once_with(self.node)
         self.configdrive_mock.assert_called_once_with(mock.ANY, self.node,
-                                                      self.node.name)
+                                                      self.node.name, mock.ANY)
         self.api.baremetal.set_node_provision_state.assert_called_once_with(
             self.node, 'active', config_drive=mock.ANY)
         self.assertFalse(self.api.network.delete_port.called)
@@ -610,7 +618,7 @@ class TestProvisionNode(Base):
         self.assertEqual(inst.node, self.node)
 
         config.generate.assert_called_once_with(self.node,
-                                                self.allocation.name)
+                                                self.allocation.name, mock.ANY)
         self.api.network.create_port.assert_called_once_with(
             network_id=self.api.network.find_network.return_value.id,
             name='example.com-%s' %
@@ -660,7 +668,7 @@ class TestProvisionNode(Base):
             self.node, instance_info=self.instance_info, extra=self.extra)
         self.api.baremetal.validate_node.assert_called_once_with(self.node)
         self.configdrive_mock.assert_called_once_with(mock.ANY, self.node,
-                                                      hostname)
+                                                      hostname, mock.ANY)
         self.api.baremetal.set_node_provision_state.assert_called_once_with(
             self.node, 'active', config_drive=mock.ANY)
         self.assertFalse(
@@ -688,7 +696,7 @@ class TestProvisionNode(Base):
             self.node, instance_info=self.instance_info, extra=self.extra)
         self.api.baremetal.validate_node.assert_called_once_with(self.node)
         self.configdrive_mock.assert_called_once_with(mock.ANY, self.node,
-                                                      hostname)
+                                                      hostname, mock.ANY)
         self.api.baremetal.set_node_provision_state.assert_called_once_with(
             self.node, 'active', config_drive=mock.ANY)
         self.assertFalse(
@@ -718,7 +726,7 @@ class TestProvisionNode(Base):
             self.node, instance_info=self.instance_info, extra=self.extra)
         self.api.baremetal.validate_node.assert_called_once_with(self.node)
         self.configdrive_mock.assert_called_once_with(mock.ANY, self.node,
-                                                      hostname)
+                                                      hostname, mock.ANY)
         self.api.baremetal.set_node_provision_state.assert_called_once_with(
             self.node, 'active', config_drive=mock.ANY)
         self.assertFalse(
@@ -775,7 +783,7 @@ class TestProvisionNode(Base):
             self.node, extra=self.extra, instance_info=self.instance_info)
         self.api.baremetal.validate_node.assert_called_once_with(self.node)
         self.configdrive_mock.assert_called_once_with(mock.ANY, self.node,
-                                                      self.node.name)
+                                                      self.node.name, mock.ANY)
         self.api.baremetal.set_node_provision_state.assert_called_once_with(
             self.node, 'active', config_drive=mock.ANY)
         self.assertFalse(
@@ -808,7 +816,7 @@ class TestProvisionNode(Base):
             self.node, extra=self.extra, instance_info=self.instance_info)
         self.api.baremetal.validate_node.assert_called_once_with(self.node)
         self.configdrive_mock.assert_called_once_with(mock.ANY, self.node,
-                                                      self.node.id)
+                                                      self.node.id, mock.ANY)
         self.api.baremetal.set_node_provision_state.assert_called_once_with(
             self.node, 'active', config_drive=mock.ANY)
         self.assertFalse(

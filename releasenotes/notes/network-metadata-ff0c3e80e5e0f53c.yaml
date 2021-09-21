@@ -1,0 +1,13 @@
+---
+features:
+  - |
+    Network metadata is now created and written to the instance config in the
+    config-drive for deployed nodes.
+fixes:
+  - |
+    Fixed and issue where deployed nodes did not become available over the
+    network. This happened when the first network interface was not connected
+    to a network with a DHCP service, i.e a secondary network interface was
+    used. The addition of network metadata in the instance config solves this
+    problem. See bug:
+    `2009238 <https://storyboard.openstack.org/#!/story/2009238>`_.
