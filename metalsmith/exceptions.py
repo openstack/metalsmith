@@ -95,6 +95,10 @@ class InstanceNotFound(Error):
     """Instance not found or node doesn't have an instance associated."""
 
 
+class NetworkResourceNotFound(Error):
+    """Network resource, port, network, subnet not found"""
+
+
 # Deprecated aliases
 DeploymentFailure = DeploymentFailed
 InvalidInstance = InstanceNotFound
