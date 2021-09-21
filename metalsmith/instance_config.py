@@ -46,15 +46,18 @@ class GenericConfig(object):
                             'got %r' % meta_data)
         self.meta_data = meta_data or {}
 
-    def generate(self, node, hostname=None):
+    def generate(self, node, hostname=None, network_data=None):
         """Generate the config drive information.
 
         :param node: `Node` object.
         :param hostname: Desired hostname (defaults to node's name or ID).
+        :param network_data: Network metadata as dictionary
         :return: configdrive contents as a dictionary with keys:
 
             ``meta_data``
                 meta data dictionary
+            ``network_data``
+                network data as dictionary
             ``user_data``
                 user data as a string
         """
@@ -81,8 +84,12 @@ class GenericConfig(object):
 
         user_data = self.populate_user_data()
 
-        return {'meta_data': meta_data,
-                'user_data': user_data}
+        data = {'meta_data': meta_data, 'user_data': user_data}
+
+        if network_data:
+            data['network_data'] = network_data
+
+        return data
 
     def populate_user_data(self):
         """Get user data for this configuration.

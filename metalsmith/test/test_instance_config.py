@@ -29,7 +29,8 @@ class TestGenericConfig(unittest.TestCase):
         self.node.name = 'node name'
 
     def _check(self, config, expected_metadata, expected_userdata=None,
-               cloud_init=True, hostname=None):
+               cloud_init=True, hostname=None, network_data=None,
+               expected_network_data=None):
         expected_m = {'public_keys': {},
                       'uuid': self.node.id,
                       'name': self.node.name,
@@ -40,7 +41,7 @@ class TestGenericConfig(unittest.TestCase):
                       'meta': {}}
         expected_m.update(expected_metadata)
 
-        result = config.generate(self.node, hostname)
+        result = config.generate(self.node, hostname, network_data)
         self.assertEqual(expected_m, result['meta_data'])
 
         user_data = result['user_data']
@@ -51,6 +52,11 @@ class TestGenericConfig(unittest.TestCase):
                 self.assertEqual('#cloud-config', header)
             user_data = json.loads(user_data)
         self.assertEqual(expected_userdata, user_data)
+
+        network_data = result.get('network_data')
+        if expected_network_data:
+            self.assertIsNotNone(network_data)
+            self.assertEqual(expected_network_data, network_data)
 
     def test_default(self):
         config = self.CLASS()
@@ -84,6 +90,11 @@ class TestGenericConfig(unittest.TestCase):
 
     def test_custom_metadata_not_dict(self):
         self.assertRaises(TypeError, self.CLASS, meta_data="foobar")
+
+    def test_custom_network_data(self):
+        config = self.CLASS()
+        data = {'net': 'data'}
+        self._check(config, {}, network_data=data, expected_network_data=data)
 
 
 class TestCloudInitConfig(TestGenericConfig):

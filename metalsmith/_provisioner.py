@@ -19,6 +19,7 @@ from openstack import connection
 from openstack import exceptions as os_exc
 
 from metalsmith import _instance
+from metalsmith import _network_metadata
 from metalsmith import _nics
 from metalsmith import _scheduler
 from metalsmith import _utils
@@ -427,9 +428,13 @@ class Provisioner(object):
                 node, instance_info=instance_info, extra=extra)
             self.connection.baremetal.validate_node(node)
 
+            network_data = _network_metadata.create_network_metadata(
+                self.connection, node.extra.get(_ATTACHED_PORTS))
+
             LOG.debug('Generating a configdrive for node %s',
                       _utils.log_res(node))
-            cd = config.generate(node, _utils.hostname_for(node, allocation))
+            cd = config.generate(node, _utils.hostname_for(node, allocation),
+                                 network_data)
             LOG.debug('Starting provisioning of node %s', _utils.log_res(node))
             self.connection.baremetal.set_node_provision_state(
                 node, 'active', config_drive=cd)
