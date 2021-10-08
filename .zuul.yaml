@@ -116,34 +116,6 @@
       metalsmith_root_size: 9
       metalsmith_python: python3
 
-# NOTE(TheJulia): This job can be removed once removed from ironic's CI.
-- job:
-    name: metalsmith-integration-glance-localboot-centos7
-    description: |
-        Integration job using Glance as image source and CentOS7 with local boot.
-    parent: metalsmith-integration-base
-    timeout: 9000
-    vars:
-      devstack_localrc:
-        # NOTE(dtantsur): we need to use streaming, otherwise the image won't
-        # fit in RAM.
-        IRONIC_AGENT_IMAGE_DOWNLOAD_SOURCE: http
-        IRONIC_BOOT_MODE: bios
-      devstack_services:
-        # Since we're using streaming, try non-swift backends.
-        s-account: false
-        s-container: false
-        s-object: false
-        s-proxy: false
-      configure_instance_user: metalsmith
-      metalsmith_netboot: false
-      metalsmith_precreate_port: false
-      metalsmith_partition_image: test-centos-partition
-      metalsmith_whole_disk_image: test-centos-wholedisk
-      metalsmith_swap_size: 1024
-      metalsmith_traits: [CUSTOM_GOLD]
-
-
 - job:
     name: metalsmith-integration-glance-localboot-centos8-uefi
     description: |
