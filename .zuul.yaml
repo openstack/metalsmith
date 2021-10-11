@@ -128,6 +128,7 @@
         # NOTE(dtantsur): we need to use streaming, otherwise the image won't
         # fit in RAM.
         IRONIC_AGENT_IMAGE_DOWNLOAD_SOURCE: http
+        IRONIC_BOOT_MODE: bios
       devstack_services:
         # Since we're using streaming, try non-swift backends.
         s-account: false
@@ -156,7 +157,6 @@
         # NOTE(dtantsur): we need to use streaming, otherwise the image won't
         # fit in RAM.
         IRONIC_AGENT_IMAGE_DOWNLOAD_SOURCE: http
-        IRONIC_BOOT_MODE: uefi
         IRONIC_VM_SPECS_RAM: 3072
       devstack_services:
         # Since we're using streaming, try non-swift backends.
@@ -179,6 +179,8 @@
     parent: metalsmith-integration-base
     run: playbooks/integration/run.yaml
     vars:
+      devstack_localrc:
+        IRONIC_BOOT_MODE: bios
       metalsmith_netboot: true
       metalsmith_precreate_port: false
 
@@ -189,6 +191,8 @@
     parent: metalsmith-integration-base
     run: playbooks/integration/run.yaml
     vars:
+      devstack_localrc:
+        IRONIC_BOOT_MODE: bios
       metalsmith_netboot: true
       metalsmith_precreate_port: true
       metalsmith_use_http: true
