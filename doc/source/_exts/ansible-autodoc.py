@@ -105,7 +105,7 @@ class AnsibleAutoPluginDirective(Directive):
 
     @staticmethod
     def build_documentation(module):
-        docs = DOCYAML.load(module.DOCUMENTATION)
+        docs = DOCYAML.load(module.DOCUMENTATION, Loader=yaml.FullLoader)
         doc_data = dict()
         doc_data['docs'] = docs['description']
         doc_data['author'] = docs.get('author', list())
@@ -114,7 +114,7 @@ class AnsibleAutoPluginDirective(Directive):
 
     @staticmethod
     def build_examples(module):
-        examples = DOCYAML.load(module.EXAMPLES)
+        examples = DOCYAML.load(module.EXAMPLES, Loader=yaml.FullLoader)
         return_examples = list()
         for example in examples:
             return_examples.append(DOCYAML.dump([example], sort_keys=False))
