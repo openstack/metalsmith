@@ -73,13 +73,22 @@ class NICs(object):
 
         for nic_type, nic in self._validated:
             if nic_type != 'port':
-                port = self._connection.network.create_port(**nic)
+                # The 'binding:host_id' must be set to ensure IP allocation
+                # is not deferred.
+                # See: https://storyboard.openstack.org/#!/story/2009715
+                port = self._connection.network.create_port(
+                    binding_host_id=self._node.id, **nic)
                 self.created_ports.append(port.id)
                 LOG.info('Created port %(port)s for node %(node)s with '
                          '%(nic)s', {'port': _utils.log_res(port),
                                      'node': _utils.log_res(self._node),
                                      'nic': nic})
             else:
+                # The 'binding:host_id' must be set to ensure IP allocation
+                # is not deferred.
+                # See: https://storyboard.openstack.org/#!/story/2009715
+                self._connection.network.update_port(
+                    nic, binding_host_id=self._node.id)
                 port = nic
 
             self._connection.baremetal.attach_vif_to_node(self._node,
