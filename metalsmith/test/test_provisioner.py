@@ -529,6 +529,7 @@ class TestProvisionNode(Base):
         self.assertEqual(inst.node, self.node)
 
         self.api.network.create_port.assert_called_once_with(
+            binding_host_id=self.node.id,
             network_id=self.api.network.find_network.return_value.id,
             name='example.com-%s' %
             self.api.network.find_network.return_value.name)
@@ -554,6 +555,7 @@ class TestProvisionNode(Base):
         self.assertEqual(inst.node, self.node)
 
         self.api.network.create_port.assert_called_once_with(
+            binding_host_id=self.node.id,
             network_id=self.api.network.find_network.return_value.id)
         self.api.baremetal.attach_vif_to_node.assert_called_once_with(
             self.node, self.api.network.create_port.return_value.id)
@@ -594,6 +596,7 @@ class TestProvisionNode(Base):
         self.assertEqual(inst.node, self.node)
 
         self.api.network.create_port.assert_called_once_with(
+            binding_host_id=self.node.id,
             network_id=self.api.network.find_network.return_value.id,
             name='example.com-%s' %
             self.api.network.find_network.return_value.name)
@@ -620,6 +623,7 @@ class TestProvisionNode(Base):
         config.generate.assert_called_once_with(self.node,
                                                 self.allocation.name, mock.ANY)
         self.api.network.create_port.assert_called_once_with(
+            binding_host_id=self.node.id,
             network_id=self.api.network.find_network.return_value.id,
             name='example.com-%s' %
             self.api.network.find_network.return_value.name)
@@ -659,6 +663,7 @@ class TestProvisionNode(Base):
         self.api.baremetal.update_allocation.assert_called_once_with(
             self.allocation, name=hostname)
         self.api.network.create_port.assert_called_once_with(
+            binding_host_id=self.node.id,
             network_id=self.api.network.find_network.return_value.id,
             name='control-0.example.com-%s' %
             self.api.network.find_network.return_value.name)
@@ -687,6 +692,7 @@ class TestProvisionNode(Base):
 
         self.assertFalse(self.api.baremetal.update_allocation.called)
         self.api.network.create_port.assert_called_once_with(
+            binding_host_id=self.node.id,
             network_id=self.api.network.find_network.return_value.id,
             name='control-0.example.com-%s' %
             self.api.network.find_network.return_value.name)
@@ -717,6 +723,7 @@ class TestProvisionNode(Base):
 
         self.assertFalse(self.api.baremetal.update_allocation.called)
         self.api.network.create_port.assert_called_once_with(
+            binding_host_id=self.node.id,
             network_id=self.api.network.find_network.return_value.id,
             name='control-0.example.com-%s' %
             self.api.network.find_network.return_value.name)
@@ -774,6 +781,7 @@ class TestProvisionNode(Base):
         self.api.baremetal.update_allocation.assert_called_once_with(
             self.allocation, name=self.node.name)
         self.api.network.create_port.assert_called_once_with(
+            binding_host_id=self.node.id,
             network_id=self.api.network.find_network.return_value.id,
             name='control-0-%s' %
             self.api.network.find_network.return_value.name)
@@ -807,6 +815,7 @@ class TestProvisionNode(Base):
         self.assertIs(inst.allocation, self.allocation)
 
         self.api.network.create_port.assert_called_once_with(
+            binding_host_id=self.node.id,
             network_id=self.api.network.find_network.return_value.id,
             name='000-%s' %
             self.api.network.find_network.return_value.name)
@@ -841,6 +850,7 @@ class TestProvisionNode(Base):
             mock.call(self.node.id)
         ])
         self.api.network.create_port.assert_called_once_with(
+            binding_host_id=self.node.id,
             network_id=self.api.network.find_network.return_value.id,
             name='%s-%s' % (
                 self.api.baremetal.wait_for_allocation.return_value.name,
@@ -878,6 +888,7 @@ class TestProvisionNode(Base):
             mock.call(self.node.id)
         ])
         self.api.network.create_port.assert_called_once_with(
+            binding_host_id=self.node.id,
             network_id=self.api.network.find_network.return_value.id,
             name='%s-%s' % (
                 self.api.baremetal.wait_for_allocation.return_value.name,
@@ -917,6 +928,11 @@ class TestProvisionNode(Base):
                                [{'port': 'port1'}, {'port': 'port2'}])
 
         self.assertFalse(self.api.network.create_port.called)
+        self.api.network.update_port.assert_has_calls([
+            mock.call(self.api.network.find_port.return_value,
+                      binding_host_id=self.node.id),
+            mock.call(self.api.network.find_port.return_value,
+                      binding_host_id=self.node.id)])
         self.api.baremetal.attach_vif_to_node.assert_called_with(
             self.node, self.api.network.find_port.return_value.id)
         self.assertEqual(2, self.api.baremetal.attach_vif_to_node.call_count)
@@ -943,6 +959,7 @@ class TestProvisionNode(Base):
         self.assertEqual(inst.node, self.node)
 
         self.api.network.create_port.assert_called_once_with(
+            binding_host_id=self.node.id,
             network_id=self.api.network.find_network.return_value.id,
             name='example.com-%s' %
             self.api.network.find_network.return_value.name,
@@ -966,6 +983,7 @@ class TestProvisionNode(Base):
         self.assertEqual(inst.node, self.node)
 
         self.api.network.create_port.assert_called_once_with(
+            binding_host_id=self.node.id,
             network_id=self.api.network.get_network.return_value.id,
             name='example.com-%s' %
             self.api.network.get_network.return_value.name,
@@ -994,6 +1012,7 @@ class TestProvisionNode(Base):
         self.pr.provision_node(self.node, 'image', [{'network': 'network'}])
 
         self.api.network.create_port.assert_called_once_with(
+            binding_host_id=self.node.id,
             network_id=self.api.network.find_network.return_value.id,
             name='example.com-%s' %
             self.api.network.find_network.return_value.name)
@@ -1024,6 +1043,7 @@ class TestProvisionNode(Base):
 
         self.assertFalse(self.api.image.find_image.called)
         self.api.network.create_port.assert_called_once_with(
+            binding_host_id=self.node.id,
             network_id=self.api.network.find_network.return_value.id,
             name='example.com-%s' %
             self.api.network.find_network.return_value.name)
@@ -1061,6 +1081,7 @@ abcd  image
         self.assertFalse(self.api.image.find_image.called)
         mock_get.assert_called_once_with('https://host/checksums')
         self.api.network.create_port.assert_called_once_with(
+            binding_host_id=self.node.id,
             network_id=self.api.network.find_network.return_value.id,
             name='example.com-%s' %
             self.api.network.find_network.return_value.name)
@@ -1094,6 +1115,7 @@ abcd  image
 
         self.assertFalse(self.api.image.find_image.called)
         self.api.network.create_port.assert_called_once_with(
+            binding_host_id=self.node.id,
             network_id=self.api.network.find_network.return_value.id,
             name='example.com-%s' %
             self.api.network.find_network.return_value.name)
@@ -1123,6 +1145,7 @@ abcd  image
 
         self.assertFalse(self.api.image.find_image.called)
         self.api.network.create_port.assert_called_once_with(
+            binding_host_id=self.node.id,
             network_id=self.api.network.find_network.return_value.id,
             name='example.com-%s' %
             self.api.network.find_network.return_value.name)
@@ -1154,6 +1177,7 @@ abcd  image
 
         self.assertFalse(self.api.image.find_image.called)
         self.api.network.create_port.assert_called_once_with(
+            binding_host_id=self.node.id,
             network_id=self.api.network.find_network.return_value.id,
             name='example.com-%s' %
             self.api.network.find_network.return_value.name)
@@ -1175,6 +1199,7 @@ abcd  image
                                root_size_gb=50)
 
         self.api.network.create_port.assert_called_once_with(
+            binding_host_id=self.node.id,
             network_id=self.api.network.find_network.return_value.id,
             name='example.com-%s' %
             self.api.network.find_network.return_value.name)
@@ -1196,6 +1221,7 @@ abcd  image
                                swap_size_mb=4096)
 
         self.api.network.create_port.assert_called_once_with(
+            binding_host_id=self.node.id,
             network_id=self.api.network.find_network.return_value.id,
             name='example.com-%s' %
             self.api.network.find_network.return_value.name)
@@ -1221,6 +1247,7 @@ abcd  image
         self.assertEqual(inst.node, self.node)
 
         self.api.network.create_port.assert_called_once_with(
+            binding_host_id=self.node.id,
             network_id=self.api.network.find_network.return_value.id,
             name='example.com-%s' %
             self.api.network.find_network.return_value.name)
@@ -1246,6 +1273,7 @@ abcd  image
         self.assertEqual(inst.node, self.node)
 
         self.api.network.create_port.assert_called_once_with(
+            binding_host_id=self.node.id,
             network_id=self.api.network.find_network.return_value.id,
             name='example.com-%s' %
             self.api.network.find_network.return_value.name)
@@ -1273,6 +1301,7 @@ abcd  image
         self.assertEqual(inst.node, self.node)
 
         self.api.network.create_port.assert_called_once_with(
+            binding_host_id=self.node.id,
             network_id=self.api.network.find_network.return_value.id,
             name='example.com-%s' %
             self.api.network.find_network.return_value.name)
@@ -1297,6 +1326,7 @@ abcd  image
         self.assertEqual(inst.node, self.node)
 
         self.api.network.create_port.assert_called_once_with(
+            binding_host_id=self.node.id,
             network_id=self.api.network.find_network.return_value.id,
             name='example.com-%s' %
             self.api.network.find_network.return_value.name)
@@ -1322,6 +1352,7 @@ abcd  image
         self.assertEqual(inst.node, self.node)
 
         self.api.network.create_port.assert_called_once_with(
+            binding_host_id=self.node.id,
             network_id=self.api.network.find_network.return_value.id,
             name='example.com-%s' %
             self.api.network.find_network.return_value.name)
@@ -1345,6 +1376,7 @@ abcd  image
                                wait=3600)
 
         self.api.network.create_port.assert_called_once_with(
+            binding_host_id=self.node.id,
             network_id=self.api.network.find_network.return_value.id,
             name='example.com-%s' %
             self.api.network.find_network.return_value.name)

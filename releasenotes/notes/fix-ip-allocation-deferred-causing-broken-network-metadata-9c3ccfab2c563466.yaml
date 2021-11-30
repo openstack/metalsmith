@@ -1,0 +1,10 @@
+---
+fixes:
+  - |
+    Fixed an issue where instance metadata for network configuration was not
+    correctly written to the config-drive when using a neutron routed
+    provider network. The invalid metadata would in most cases cause the
+    instance network initialization to completely fail, leaving the instance
+    with no network connectivity. See bug: `2009715
+    <https://storyboard.openstack.org/#!/story/2009715>`_.
+
