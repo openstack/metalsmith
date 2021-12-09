@@ -1,0 +1,7 @@
+---
+fixes:
+  - |
+    It is now possible to create a port on a specific subnet also when multiple
+    subnets with the same name exist on different networks. See bug:
+    `2009732 <https://storyboard.openstack.org/#!/story/2009732>`_.
+
