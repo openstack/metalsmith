@@ -104,6 +104,45 @@ class TestNICs(unittest.TestCase):
                           'name': '%s-%s' % (hostname, fake_net.name)},
                          return_value)
 
+    def test_get_network_and_subnet(self):
+        nic_info = [{'network': 'net-name', 'subnet': 'subnet-name'}]
+        hostname = 'test-host'
+        nics = _nics.NICs(self.connection, self.node, nic_info,
+                          hostname=hostname)
+        fake_net = mock.Mock(id='fake_net_id', name='fake_net_name')
+        fake_subnet = mock.Mock(id='fake_subnet_id', name='fake_subnet_name')
+        self.connection.network.find_network.return_value = fake_net
+        self.connection.network.find_subnet.return_value = fake_subnet
+        return_value = nics._get_network(nic_info[0])
+        self.connection.network.find_network.assert_called_once_with(
+            nic_info[0]['network'], ignore_missing=False)
+        self.connection.network.find_subnet.assert_called_once_with(
+            nic_info[0]['subnet'], network_id=fake_net.id,
+            ignore_missing=False)
+        self.assertEqual({'network_id': fake_net.id,
+                          'name': '%s-%s' % (hostname, fake_net.name),
+                          'fixed_ips': [{'subnet_id': fake_subnet.id}]},
+                         return_value)
+
+    def test_get_network_and_subnet_not_found(self):
+        nic_info = [{'network': 'net-name', 'subnet': 'subnet-name'}]
+        hostname = 'test-host'
+        nics = _nics.NICs(self.connection, self.node, nic_info,
+                          hostname=hostname)
+        fake_net = mock.Mock(id='fake_net_id', name='fake_net_name')
+        self.connection.network.find_network.return_value = fake_net
+        self.connection.network.find_subnet.side_effect = (
+            sdk_exc.SDKException('SDK_ERROR'))
+        self.assertRaisesRegex(exceptions.InvalidNIC,
+                               ('Cannot find subnet subnet-name on network '
+                                'net-name: SDK_ERROR'),
+                               nics._get_network, nic_info[0])
+        self.connection.network.find_network.assert_called_once_with(
+            nic_info[0]['network'], ignore_missing=False)
+        self.connection.network.find_subnet.assert_called_once_with(
+            nic_info[0]['subnet'], network_id=fake_net.id,
+            ignore_missing=False)
+
     def test_get_network_fixed_ip(self):
         nic_info = [{'network': 'net-name', 'fixed_ip': '1.1.1.1'}]
         hostname = 'test-host'
@@ -121,6 +160,7 @@ class TestNICs(unittest.TestCase):
 
     def test_get_network_unexpected_fields(self):
         nic_info = [{'network': 'uuid',
+                     'subnet': 'subnet_name',
                      'fixed_ip': '1.1.1.1',
                      'unexpected': 'field'}]
         nics = _nics.NICs(self.connection, self.node, nic_info,

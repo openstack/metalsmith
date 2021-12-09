@@ -131,7 +131,7 @@ class NICs(object):
             or ``{"network": "<net ident>", "fixed_ip": "<desired IP>"}``.
         :returns: keyword arguments to use when creating a port.
         """
-        unexpected = set(nic) - {'network', 'fixed_ip'}
+        unexpected = set(nic) - {'network', 'fixed_ip', 'subnet'}
         if unexpected:
             raise exceptions.InvalidNIC(
                 'Unexpected fields for a network: %s' % ', '.join(unexpected))
@@ -144,9 +144,25 @@ class NICs(object):
                 'Cannot find network %(net)s: %(error)s' %
                 {'net': nic['network'], 'error': exc})
 
-        port_args = {'network_id': network.id}
+        fixed_ip = {}
         if nic.get('fixed_ip'):
-            port_args['fixed_ips'] = [{'ip_address': nic['fixed_ip']}]
+            fixed_ip['ip_address'] = nic['fixed_ip']
+        if nic.get('subnet'):
+            try:
+                subnet = self._connection.network.find_subnet(
+                    nic['subnet'], network_id=network.id, ignore_missing=False)
+            except sdk_exc.SDKException as exc:
+                raise exceptions.InvalidNIC(
+                    'Cannot find subnet %(subnet)s on network %(net)s: '
+                    '%(error)s' %
+                    {'net': nic['network'], 'subnet': nic['subnet'],
+                     'error': exc})
+
+            fixed_ip['subnet_id'] = subnet.id
+
+        port_args = {'network_id': network.id}
+        if fixed_ip:
+            port_args['fixed_ips'] = [fixed_ip]
         if self._hostname:
             port_args['name'] = '%s-%s' % (self._hostname, network.name)
 
