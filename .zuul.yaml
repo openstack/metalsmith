@@ -214,12 +214,13 @@
     check:
       jobs:
         - metalsmith-integration-glance-localboot-centos8-uefi
-        - metalsmith-integration-glance-netboot-cirros-iscsi
         - metalsmith-integration-glance-netboot-cirros-direct
         - metalsmith-integration-http-netboot-cirros-direct
+        # The CI is too unstable on Wallaby, reduce the number of voting jobs
+        - metalsmith-integration-glance-netboot-cirros-iscsi:
+            voting: false
     gate:
       jobs:
         - metalsmith-integration-glance-localboot-centos8-uefi
-        - metalsmith-integration-glance-netboot-cirros-iscsi
         - metalsmith-integration-glance-netboot-cirros-direct
         - metalsmith-integration-http-netboot-cirros-direct
