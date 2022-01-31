@@ -26,12 +26,12 @@
 - name: Build a centos8 wholedisk image
   command: disk-image-create centos grub2 vm block-device-efi -o centos8-wholedisk
   environment:
-    OS_RELEASE: 8
+    DIB_RELEASE: 8-stream
 
 - name: Build a centos8 partition image
   command: disk-image-create centos grub2 baremetal -o centos8-partition
   environment:
-    OS_RELEASE: 8
+    DIB_RELEASE: 8-stream
 
 - name: Upload the CentOS whole-disk image
   command: >
