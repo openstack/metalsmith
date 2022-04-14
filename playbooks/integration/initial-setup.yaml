@@ -7,6 +7,11 @@
     - set_fact:
         metalsmith_src_dir: '{{ ansible_user_dir }}/src/opendev.org/openstack'
 
+    # https://github.com/git/git/commit/8959555cee7ec045958f9b6dd62e541affb7e7d9
+    - name: Mark the metalsmith as safe for git
+      command: git config --global --add safe.directory "{{ metalsmith_src_dir }}/metalsmith"
+      become: true
+
     - name: Install requirements for metalsmith
       pip:
         requirements: "{{ metalsmith_src_dir }}/metalsmith/requirements.txt"
