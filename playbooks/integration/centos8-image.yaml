@@ -23,8 +23,15 @@
   shell: chmod 0644 /boot/vmlinuz-*
   become: true
 
+- name: Detect the right block device element
+  set_fact:
+    centos_block_device: block-device-efi
+  when: metalsmith_boot_mode | default('uefi') != 'bios'
+
 - name: Build a centos8 wholedisk image
-  command: disk-image-create centos grub2 vm block-device-efi -o centos8-wholedisk
+  command: >
+    disk-image-create centos grub2 vm {{ centos_block_device | default('') }}
+    -o centos8-wholedisk
   environment:
     DIB_RELEASE: 8-stream
 

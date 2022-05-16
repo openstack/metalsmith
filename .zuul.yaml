@@ -96,6 +96,7 @@
         GLANCE_LIMIT_IMAGE_SIZE_TOTAL: 5000
         IRONIC_BAREMETAL_BASIC_OPS: true
         IRONIC_BUILD_DEPLOY_RAMDISK: false
+        IRONIC_BOOT_MODE: uefi
         IRONIC_DEFAULT_DEPLOY_INTERFACE: direct
         IRONIC_DEPLOY_DRIVER: ipmi
         IRONIC_RAMDISK_TYPE: tinyipa
@@ -117,7 +118,7 @@
       metalsmith_python: python3
 
 - job:
-    name: metalsmith-integration-glance-localboot-centos8-uefi
+    name: metalsmith-integration-glance-centos8-uefi
     description: |
         Integration job using Glance as image source and CentOS8 with local boot
         and UEFI. Images are built with diskimage-builder.
@@ -143,6 +144,19 @@
       metalsmith_whole_disk_image: test-centos-wholedisk
       metalsmith_swap_size: 1024
       metalsmith_traits: [CUSTOM_GOLD]
+
+# Remove when no longer used by other projects
+- job:
+    name: metalsmith-integration-glance-localboot-centos8-uefi
+    parent: metalsmith-integration-glance-centos8-uefi
+
+- job:
+    name: metalsmith-integration-glance-centos8-legacy
+    parent: metalsmith-integration-glance-centos8-uefi
+    vars:
+      devstack_localrc:
+        IRONIC_BOOT_MODE: bios
+      metalsmith_boot_mode: bios
 
 - job:
     name: metalsmith-integration-glance-netboot-cirros
@@ -178,11 +192,13 @@
       - release-notes-jobs-python3
     check:
       jobs:
-        - metalsmith-integration-glance-localboot-centos8-uefi
+        - metalsmith-integration-glance-centos8-uefi
+        - metalsmith-integration-glance-centos8-legacy
         - metalsmith-integration-glance-netboot-cirros
         - metalsmith-integration-http-netboot-cirros
     gate:
       jobs:
-        - metalsmith-integration-glance-localboot-centos8-uefi
+        - metalsmith-integration-glance-centos8-uefi
+        - metalsmith-integration-glance-centos8-legacy
         - metalsmith-integration-glance-netboot-cirros
         - metalsmith-integration-http-netboot-cirros
