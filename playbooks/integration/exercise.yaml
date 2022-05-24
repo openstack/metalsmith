@@ -29,8 +29,16 @@
           - "{{ ssh_key_file }}"
         user_name: "{{ configure_instance_user | default('') }}"
 
+# FIXME(dtantsur): openstacksdk issues a deprecation warning here, which
+# somehow ends up in stdout, presumably because of Zuul quirks.
+# Hack around it while we're solving the issue.
 - name: Get instance info via CLI show
-  command: metalsmith --format=json show test
+  shell: |
+    errout="$(mktemp)"
+    if ! metalsmith --format=json show test 2> "$errout"; then
+      cat "$errout"
+      exit 1
+    fi
   register: instance_info
 
 - name: Register instance information
@@ -38,8 +46,16 @@
     instance: "{{ (instance_info.stdout | from_json).test }}"
   failed_when: instance.state != 'active' or instance.node.provision_state != 'active'
 
+# FIXME(dtantsur): openstacksdk issues a deprecation warning here, which
+# somehow ends up in stdout, presumably because of Zuul quirks.
+# Hack around it while we're solving the issue.
 - name: Get instance info via CLI list
-  command: metalsmith --format=json list
+  shell: |
+    errout="$(mktemp)"
+    if ! metalsmith --format=json list 2> "$errout"; then
+      cat "$errout"
+      exit 1
+    fi
   register: instance_info_via_list
 
 - name: Verify that instance info via list is also correct
