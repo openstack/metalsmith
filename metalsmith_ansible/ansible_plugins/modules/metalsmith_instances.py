@@ -268,6 +268,7 @@ def reserve(provisioner, instances, clean_up):
             candidates = None
         try:
             node = provisioner.reserve_node(
+                hostname=instance.get('hostname'),
                 resource_class=instance.get('resource_class', 'baremetal'),
                 capabilities=instance.get('capabilities'),
                 candidates=candidates,
