@@ -14,9 +14,14 @@
 # limitations under the License.
 
 import enum
+import logging
+
+from openstack import exceptions as os_exc
 
 from metalsmith import _utils
 
+
+LOG = logging.getLogger(__name__)
 
 _PROGRESS_STATES = frozenset(['deploying', 'wait call-back',
                               'deploy complete'])
@@ -117,10 +122,13 @@ class Instance(object):
         result = []
         vifs = self._connection.baremetal.list_node_vifs(self.node)
         for vif in vifs:
-            port = self._connection.network.get_port(vif)
-            port.network = self._connection.network.get_network(
-                port.network_id)
-            result.append(port)
+            try:
+                port = self._connection.network.get_port(vif)
+                port.network = self._connection.network.get_network(
+                    port.network_id)
+                result.append(port)
+            except os_exc.ResourceNotFound:
+                LOG.warning('vif has missing port: %s', vif)
         return result
 
     @property

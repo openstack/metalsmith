@@ -15,6 +15,8 @@
 
 from unittest import mock
 
+from openstack import exceptions as os_exc
+
 from metalsmith import _instance
 from metalsmith.test import test_provisioner
 
@@ -48,6 +50,17 @@ class TestInstanceIPAddresses(test_provisioner.Base):
         ips = self.instance.ip_addresses()
         self.assertEqual({'name-0': [],
                           'name-1': ['10.0.0.2']}, ips)
+
+    def test_missing_port(self):
+        self.ports = [
+            mock.Mock(spec=['network_id', 'fixed_ips', 'network'],
+                      network_id='0',
+                      fixed_ips=[{'ip_address': '192.168.0.1'}]),
+            os_exc.ResourceNotFound(),
+        ]
+        self.api.network.get_port.side_effect = self.ports
+        ips = self.instance.ip_addresses()
+        self.assertEqual({'name-0': ['192.168.0.1']}, ips)
 
 
 class TestInstanceStates(test_provisioner.Base):
