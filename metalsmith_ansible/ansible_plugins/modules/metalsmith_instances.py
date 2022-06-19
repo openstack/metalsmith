@@ -375,7 +375,8 @@ def _provision_instance(provisioner, instance, nodes, timeout, wait):
 
 def unprovision(provisioner, instances):
     for instance in instances:
-        provisioner.unprovision_node(instance.get('name'))
+        provisioner.unprovision_node(instance.get('hostname',
+                                                  instance.get('name')))
     return True
 
 
