@@ -123,7 +123,7 @@
         Integration job using Glance as image source and CentOS8 with local boot
         and UEFI. Images are built with diskimage-builder.
     parent: metalsmith-integration-base
-    timeout: 8200
+    timeout: 8500
     run: playbooks/integration/centos8-integration.yaml
     vars:
       devstack_localrc:
