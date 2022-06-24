@@ -260,3 +260,24 @@ class TestMetalsmithInstances(unittest.TestCase):
             mock.call(1),
             mock.call(2)
         ])
+
+    @mock.patch('metalsmith.sources.detect', autospec=True)
+    @mock.patch('metalsmith.instance_config.CloudInitConfig', autospec=True)
+    def test_unprovision(self, mock_config, mock_detect):
+
+        provisioner = mock.Mock()
+        instances = [{
+            'name': 'node-1',
+            'hostname': 'overcloud-controller-1',
+            'image': {'href': 'overcloud-full'},
+            'state': 'absent'
+        }, {
+            'name': 'node-2',
+            'image': {'href': 'overcloud-full'},
+            'state': 'absent'
+        }]
+        self.assertTrue(mi.unprovision(provisioner, instances))
+        provisioner.unprovision_node.assert_has_calls([
+            mock.call('overcloud-controller-1'),
+            mock.call('node-2')
+        ])
