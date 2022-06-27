@@ -63,7 +63,7 @@
   register: ssh_result
   until: ssh_result is success
   retries: 30
-  delay: 20
+  delay: 30
 
 - name: Undeploy a node
   command: metalsmith --debug undeploy --wait 900 test
