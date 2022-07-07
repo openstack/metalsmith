@@ -18,6 +18,7 @@ from unittest import mock
 
 from metalsmith_ansible.ansible_plugins.modules \
     import metalsmith_instances as mi
+from openstack import exceptions as os_exc
 
 from metalsmith import exceptions as exc
 
@@ -265,7 +266,17 @@ class TestMetalsmithInstances(unittest.TestCase):
     @mock.patch('metalsmith.instance_config.CloudInitConfig', autospec=True)
     def test_unprovision(self, mock_config, mock_detect):
 
-        provisioner = mock.Mock()
+        mock_node1 = mock.Mock(name='node-1')
+        mock_node2 = mock.Mock(name='node-2')
+        mock_allocation1 = mock.Mock(name='overcloud-controller-1',
+                                     node_id='aaaa')
+        connection = mock.Mock()
+        provisioner = mock.Mock(connection=connection)
+
+        connection.baremetal.get_allocation.side_effect = [
+            mock_allocation1, os_exc.ResourceNotFound()]
+        connection.baremetal.get_node.side_effect = [
+            mock_node1, mock_node2, os_exc.ResourceNotFound()]
         instances = [{
             'name': 'node-1',
             'hostname': 'overcloud-controller-1',
@@ -275,9 +286,23 @@ class TestMetalsmithInstances(unittest.TestCase):
             'name': 'node-2',
             'image': {'href': 'overcloud-full'},
             'state': 'absent'
+        }, {
+            'name': 'node-3',
+            'hostname': 'overcloud-controller-3',
+            'image': {'href': 'overcloud-full'},
+            'state': 'absent'
         }]
         self.assertTrue(mi.unprovision(provisioner, instances))
         provisioner.unprovision_node.assert_has_calls([
+            mock.call(mock_node1),
+            mock.call(mock_node2)
+        ])
+        connection.baremetal.get_allocation.assert_has_calls([
             mock.call('overcloud-controller-1'),
-            mock.call('node-2')
+            mock.call('overcloud-controller-3')
+        ])
+        connection.baremetal.get_node.assert_has_calls([
+            mock.call('aaaa'),
+            mock.call('node-2'),
+            mock.call('node-3')
         ])
