@@ -185,9 +185,11 @@
         - metalsmith-integration-glance-netboot-cirros-iscsi
         - metalsmith-integration-glance-netboot-cirros-direct
         - metalsmith-integration-http-netboot-cirros-direct
+        - openstack-tox-linters
     gate:
       jobs:
         - metalsmith-integration-glance-localboot-centos7
         - metalsmith-integration-glance-netboot-cirros-iscsi
         - metalsmith-integration-glance-netboot-cirros-direct
         - metalsmith-integration-http-netboot-cirros-direct
+        - openstack-tox-linters

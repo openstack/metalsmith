@@ -1,6 +1,6 @@
 ---
 - name: Perform initial setup
-  include: initial-setup.yaml
+  import_playbook: initial-setup.yaml
 
 - hosts: all
   environment:
