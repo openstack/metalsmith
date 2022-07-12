@@ -181,8 +181,10 @@
         - metalsmith-integration-glance-localboot-centos8-uefi
         - metalsmith-integration-glance-netboot-cirros
         - metalsmith-integration-http-netboot-cirros
+        - openstack-tox-linters
     gate:
       jobs:
         - metalsmith-integration-glance-localboot-centos8-uefi
         - metalsmith-integration-glance-netboot-cirros
         - metalsmith-integration-http-netboot-cirros
+        - openstack-tox-linters
