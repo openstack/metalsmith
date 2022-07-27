@@ -30,6 +30,7 @@ except ImportError:
 import metalsmith
 from metalsmith import instance_config
 from metalsmith import sources
+from openstack import exceptions as os_exc
 
 import yaml
 
@@ -374,9 +375,30 @@ def _provision_instance(provisioner, instance, nodes, timeout, wait):
 
 
 def unprovision(provisioner, instances):
+    connection = provisioner.connection
     for instance in instances:
-        provisioner.unprovision_node(instance.get('hostname',
-                                                  instance.get('name')))
+        hostname = instance.get('hostname')
+        node = None
+        if hostname:
+            try:
+                allocation = connection.baremetal.get_allocation(hostname)
+                node = connection.baremetal.get_node(allocation.node_id)
+            except os_exc.ResourceNotFound:
+                # Allocation for this hostname doesn't exist, so attempt
+                # to lookup by node name
+                pass
+
+        name = instance.get('name')
+        if not node and name:
+            try:
+                node = connection.baremetal.get_node(name)
+            except os_exc.ResourceNotFound:
+                # Node with this name doesn't exist, so there is no
+                # node to unprovision
+                pass
+
+        if node:
+            provisioner.unprovision_node(node)
     return True
 
 
