@@ -1,8 +1,8 @@
 ---
-- name: Find Cirros UEC image
-  shell: openstack image list -f value -c Name | grep 'cirros-.*-uec$' | sort | tail -n1
-  register: cirros_uec_image_result
-  failed_when: cirros_uec_image_result.stdout == ""
+- name: Find Cirros partition image
+  shell: openstack image list -f value -c Name | grep 'cirros-.*-partition$' | sort | tail -n1
+  register: cirros_partition_image_result
+  failed_when: cirros_partition_image_result.stdout == ""
 
 - name: Find Cirros disk image
   shell: openstack image list -f value -c Name | grep 'cirros-.*-disk$' | sort | tail -n1
@@ -12,10 +12,15 @@
 - name: Set image facts for Glance image
   set_fact:
     metalsmith_whole_disk_image: "{{ cirros_disk_image_result.stdout }}"
-    metalsmith_partition_image: "{{ cirros_uec_image_result.stdout }}"
+    metalsmith_partition_image: "{{ cirros_partition_image_result.stdout }}"
   when: not (metalsmith_use_http | default(false))
 
 - block:
+    - name: Find Cirros UEC image
+      shell: openstack image list -f value -c Name | grep 'cirros-.*-uec$' | sort | tail -n1
+      register: cirros_uec_image_result
+      failed_when: cirros_uec_image_result.stdout == ""
+
     - name: Get baremetal HTTP endpoint
       shell: |
         source /opt/stack/devstack/openrc admin admin > /dev/null
@@ -25,7 +30,7 @@
       register: baremetal_endpoint_result
       failed_when: baremetal_endpoint_result.stdout == ""
 
-    - name: Copy partition images directory
+    - name: Copy UEC images directory
       command: >
         cp -r /opt/stack/devstack/files/images/{{ cirros_uec_image_result.stdout }}
             /opt/stack/data/ironic/httpboot/metalsmith
@@ -39,6 +44,14 @@
             /opt/stack/data/ironic/httpboot/metalsmith/
       args:
         creates: /opt/stack/data/ironic/httpboot/metalsmith/{{ cirros_disk_image_result.stdout }}.img
+      become: yes
+
+    - name: Copy partition image
+      command: >
+        cp /opt/stack/data/ironic/{{ cirros_partition_image_result.stdout }}.img
+            /opt/stack/data/ironic/httpboot/metalsmith
+      args:
+        creates: /opt/stack/data/ironic/httpboot/metalsmith/{{ cirros_partition_image_result.stdout }}.img
       become: yes
 
     - name: Create MD5 checksums file for images
@@ -65,7 +78,7 @@
 
     - name: Set facts for HTTP image
       set_fact:
-        metalsmith_partition_image: "{{ baremetal_endpoint_result.stdout}}/metalsmith/{{ cirros_uec_image_result.stdout | replace('-uec', '-blank') }}.img"
+        metalsmith_partition_image: "{{ baremetal_endpoint_result.stdout}}/metalsmith/{{ cirros_partition_image_result.stdout }}.img"
         metalsmith_partition_kernel_image: "{{ baremetal_endpoint_result.stdout}}/metalsmith/{{ cirros_uec_image_result.stdout | replace('-uec', '-vmlinuz') }}"
         metalsmith_partition_ramdisk_image: "{{ baremetal_endpoint_result.stdout}}/metalsmith/{{ cirros_uec_image_result.stdout | replace('-uec', '-initrd') }}"
         metalsmith_partition_checksum: "{{ baremetal_endpoint_result.stdout}}/metalsmith/CHECKSUMS"

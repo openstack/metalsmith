@@ -114,6 +114,7 @@
       centos_glance_kernel_image: test-centos-kernel
       centos_glance_root_image: test-centos-partition
       centos_glance_whole_disk_image: test-centos-wholedisk
+      metalsmith_netboot: false
       metalsmith_root_size: 9
       metalsmith_python: python3
 
@@ -138,7 +139,6 @@
         s-object: false
         s-proxy: false
       configure_instance_user: metalsmith
-      metalsmith_netboot: false
       metalsmith_precreate_port: false
       metalsmith_partition_image: test-centos-partition
       metalsmith_whole_disk_image: test-centos-wholedisk
@@ -159,27 +159,12 @@
       metalsmith_boot_mode: bios
 
 - job:
-    name: metalsmith-integration-glance-netboot-cirros
-    description: |
-        Integration job using Glance as image source and direct deploy.
-    parent: metalsmith-integration-base
-    run: playbooks/integration/run.yaml
-    vars:
-      devstack_localrc:
-        IRONIC_BOOT_MODE: bios
-      metalsmith_netboot: true
-      metalsmith_precreate_port: false
-
-- job:
-    name: metalsmith-integration-http-netboot-cirros
+    name: metalsmith-integration-http-cirros
     description: |
         Integration job using HTTP as image source and direct deploy.
     parent: metalsmith-integration-base
     run: playbooks/integration/run.yaml
     vars:
-      devstack_localrc:
-        IRONIC_BOOT_MODE: bios
-      metalsmith_netboot: true
       metalsmith_precreate_port: true
       metalsmith_use_http: true
 
@@ -194,13 +179,11 @@
       jobs:
         - metalsmith-integration-glance-centos8-uefi
         - metalsmith-integration-glance-centos8-legacy
-        - metalsmith-integration-glance-netboot-cirros
-        - metalsmith-integration-http-netboot-cirros
+        - metalsmith-integration-http-cirros
         - openstack-tox-linters
     gate:
       jobs:
         - metalsmith-integration-glance-centos8-uefi
         - metalsmith-integration-glance-centos8-legacy
-        - metalsmith-integration-glance-netboot-cirros
-        - metalsmith-integration-http-netboot-cirros
+        - metalsmith-integration-http-cirros
         - openstack-tox-linters

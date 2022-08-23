@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import logging
+import warnings
 
 from openstack import connection
 from openstack import exceptions as os_exc
@@ -350,6 +351,7 @@ class Provisioner(object):
         :param hostname: Hostname to assign to the instance. If provided,
             overrides the ``hostname`` passed to ``reserve_node``.
         :param netboot: Whether to use networking boot for final instances.
+            Deprecated and does not work in Ironic Zed.
         :param capabilities: Requested capabilities of the node. If present,
             overwrites the capabilities set by :meth:`reserve_node`.
             Note that the capabilities are not checked against the ones
@@ -368,6 +370,10 @@ class Provisioner(object):
             is already finished.
         :raises: :py:class:`metalsmith.exceptions.Error`
         """
+        if netboot:
+            warnings.warn("Network boot is deprecated and does not work in "
+                          "Ironic Zed", DeprecationWarning)
+
         if config is None:
             config = instance_config.GenericConfig()
         if isinstance(image, str):
