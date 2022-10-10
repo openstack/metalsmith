@@ -6,6 +6,7 @@
     nodeset: openstack-single-node-focal
     post-run: playbooks/integration/post.yaml
     run: playbooks/integration/run.yaml
+    ansible-version: 5
     irrelevant-files:
       - ^.*\.rst$
       - ^api-ref/.*$
