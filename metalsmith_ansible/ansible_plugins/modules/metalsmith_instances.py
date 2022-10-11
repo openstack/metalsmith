@@ -423,6 +423,15 @@ def main():
         raise RuntimeError(
             'This module requires ansible-collections-openstack')
 
+    # Modules in Ansible OpenStack Collection prior to 2.0.0 are not compatible
+    # with openstacksdk >=0.99.0, but the functions used here ARE compatible
+    # and will most likely not be removed in collection release 2.0.0, so we
+    # can safely remove the MAXIMUM_SDK_VERSION and thus use this module with
+    # releases of openstacksdk.
+    # TODO: Remove once ansible-collections-openstack 2.0.0 has been released
+    from ansible.module_utils import openstack as aoc
+    aoc.MAXIMUM_SDK_VERSION = None
+
     argument_spec = openstack_full_argument_spec(
         **yaml.safe_load(DOCUMENTATION)['options']
     )
