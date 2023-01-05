@@ -73,7 +73,7 @@
 
 - name: SSH into the instance
   command: >
-    ssh -v -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10
+    ssh -vvv -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10
     {{ configure_instance_user | default('cirros') }}@{{ instance_ip }}
     "cat /etc/hostname"
   register: ssh_result

@@ -120,6 +120,34 @@
       metalsmith_python: python3
 
 - job:
+    name: metalsmith-integration-glance-centos9-uefi
+    nodeset: openstack-single-node-jammy
+    description: |
+        Integration job using Glance as image source and Centos Stream 9 with
+        local boot and UEFI. Images are built with diskimage-builder.
+    parent: metalsmith-integration-base
+    timeout: 8500
+    run: playbooks/integration/centos9-integration.yaml
+    vars:
+      devstack_localrc:
+        # NOTE(dtantsur): we need to use streaming, otherwise the image won't
+        # fit in RAM.
+        IRONIC_AGENT_IMAGE_DOWNLOAD_SOURCE: http
+        IRONIC_VM_SPECS_RAM: 3072
+      devstack_services:
+        # Since we're using streaming, try non-swift backends.
+        s-account: false
+        s-container: false
+        s-object: false
+        s-proxy: false
+      configure_instance_user: metalsmith
+      metalsmith_precreate_port: false
+      metalsmith_partition_image: test-centos-partition
+      metalsmith_whole_disk_image: test-centos-wholedisk
+      metalsmith_swap_size: 1024
+      metalsmith_traits: [CUSTOM_GOLD]
+
+- job:
     name: metalsmith-integration-glance-centos8-uefi
     description: |
         Integration job using Glance as image source and CentOS8 with local boot
@@ -173,13 +201,15 @@
       - release-notes-jobs-python3
     check:
       jobs:
-        - metalsmith-integration-glance-centos8-uefi
-        - metalsmith-integration-glance-centos8-legacy
+        - metalsmith-integration-glance-centos9-uefi
+        - metalsmith-integration-glance-centos8-uefi:
+            voting: false
+        - metalsmith-integration-glance-centos8-legacy:
+            voting: false
         - metalsmith-integration-http-cirros
         - openstack-tox-linters
     gate:
       jobs:
-        - metalsmith-integration-glance-centos8-uefi
-        - metalsmith-integration-glance-centos8-legacy
+        - metalsmith-integration-glance-centos9-uefi
         - metalsmith-integration-http-cirros
         - openstack-tox-linters
