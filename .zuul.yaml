@@ -145,11 +145,6 @@
       metalsmith_swap_size: 1024
       metalsmith_traits: [CUSTOM_GOLD]
 
-# Remove when no longer used by other projects
-- job:
-    name: metalsmith-integration-glance-localboot-centos8-uefi
-    parent: metalsmith-integration-glance-centos8-uefi
-
 - job:
     name: metalsmith-integration-glance-centos8-legacy
     parent: metalsmith-integration-glance-centos8-uefi
