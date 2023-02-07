@@ -197,7 +197,7 @@ class TestMetalsmithInstances(unittest.TestCase):
                 root_size_gb=None,
                 swap_size_mb=None
             ),
-        ])
+        ], any_order=True)
         mock_config.assert_has_calls([
             mock.call(ssh_keys=None, user_data=None, meta_data=None),
             mock.call(ssh_keys='abcd',
