@@ -73,6 +73,8 @@ _DEPLOYED_STATES = frozenset([InstanceState.ACTIVE, InstanceState.MAINTENANCE])
 class Instance(object):
     """Instance status in metalsmith."""
 
+    network_cache = dict()
+
     def __init__(self, connection, node, allocation=None):
         self._connection = connection
         self._uuid = node.id
@@ -124,8 +126,10 @@ class Instance(object):
         for vif in vifs:
             try:
                 port = self._connection.network.get_port(vif)
-                port.network = self._connection.network.get_network(
-                    port.network_id)
+                if port.network_id not in Instance.network_cache:
+                    Instance.network_cache[port.network_id] = (
+                        self._connection.network.get_network(port.network_id))
+                port.network = Instance.network_cache[port.network_id]
                 result.append(port)
             except os_exc.ResourceNotFound:
                 LOG.warning('vif has missing port: %s', vif)
