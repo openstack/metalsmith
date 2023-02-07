@@ -15,8 +15,6 @@
 
 from unittest import mock
 
-from openstack import exceptions as os_exc
-
 from metalsmith import _instance
 from metalsmith.test import test_provisioner
 
@@ -25,13 +23,12 @@ class TestInstanceIPAddresses(test_provisioner.Base):
     def setUp(self):
         super(TestInstanceIPAddresses, self).setUp()
         self.instance = _instance.Instance(self.api, self.node)
-        self.api.baremetal.list_node_vifs.return_value = ['111', '222']
         self.ports = [
             mock.Mock(spec=['network_id', 'fixed_ips', 'network'],
                       network_id=n, fixed_ips=[{'ip_address': ip}])
             for n, ip in [('0', '192.168.0.1'), ('1', '10.0.0.2')]
         ]
-        self.api.network.get_port.side_effect = self.ports
+        self.api.network.ports.return_value = self.ports
         self.nets = [
             mock.Mock(spec=['id', 'name'], id=str(i)) for i in range(2)
         ]
@@ -56,9 +53,8 @@ class TestInstanceIPAddresses(test_provisioner.Base):
             mock.Mock(spec=['network_id', 'fixed_ips', 'network'],
                       network_id='0',
                       fixed_ips=[{'ip_address': '192.168.0.1'}]),
-            os_exc.ResourceNotFound(),
         ]
-        self.api.network.get_port.side_effect = self.ports
+        self.api.network.ports.return_value = self.ports
         ips = self.instance.ip_addresses()
         self.assertEqual({'name-0': ['192.168.0.1']}, ips)
 
