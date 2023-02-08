@@ -32,6 +32,7 @@ NODE_FIELDS = ['name', 'id', 'instance_info', 'instance_id', 'is_maintenance',
                'maintenance_reason', 'properties', 'provision_state', 'extra',
                'last_error', 'traits', 'resource_class', 'conductor_group',
                'allocation_id']
+ALLOCATION_FIELDS = ['id', 'name', 'node_id']
 
 
 class TestInit(unittest.TestCase):
@@ -2073,14 +2074,16 @@ class TestListInstances(Base):
         self.nodes[0].allocation_id = 'id2'
         self.nodes[6].instance_id = None
         self.api.baremetal.nodes.return_value = self.nodes
+        self.allocations = [mock.Mock(id='id2')]
+        self.api.baremetal.allocations.return_value = self.allocations
 
     def test_list(self):
         instances = self.pr.list_instances()
         self.assertTrue(all(isinstance(i, _instance.Instance)
                             for i in instances))
         self.assertEqual(self.nodes[:6], [i.node for i in instances])
-        self.assertEqual([self.api.baremetal.get_allocation.return_value]
-                         + [None] * 5,
+        self.assertEqual([self.api.baremetal.get_allocation.return_value] * 6,
                          [i.allocation for i in instances])
         self.api.baremetal.nodes.assert_called_once_with(associated=True,
                                                          details=True)
+        self.api.baremetal.allocations.assert_called_once()
