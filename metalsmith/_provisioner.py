@@ -50,6 +50,8 @@ class Provisioner(object):
         OpenStack API during provisioning.
     """
 
+    allocations_cache = dict()
+
     def __init__(self, session=None, cloud_region=None, dry_run=False):
         if cloud_region is None:
             if session is None:
@@ -630,6 +632,8 @@ class Provisioner(object):
         :return: list of :py:class:`metalsmith.Instance` objects.
         """
         nodes = self.connection.baremetal.nodes(associated=True, details=True)
+        Provisioner.allocations_cache = {
+            a.id: a for a in self.connection.baremetal.allocations()}
         instances = [i for i in map(self._get_instance, nodes)
                      if i.state != _instance.InstanceState.UNKNOWN]
         return instances
@@ -678,13 +682,24 @@ class Provisioner(object):
                 'with a node' % node)
 
     def _get_instance(self, ident):
-        node, allocation = self._find_node_and_allocation(ident)
-        if allocation is None and node.allocation_id:
+        if hasattr(ident, 'allocation_id'):
+            node = ident
             try:
-                allocation = self.connection.baremetal.get_allocation(
-                    node.allocation_id)
+                try:
+                    allocation = Provisioner.allocations_cache[
+                        node.instance_id]
+                except KeyError:
+                    allocation = self.connection.baremetal.get_allocation(
+                        node.allocation_id)
             except os_exc.ResourceNotFound as exc:
                 raise exceptions.InstanceNotFound(str(exc))
-
+        else:
+            node, allocation = self._find_node_and_allocation(ident)
+            if allocation is None and node.allocation_id:
+                try:
+                    allocation = self.connection.baremetal.get_allocation(
+                        node.allocation_id)
+                except os_exc.ResourceNotFound as exc:
+                    raise exceptions.InstanceNotFound(str(exc))
         return _instance.Instance(self.connection, node,
                                   allocation=allocation)
