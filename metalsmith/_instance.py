@@ -16,8 +16,6 @@
 import enum
 import logging
 
-from openstack import exceptions as os_exc
-
 from metalsmith import _utils
 
 
@@ -122,17 +120,14 @@ class Instance(object):
             with full representations of their networks.
         """
         result = []
-        vifs = self._connection.baremetal.list_node_vifs(self.node)
-        for vif in vifs:
-            try:
-                port = self._connection.network.get_port(vif)
-                if port.network_id not in Instance.network_cache:
-                    Instance.network_cache[port.network_id] = (
-                        self._connection.network.get_network(port.network_id))
-                port.network = Instance.network_cache[port.network_id]
-                result.append(port)
-            except os_exc.ResourceNotFound:
-                LOG.warning('vif has missing port: %s', vif)
+        ports_query = {'binding:host_id': self.node.id}
+        ports = self._connection.network.ports(**ports_query)
+        for port in ports:
+            if port.network_id not in Instance.network_cache:
+                Instance.network_cache[port.network_id] = (
+                    self._connection.network.get_network(port.network_id))
+            port.network = Instance.network_cache[port.network_id]
+            result.append(port)
         return result
 
     @property
