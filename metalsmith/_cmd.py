@@ -147,7 +147,7 @@ def _parse_args(args, config):
     deploy.add_argument('--image', help='image to use (name, UUID or URL)',
                         required=True)
     deploy.add_argument('--image-checksum',
-                        help='image MD5 checksum or URL with checksums')
+                        help='image SHA256 checksum or URL with checksums')
     deploy.add_argument('--image-kernel', help='URL of the image\'s kernel')
     deploy.add_argument('--image-ramdisk', help='URL of the image\'s ramdisk')
     deploy.add_argument('--network', help='network to create a port on '

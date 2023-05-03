@@ -54,8 +54,8 @@
         creates: /opt/stack/data/ironic/httpboot/metalsmith/{{ cirros_partition_image_result.stdout }}.img
       become: yes
 
-    - name: Create MD5 checksums file for images
-      shell: md5sum cirros-* > CHECKSUMS
+    - name: Create SHA256 checksums file for images
+      shell: sha256sum cirros-* > CHECKSUMS
       args:
         chdir: /opt/stack/data/ironic/httpboot/metalsmith
       become: yes
@@ -69,9 +69,9 @@
         mode: a+r
       become: yes
 
-    - name: Calculate MD5 checksum for HTTP disk image
+    - name: Calculate SHA256 checksum for HTTP disk image
       shell: |
-          md5sum /opt/stack/devstack/files/{{ cirros_disk_image_result.stdout }}.img \
+          sha256sum /opt/stack/devstack/files/{{ cirros_disk_image_result.stdout }}.img \
               | awk '{ print $1; }'
       register: cirros_disk_image_checksum_result
       failed_when: cirros_disk_image_checksum_result.stdout == ""

@@ -80,7 +80,7 @@ options:
             required: True
           checksum :
             description:
-              - Image MD5 checksum or URL with checksums
+              - Image SHA256, or SHA512 checksum or URL with checksums. MD5 is deprecated.
             type: str
           kernel:
             description:
