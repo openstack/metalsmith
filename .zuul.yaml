@@ -110,6 +110,7 @@
         SWIFT_HASH: 54bd5642300c4b45-846f8636a70a07d2
         SWIFT_START_ALL_SERVICES: false
         SWIFT_TEMPURL_KEY: 54bd5642300c4b45846f8636a70a07d2
+        IRONIC_PXE_BOOT_RETRY_TIMEOUT: 600
       centos_glance_initramds_image: test-centos-initramfs
       centos_glance_kernel_image: test-centos-kernel
       centos_glance_root_image: test-centos-partition
