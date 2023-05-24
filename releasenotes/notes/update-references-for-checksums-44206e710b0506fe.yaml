@@ -1,0 +1,8 @@
+---
+upgrade:
+  - |
+    During the *bobcat* development cycle, the Ironic community updated the
+    MD5 checksum logic in the ``ironic-python-agent`` to be explicitly
+    disabled, and added support for the checksums to be conveyed as a
+    SHA256 or SHA512 checksum.
+    With this upgrade, we have updated our references and playbooks.

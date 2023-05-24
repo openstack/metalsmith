@@ -100,10 +100,10 @@ class HttpWholeDiskImage(_Source):
         """Create an HTTP source.
 
         :param url: URL of the image.
-        :param checksum: MD5 checksum of the image. Mutually exclusive with
+        :param checksum: SHA256 checksum of the image. Mutually exclusive with
             ``checksum_url``.
         :param checksum_url: URL of the checksum file for the image. Has to
-            be in the standard format of the ``md5sum`` tool. Mutually
+            be in the standard format of the ``sha256sum`` tool. Mutually
             exclusive with ``checksum``.
         :param disk_format: Optional value to set for ``instance_info``
             ``image_disk_format``.
@@ -170,11 +170,11 @@ class HttpPartitionImage(HttpWholeDiskImage):
         :param url: URL of the root disk image.
         :param kernel_url: URL of the kernel image.
         :param ramdisk_url: URL of the initramfs image.
-        :param checksum: MD5 checksum of the root disk image. Mutually
+        :param checksum: SHA256 checksum of the root disk image. Mutually
             exclusive with ``checksum_url``.
         :param checksum_url: URL of the checksum file for the root disk image.
-            Has to be in the standard format of the ``md5sum`` tool. Mutually
-            exclusive with ``checksum``.
+            Has to be in the standard format of the ``sha256sum`` tool.
+            Mutually exclusive with ``checksum``.
         :param disk_format: Optional value to set for ``instance_info``
             ``image_disk_format``.
         """
@@ -212,7 +212,7 @@ class FileWholeDiskImage(_Source):
 
         :param location: Location of the image, optionally starting with
             ``file://``.
-        :param checksum: MD5 checksum of the image. DEPRECATED: checksums do
+        :param checksum: SHA256 checksum of the image. DEPRECATED: checksums do
             not actually work with file images.
         """
         if not location.startswith('file://'):
@@ -250,7 +250,7 @@ class FilePartitionImage(FileWholeDiskImage):
             optionally starting with ``file://``.
         :param ramdisk_location: Location of the ramdisk of the image,
             optionally starting with ``file://``.
-        :param checksum: MD5 checksum of the image. DEPRECATED: checksums do
+        :param checksum: SHA256 checksum of the image. DEPRECATED: checksums do
             not actually work with file images.
         """
         super(FilePartitionImage, self).__init__(location, checksum)
@@ -286,7 +286,7 @@ def detect(image, kernel=None, ramdisk=None, checksum=None):
         ``http://``, ``https://`` link or a Glance image name or UUID.
     :param ramdisk: Location of the ramdisk (if present): ``file://``,
         ``http://``, ``https://`` link or a Glance image name or UUID.
-    :param checksum: MD5 checksum of the image: ``http://`` or ``https://``
+    :param checksum: SHA256 checksum of the image: ``http://`` or ``https://``
         link or a string.
     :return: A valid source object.
     :raises: ValueError if the given parameters do not correspond to any
