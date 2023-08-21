@@ -3,7 +3,7 @@
     description: |
         Base job for devstack-based metalsmith jobs.
     parent: devstack-minimal
-    nodeset: openstack-single-node-focal
+    nodeset: openstack-single-node-jammy
     post-run: playbooks/integration/post.yaml
     run: playbooks/integration/run.yaml
     irrelevant-files:
