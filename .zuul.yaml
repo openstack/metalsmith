@@ -148,6 +148,14 @@
       metalsmith_traits: [CUSTOM_GOLD]
 
 - job:
+    name: metalsmith-integration-glance-centos9-legacy
+    parent: metalsmith-integration-glance-centos9-uefi
+    vars:
+      devstack_localrc:
+        IRONIC_BOOT_MODE: bios
+      metalsmith_boot_mode: bios
+
+- job:
     name: metalsmith-integration-glance-centos8-uefi
     description: |
         Integration job using Glance as image source and CentOS8 with local boot
@@ -202,6 +210,7 @@
     check:
       jobs:
         - metalsmith-integration-glance-centos9-uefi
+        - metalsmith-integration-glance-centos9-legacy
         - metalsmith-integration-glance-centos8-uefi:
             voting: false
         - metalsmith-integration-glance-centos8-legacy:
@@ -211,5 +220,6 @@
     gate:
       jobs:
         - metalsmith-integration-glance-centos9-uefi
+        - metalsmith-integration-glance-centos9-legacy
         - metalsmith-integration-http-cirros
         - openstack-tox-linters
