@@ -18,4 +18,4 @@ metalsmith_traits: []
 metalsmith_user_name: metalsmith
 
 # Wait parameters
-metalsmith_provisioning_timeout:
+metalsmith_provisioning_timeout: 3600
