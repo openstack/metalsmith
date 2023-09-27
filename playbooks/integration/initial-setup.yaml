@@ -23,6 +23,18 @@
       vars:
         ansible_python_interpreter: /usr/bin/python3
 
+    - name: Install the latest sdk to align with ansible
+      pip:
+        name: openstacksdk
+        state: latest
+      become: true
+      environment:
+        # NOTE(dtantsur): https://github.com/pypa/setuptools/issues/2353
+        SETUPTOOLS_USE_DISTUTILS: stdlib
+      vars:
+        ansible_python_interpreter: /usr/bin/python3
+
+
     - name: Install metalsmith
       pip:
         name: "{{ metalsmith_src_dir }}/metalsmith"
