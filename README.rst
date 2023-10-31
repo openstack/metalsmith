@@ -13,6 +13,11 @@ optionally, `OpenStack Image Service (glance)
 <https://docs.openstack.org/glance/latest/>`_ and `OpenStack Networking
 Service (neutron) <https://docs.openstack.org/neutron/latest/>`_.
 
+Please note the Metalsmith project is in maintenance mode and it's
+functionality is slowly being introduced into Ironic's API and usual clients.
+No additional features are expected to be added to metalsmith directly.
+
+
 * License: Apache License, Version 2.0
 * Documentation: https://docs.openstack.org/metalsmith/
 * Source: https://opendev.org/openstack/metalsmith
