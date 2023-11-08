@@ -16,7 +16,7 @@ Service (neutron) <https://docs.openstack.org/neutron/latest/>`_.
 * License: Apache License, Version 2.0
 * Documentation: https://docs.openstack.org/metalsmith/
 * Source: https://opendev.org/openstack/metalsmith
-* Bugs: https://storyboard.openstack.org/#!/project/openstack/metalsmith
+* Bugs: https://bugs.launchpad.net/metalsmith/+bugs
 
 Installation
 ------------
@@ -36,6 +36,6 @@ Contributing
   <https://review.openstack.org/#/q/project:openstack/metalsmith>`_
   (see `developer's guide
   <https://docs.openstack.org/infra/manual/developers.html>`_)
-* Bugs and RFEs:  `StoryBoard
-  <https://storyboard.openstack.org/#!/project/openstack/metalsmith>`_
+* Bugs and RFEs:  `Launchpad
+  <https://bugs.launchpad.net/metalsmith/+bugs>`_
   (please do NOT report bugs to Github)
