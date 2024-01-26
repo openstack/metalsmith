@@ -170,6 +170,13 @@
       metalsmith_precreate_port: true
       metalsmith_use_http: true
 
+- job:
+    name: metalsmith-tox-codespell
+    parent: openstack-tox
+    timeout: 7200
+    vars:
+      tox_envlist: codespell
+
 - project:
     templates:
       - check-requirements
@@ -183,6 +190,8 @@
         - metalsmith-integration-glance-centos9-legacy
         - metalsmith-integration-http-cirros
         - openstack-tox-linters
+        - metalsmith-tox-codespell:
+            voting: false
     gate:
       jobs:
         - metalsmith-integration-glance-centos9-uefi
