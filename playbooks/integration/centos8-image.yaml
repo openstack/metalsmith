@@ -14,7 +14,7 @@
 
 - name: Install DIB
   pip:
-    name: diskimage-builder
+    name: "/home/zuul/src/opendev.org/openstack/diskimage-builder"
   become: true
   vars:
     ansible_python_interpreter: /usr/bin/{{ metalsmith_python | default('python') }}
@@ -30,13 +30,13 @@
 
 - name: Build a centos8 wholedisk image
   command: >
-    disk-image-create centos grub2 vm {{ centos_block_device | default('') }}
+    disk-image-create centos bootloader vm {{ centos_block_device | default('') }}
     -o centos8-wholedisk
   environment:
     DIB_RELEASE: 8-stream
 
 - name: Build a centos8 partition image
-  command: disk-image-create centos grub2 baremetal -o centos8-partition
+  command: disk-image-create centos bootloader baremetal -o centos8-partition
   environment:
     DIB_RELEASE: 8-stream
 
