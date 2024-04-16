@@ -187,7 +187,11 @@
     check:
       jobs:
         - metalsmith-integration-glance-centos9-uefi
-        - metalsmith-integration-glance-centos9-legacy
+        # NOTE(rpittau): this is broken because of an issue with tinycore
+        # moving to non-voting while we evaluate if it's worth trying to
+        # fix it or just removing it
+        - metalsmith-integration-glance-centos9-legacy:
+            voting: false
         - metalsmith-integration-http-cirros
         - openstack-tox-linters
         - metalsmith-tox-codespell:
@@ -195,6 +199,5 @@
     gate:
       jobs:
         - metalsmith-integration-glance-centos9-uefi
-        - metalsmith-integration-glance-centos9-legacy
         - metalsmith-integration-http-cirros
         - openstack-tox-linters
