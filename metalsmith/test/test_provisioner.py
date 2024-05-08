@@ -2071,19 +2071,70 @@ class TestListInstances(Base):
             for state in ('active', 'active', 'deploying', 'wait call-back',
                           'deploy failed', 'available', 'available', 'enroll')
         ]
-        self.nodes[0].allocation_id = 'id2'
+        self.nodes[0].allocation_id = 'id0'
+        self.nodes[1].allocation_id = 'id1'
+        self.nodes[2].allocation_id = 'id2'
+        self.nodes[3].allocation_id = 'id3'
+        self.nodes[4].allocation_id = 'id4'
+        # Ends up exercising the alternate path and would
+        # not appear in the list.
+        self.nodes[5].instance_id = None
         self.nodes[6].instance_id = None
+        self.nodes[7].instance_id = None
         self.api.baremetal.nodes.return_value = self.nodes
-        self.allocations = [mock.Mock(id='id2')]
+        self.allocations = [
+            mock.Mock(id='id0'),
+            mock.Mock(id='id1'),
+            mock.Mock(id='id2'),
+            mock.Mock(id='id3'),
+            mock.Mock(id='id4'),
+        ]
         self.api.baremetal.allocations.return_value = self.allocations
 
     def test_list(self):
         instances = self.pr.list_instances()
         self.assertTrue(all(isinstance(i, _instance.Instance)
                             for i in instances))
-        self.assertEqual(self.nodes[:6], [i.node for i in instances])
-        self.assertEqual([self.api.baremetal.get_allocation.return_value] * 6,
-                         [i.allocation for i in instances])
+        self.assertEqual(self.nodes[:5], [i.node for i in instances])
+        allocations = [self.api.baremetal.get_allocation.return_value] * 5
+        self.assertEqual(allocations, [i.allocation for i in instances])
+        self.api.baremetal.nodes.assert_called_once_with(associated=True,
+                                                         details=True)
+        self.api.baremetal.allocations.assert_called_once()
+
+
+class TestListInstancesBadUpgrade(Base):
+    def setUp(self):
+        super(TestListInstancesBadUpgrade, self).setUp()
+        self.nodes = [
+            mock.Mock(spec=NODE_FIELDS, provision_state=state,
+                      instance_id='1234', allocation_id=None)
+            for state in ('active', 'active')
+        ]
+        self.nodes[0].allocation_id = 'id0'
+        self.nodes[1].id = '0001'
+        self.nodes[1].allocation_id = None
+        self.nodes[1].name = 'fake_name'
+        self.nodes[1].instance_id = 'id5'
+        self.api.baremetal.nodes.return_value = self.nodes
+        self.allocations = [
+            mock.Mock(id='id0'),
+        ]
+        self.api.baremetal.allocations.return_value = self.allocations
+
+    def test_list(self):
+        self.assertRaisesRegex(
+            exceptions.InstanceNotFound,
+            'A error has been detected in the state of '
+            'the instance allocation records inside of '
+            'Ironic where a node has an assigned Instance '
+            'ID, but no allocation record. If only '
+            'Metalsmith is being used with Ironic, '
+            'this can be safely corrected with manual '
+            'intervention. To correct this, execute this '
+            'command: openstack baremetal allocation '
+            'create --uuid id5 --name fake_name --node 0001',
+            self.pr.list_instances)
         self.api.baremetal.nodes.assert_called_once_with(associated=True,
                                                          details=True)
         self.api.baremetal.allocations.assert_called_once()

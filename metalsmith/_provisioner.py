@@ -682,17 +682,49 @@ class Provisioner(object):
                 'with a node' % node)
 
     def _get_instance(self, ident):
+        allocation = None
         if hasattr(ident, 'allocation_id'):
             node = ident
             try:
-                try:
-                    allocation = Provisioner.allocations_cache[
-                        node.instance_id]
-                except KeyError:
-                    allocation = self.connection.baremetal.get_allocation(
-                        node.allocation_id)
-            except os_exc.ResourceNotFound as exc:
-                raise exceptions.InstanceNotFound(str(exc))
+                allocation = Provisioner.allocations_cache[
+                    node.instance_id]
+            except KeyError:
+                # NOTE(TheJulia): The pattern here assumes we just haven't
+                # found the allocation entry, so we try to get it.
+                if node.allocation_id:
+                    try:
+                        allocation = self.connection.baremetal.get_allocation(
+                            node.allocation_id)
+                    except os_exc.ResourceNotFound as exc:
+                        raise exceptions.InstanceNotFound(str(exc))
+                elif node.instance_id:
+                    LOG.debug('Discovered node %s without an '
+                              'allocation when we believe it should have '
+                              'an allocation based on the Metalsmith use '
+                              'model. Metalsmith is likely being used '
+                              'in an unsupported case, either in concert '
+                              'with another user of Ironic, OR in a case '
+                              'where a migration was executed incorrectly.',
+                              node.id)
+                    # We have an instance_id, and to be here we have
+                    # no allocation ID.
+
+                    fix_cmd = ('openstack baremetal allocation create --uuid '
+                               '%(node_instance_id)s --name %(node_name)s '
+                               '--node %(node_id)s' %
+                               {'node_instance_id': node.instance_id,
+                                'node_name': node.name,
+                                'node_id': node.id})
+                    msg = ('A error has been detected in the state of the '
+                           'instance allocation records inside of Ironic '
+                           'where a node has an assigned Instance ID, but '
+                           'no allocation record. If only Metalsmith is '
+                           'being used with Ironic, this can be safely '
+                           'corrected with manual intervention. '
+                           'To correct this, execute this command: '
+                           '%(cmd)s' %
+                           {'cmd': fix_cmd})
+                    raise exceptions.InstanceNotFound(msg)
         else:
             node, allocation = self._find_node_and_allocation(ident)
             if allocation is None and node.allocation_id:
