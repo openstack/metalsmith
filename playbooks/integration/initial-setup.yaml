@@ -17,9 +17,6 @@
         requirements: "{{ metalsmith_src_dir }}/metalsmith/requirements.txt"
         extra_args: -c {{ metalsmith_src_dir }}/requirements/upper-constraints.txt
       become: true
-      environment:
-        # NOTE(dtantsur): https://github.com/pypa/setuptools/issues/2353
-        SETUPTOOLS_USE_DISTUTILS: stdlib
       vars:
         ansible_python_interpreter: /usr/bin/python3
 
@@ -28,7 +25,5 @@
         name: "{{ metalsmith_src_dir }}/metalsmith"
         editable: true
       become: true
-      environment:
-        SETUPTOOLS_USE_DISTUTILS: stdlib
       vars:
         ansible_python_interpreter: /usr/bin/python3
