@@ -145,14 +145,6 @@
       metalsmith_traits: [CUSTOM_GOLD]
 
 - job:
-    name: metalsmith-integration-glance-centos9-legacy
-    parent: metalsmith-integration-glance-centos9-uefi
-    vars:
-      devstack_localrc:
-        IRONIC_BOOT_MODE: bios
-      metalsmith_boot_mode: bios
-
-- job:
     name: metalsmith-integration-http-cirros
     description: |
         Integration job using HTTP as image source and direct deploy.
@@ -179,17 +171,14 @@
     check:
       jobs:
         - metalsmith-integration-glance-centos9-uefi
-        # NOTE(rpittau): this is broken because of an issue with tinycore
-        # moving to non-voting while we evaluate if it's worth trying to
-        # fix it or just removing it
-        - metalsmith-integration-glance-centos9-legacy:
-            voting: false
         - metalsmith-integration-http-cirros
-        - openstack-tox-linters
+        #NOTE(rpittau): disabling ansible linters for the time being
+        # we need to update ansible-lint to make it work on ubuntu noble
+        #- openstack-tox-linters
         - metalsmith-tox-codespell:
             voting: false
     gate:
       jobs:
         - metalsmith-integration-glance-centos9-uefi
         - metalsmith-integration-http-cirros
-        - openstack-tox-linters
+        #- openstack-tox-linters
