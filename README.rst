@@ -38,7 +38,7 @@ Contributing
 ------------
 
 * Pull requests: `Gerrit
-  <https://review.openstack.org/#/q/project:openstack/metalsmith>`_
+  <https://review.opendev.org/q/project:openstack/metalsmith>`_
   (see `developer's guide
   <https://docs.openstack.org/infra/manual/developers.html>`_)
 * Bugs and RFEs:  `Launchpad
