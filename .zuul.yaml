@@ -76,14 +76,6 @@
         c-sch: false
         c-vol: false
         cinder: false
-        # Ceilometer services
-        ceilometer-acentral: False
-        ceilometer-acompute: False
-        ceilometer-alarm-evaluator: False
-        ceilometer-alarm-notifier: False
-        ceilometer-anotification: False
-        ceilometer-api: False
-        ceilometer-collector: False
         # Services we don't need.
         horizon: false
         tempest: false
