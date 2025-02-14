@@ -113,6 +113,18 @@ class DefaultFormat(ValueFormat):
 
 class JsonFormat(NullFormat):
     """JSON formatter."""
+    def _get_value_dict(self, instance):
+        if instance.is_deployed:
+            ips = '\n'.join('%s=%s' % (net, ','.join(ips))
+                            for net, ips in
+                            instance.ip_addresses().items())
+        else:
+            ips = ''
+        dict_values = [instance.uuid, instance.node.name or '',
+                       instance.allocation.id if instance.allocation else '',
+                       instance.hostname or '', instance.state.name, ips]
+        value_dict = dict(zip(FIELDS, dict_values))
+        return value_dict
 
     def deploy(self, instance):
         """Output result of the deploy."""
@@ -127,8 +139,16 @@ class JsonFormat(NullFormat):
 
     def show(self, instances):
         """Output instance statuses."""
-        json.dump({instance.hostname: instance.to_dict()
-                   for instance in instances}, sys.stdout)
+        if self.columns:
+            value = {
+                instance.hostname: {
+                    col: self._get_value_dict(instance).get(col)
+                    for col in self.columns}
+                for instance in instances}
+        else:
+            value = {instance.hostname: instance.to_dict()
+                     for instance in instances}
+        json.dump(value, sys.stdout)
 
 
 FORMATS = {
