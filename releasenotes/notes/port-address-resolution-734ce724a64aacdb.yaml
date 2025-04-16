@@ -1,0 +1,13 @@
+---
+fixes:
+  - |
+    Fixes erroneous behavior in metalsmith as it relates to the generation of
+    instance metadata where it relies upon the pre-set neutron mac address
+    to generate metadata. This is because metalsmith attempts to generate port
+    bindings in Neutron and then populate the VIF attachments to Ironic. This
+    behavior breaks when Ironic resets MAC addresses as part of early vif
+    binding fixes which break Metalsmith's reliance upon incorrect behavior.
+    Metalsmith now reconciles against tenant vif attachment record in Ironic,
+    and uses that data source for the physical MAC address to feed into network
+    metadata generation. More information regarding this issue can be found in
+    `bug 2107483 <https://bugs.launchpad.net/metalsmith/+bug/2107483>`_.

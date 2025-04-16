@@ -437,7 +437,7 @@ class Provisioner(object):
             self.connection.baremetal.validate_node(node)
 
             network_data = _network_metadata.create_network_metadata(
-                self.connection, node.extra.get(_ATTACHED_PORTS))
+                self.connection, node.extra.get(_ATTACHED_PORTS), node.id)
 
             LOG.debug('Generating a configdrive for node %s',
                       _utils.log_res(node))

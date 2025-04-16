@@ -28,11 +28,12 @@ class TestMetadataAdd(unittest.TestCase):
         port.mac_address = 'aa:bb:cc:dd:ee:ff'
         network.mtu = 1500
         links = []
+        ir_mac = '11:22:33:44:55:66'
         expected = [{'id': 'port_id',
                      'type': 'phy',
                      'mtu': 1500,
-                     'ethernet_mac_address': 'aa:bb:cc:dd:ee:ff'}]
-        _network_metadata.metadata_add_links(links, port, network)
+                     'ethernet_mac_address': ir_mac}]
+        _network_metadata.metadata_add_links(links, port, network, ir_mac)
         self.assertEqual(expected, links)
 
     def test_metadata_add_services(self):
