@@ -1,5 +1,0 @@
----
-fixes:
-  - |
-    No longer removes ``instance_info`` on normal unprovisioning, only on
-    failures during deployment.

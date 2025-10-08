@@ -1,7 +1,0 @@
----
-upgrade:
-  - |
-    The deprecated class ``InstanceConfig`` has been removed.
-  - |
-    The deprecated instance configuration method ``build_configdrive`` has
-    been removed.

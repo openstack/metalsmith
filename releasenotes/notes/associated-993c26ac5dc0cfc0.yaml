@@ -1,5 +1,0 @@
----
-critical:
-  - |
-    Fixes a regression that caused deployed nodes to be picked for deployment
-    again.

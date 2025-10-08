@@ -1,7 +1,0 @@
----
-features:
-  - |
-    The ``metalsmith`` CLI now uses table format similar to OpenStack CLI.
-  - |
-    The ``metalsmith`` CLI now supports the same ``-f``, ``-c`` and
-    ``--sort-column`` arguments as other OpenStack CLI.
